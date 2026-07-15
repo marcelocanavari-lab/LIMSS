@@ -1,0 +1,146 @@
+/* ============================================================
+   LIMSS — Sistema de diseño
+   ------------------------------------------------------------
+   Contexto: uso en laboratorio de control de calidad, lectura
+   de valores numéricos y estados de tolerancia (OOS). Prioridad:
+   legibilidad y estados inequívocos sobre expresión visual.
+
+   Paleta: "instrumental clínico" — base gris-azulado frío que
+   evoca acero/instrumental de laboratorio, con un único acento
+   ámbar cálido (el color de alerta farmacéutica clásico) que
+   se reserva para foco activo y elementos accionables, y el
+   trío semáforo (verde/ámbar/rojo) reservado EXCLUSIVAMENTE
+   para estados de tolerancia/validación — nunca decorativo.
+
+   Comparte el mismo sistema de diseño que eBR (Y:\Lamar\eBR\)
+   para mantener consistencia visual entre ambas apps satélite.
+   ============================================================ */
+
+:root {
+  /* --- Superficies --- */
+  --surf-0: #101317;       /* fondo de app (gris-carbón azulado, más oscuro) */
+  --surf-1: #1d232c;       /* tarjetas (más diferenciado del fondo) */
+  --surf-2: #2a323d;       /* tarjetas elevadas / inputs / items seleccionables */
+  --surf-3: #3a4452;       /* hover / bordes sutiles */
+
+  /* --- Texto --- */
+  --ink-1: #f7f8fa;        /* texto primario */
+  --ink-2: #c2cad6;        /* texto secundario */
+  --ink-3: #8b94a3;        /* texto terciario / placeholder */
+
+  /* --- Acento de marca (ámbar instrumental) --- */
+  --accent: #e8a33d;
+  --accent-ink: #1c1305;
+  --accent-soft: #e8a33d22;
+
+  /* --- Semáforo de estado (uso exclusivo: validación GMP / OOS) --- */
+  --ok: #4caf6e;
+  --ok-soft: #4caf6e1f;
+  --ok-ink: #0c2014;
+
+  --warn: #e0a93a;
+  --warn-soft: #e0a93a1f;
+  --warn-ink: #241a04;
+
+  --danger: #e0594f;
+  --danger-soft: #e0594f1f;
+  --danger-ink: #240b08;
+
+  --info: #4d8fe0;
+  --info-soft: #4d8fe01f;
+
+  /* --- Bordes --- */
+  --border: #323a45;
+  --border-soft: #262d36;
+  --border-focus: var(--accent);
+
+  /* --- Tipografía --- */
+  --font-display: 'Spectral', Georgia, serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Consolas', monospace;
+
+  /* --- Escala tipográfica --- */
+  --fs-xs: 0.75rem;      /* 12px - metadatos */
+  --fs-sm: 0.8125rem;    /* 13px - texto secundario */
+  --fs-base: 0.9375rem;  /* 15px - cuerpo, base elevada */
+  --fs-lg: 1.0625rem;    /* 17px - subtítulos */
+  --fs-xl: 1.375rem;     /* 22px - títulos de pantalla */
+  --fs-2xl: 1.875rem;    /* 30px - valores numéricos clave (peso) */
+  --fs-3xl: 2.5rem;      /* 40px - hero numérico */
+
+  /* --- Espaciado --- */
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.5rem;
+  --sp-6: 2rem;
+  --sp-7: 3rem;
+
+  /* --- Radios y sombras --- */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --shadow-card: 0 4px 24px -8px rgba(0,0,0,0.4);
+  --shadow-float: 0 12px 40px -12px rgba(0,0,0,0.55);
+
+  /* --- Tamaño mínimo táctil --- */
+  --tap-min: 56px;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--surf-0);
+  color: var(--ink-1);
+  font-family: var(--font-body);
+  font-size: var(--fs-base);
+  line-height: 1.5;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+button, input, select {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+button {
+  cursor: pointer;
+  min-height: var(--tap-min);
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* Foco visible siempre — accesibilidad en GMP no es opcional */
+:focus-visible {
+  outline: 3px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+input:focus-visible {
+  outline: none;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

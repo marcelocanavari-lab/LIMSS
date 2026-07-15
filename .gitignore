@@ -1,0 +1,20 @@
+# --- Credenciales / config local (NUNCA subir) ---
+backend/.env
+*.env
+!*.env.example
+
+# --- Python ---
+backend/venv/
+**/__pycache__/
+*.pyc
+
+# --- Node / frontend ---
+frontend/node_modules/
+frontend/dist/
+
+# --- Claude Code local state ---
+.claude/
+
+# --- OS ---
+.DS_Store
+Thumbs.db

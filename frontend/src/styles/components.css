@@ -1,0 +1,372 @@
+/* ============================================================
+   Componentes base reutilizables
+   ============================================================ */
+
+/* --- Shell de pantalla --- */
+.screen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.screen-content {
+  flex: 1;
+  padding: var(--sp-5);
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* --- Barra superior --- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-4) var(--sp-5);
+  background: var(--surf-1);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.topbar-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-lg);
+}
+
+.topbar-user {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.user-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.25;
+}
+
+.user-chip-name { font-size: var(--fs-sm); font-weight: 600; }
+.user-chip-role {
+  font-size: var(--fs-xs);
+  color: var(--ink-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* --- Botones --- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 0 var(--sp-5);
+  font-size: var(--fs-base);
+  font-weight: 600;
+  transition: transform 0.08s ease, filter 0.15s ease, opacity 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn:active:not(:disabled) { transform: scale(0.98); }
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
+.btn-primary:disabled { opacity: 0.35; }
+
+.btn-secondary {
+  background: var(--surf-2);
+  color: var(--ink-1);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover:not(:disabled) { background: var(--surf-3); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--ink-2);
+}
+.btn-ghost:hover:not(:disabled) { color: var(--ink-1); background: var(--surf-2); }
+
+.btn-block { width: 100%; }
+
+.btn-lg { min-height: 64px; font-size: var(--fs-lg); }
+
+/* --- Cards --- */
+.card {
+  background: var(--surf-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-5);
+}
+
+.card-elevated {
+  background: var(--surf-1);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-5);
+  box-shadow: var(--shadow-card);
+}
+
+/* --- Inputs --- */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+
+.field-label {
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+.field-input {
+  background: var(--surf-2);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--ink-1);
+  padding: 0 var(--sp-4);
+  height: var(--tap-min);
+  font-size: var(--fs-base);
+  transition: border-color 0.15s ease;
+}
+
+.field-input::placeholder { color: var(--ink-3); }
+
+.field-input-lg {
+  height: 72px;
+  font-size: var(--fs-2xl);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.field-error {
+  font-size: var(--fs-xs);
+  color: var(--danger);
+}
+
+/* --- Badges de estado (uso exclusivo GMP / OOS) --- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: 999px;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.badge-ok      { background: var(--ok-soft);     color: var(--ok); }
+.badge-warn    { background: var(--warn-soft);   color: var(--warn); }
+.badge-danger  { background: var(--danger-soft); color: var(--danger); }
+.badge-info    { background: var(--info-soft);   color: var(--info); }
+.badge-neutral { background: var(--surf-2);      color: var(--ink-2); }
+
+.badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* --- Lista de selección (muestras, ensayos) --- */
+.select-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.select-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  background: var(--surf-2);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--sp-4);
+  text-align: left;
+  width: 100%;
+  min-height: var(--tap-min);
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.select-item:hover {
+  border-color: var(--ink-2);
+  background: var(--surf-3);
+}
+
+.select-item-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.select-item-main { display: flex; flex-direction: column; gap: 2px; }
+.select-item-title { font-weight: 600; font-size: var(--fs-base); }
+.select-item-sub {
+  font-size: var(--fs-xs);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+}
+
+/* --- Empty / loading states --- */
+.state-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--sp-7) var(--sp-4);
+  color: var(--ink-2);
+  gap: var(--sp-2);
+}
+
+.state-block-title {
+  font-size: var(--fs-lg);
+  color: var(--ink-1);
+  font-weight: 600;
+}
+
+/* --- Spinner --- */
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--surf-3);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* --- Stepper de progreso --- */
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.stepper-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surf-3);
+  overflow: hidden;
+}
+
+.stepper-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.stepper-label {
+  font-size: var(--fs-xs);
+  color: var(--ink-2);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Tabla de resultados / stock --- */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+
+.data-table th {
+  text-align: left;
+  font-size: var(--fs-xs);
+  color: var(--ink-2);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.data-table td {
+  padding: var(--sp-3);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.data-table tr:last-child td { border-bottom: none; }
+
+.num { font-variant-numeric: tabular-nums; text-align: right; }
+
+/* --- Alertas inline --- */
+.alert {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: flex-start;
+  padding: var(--sp-4);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-sm);
+}
+
+.alert-danger { background: var(--danger-soft); color: var(--danger); }
+.alert-warn   { background: var(--warn-soft);   color: var(--warn); }
+.alert-info   { background: var(--info-soft);   color: var(--info); }
+.alert-ok     { background: var(--ok-soft);     color: var(--ok); }
+
+/* --- Vistas imprimibles (remitos, etiquetas, reportes) --- */
+.printable {
+  background: #fff;
+  color: #111;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: var(--sp-5);
+}
+
+.printable h1, .printable h2, .printable h3 { color: #111; }
+.printable .card { background: #f4f4f5; border: 1px solid #ddd; box-shadow: none; }
+.printable .badge { border: 1px solid currentColor; background: transparent; }
+
+@media print {
+  .no-print, .topbar { display: none !important; }
+  body, .screen, .screen-content { background: #fff !important; }
+  .printable { padding: 0; max-width: 100%; }
+  .printable .card { break-inside: avoid; }
+}
+
+/* --- Etiqueta de muestra (chica, no A4) --- */
+.printable-label {
+  background: #fff;
+  color: #111;
+  width: 10cm;
+  margin: 0 auto;
+  padding: var(--sp-4);
+  border: 1px dashed #ccc;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.printable-label h3 { color: #111; font-size: var(--fs-base); }
+.printable-label .label-row { display: flex; justify-content: space-between; font-size: var(--fs-sm); gap: var(--sp-3); }
+.printable-label .label-codigo { font-family: var(--font-mono); font-weight: 700; font-size: var(--fs-lg); }
+
+@media print {
+  .printable-label { border: none; padding: 0; }
+}
