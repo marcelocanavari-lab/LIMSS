@@ -18,6 +18,7 @@ from app.db.connections import ebr_db, erp_db, limss_db
 from app.schemas.muestras import (
     EnvioCreate,
     EnvioResponse,
+    EtiquetaResponse,
     LaboratorioCreate,
     LaboratorioResponse,
     LaboratorioUpdate,
@@ -29,7 +30,7 @@ from app.schemas.muestras import (
 )
 from app.services import audit
 from app.services.ebr_lotes import buscar_lote
-from app.services.erp_ir import buscar_lineas_ir
+from app.services.erp_ir import buscar_lineas_ir, formatear_nro_ir
 
 router = APIRouter(prefix="/api/muestras", tags=["Muestras y Envíos"])
 
@@ -65,6 +66,24 @@ def _fila_a_muestra(row) -> MuestraResponse:
         usuario_muestreo_nombre=row.usuario_muestreo_nombre,
         fecha_muestreo=row.fecha_muestreo,
         observaciones=row.observaciones,
+    )
+
+
+def _fila_a_etiqueta(fila, muestra) -> EtiquetaResponse:
+    return EtiquetaResponse(
+        id_etiqueta=fila.id_etiqueta,
+        id_muestra=fila.id_muestra,
+        codigo_muestra=muestra.codigo_muestra,
+        erp_CODART=muestra.erp_CODART,
+        erp_DESART=muestra.erp_DESART,
+        tipo_referencia=muestra.tipo_referencia,
+        nro_referencia=muestra.nro_referencia,
+        fecha_muestreo=muestra.fecha_muestreo,
+        usuario_muestreo_nombre=muestra.usuario_muestreo_nombre,
+        numero_impresion=fila.numero_impresion,
+        es_reimpresion=fila.numero_impresion > 1,
+        id_usuario_impresion=fila.id_usuario,
+        fecha_hora=fila.fecha_hora,
     )
 
 
@@ -203,7 +222,7 @@ def buscar_ir(
         raise HTTPException(status_code=404, detail=f"No se encontró el IR '{nro_ir}' en el ERP")
     return [
         LineaIR(
-            N01Id=r.N01Id, NUMCOMO=r.NUMCOMO.strip(), IdM21=r.IdM21,
+            N01Id=r.N01Id, NUMCOMO=formatear_nro_ir(r.NUMCOMO, r.FECCOM), IdM21=r.IdM21,
             CODART=r.CODART, DESART=r.DESART, CANTID=float(r.CANTID),
             unidad=r.unidad, proveedor=r.proveedor,
         )
@@ -229,7 +248,7 @@ def buscar_material(
             raise HTTPException(status_code=404, detail=f"No se encontró el IR '{referencia}' en el ERP")
         return [
             MaterialEncontrado(
-                referencia=r.NUMCOMO.strip(), IdM21=r.IdM21, CODART=r.CODART, DESART=r.DESART,
+                referencia=formatear_nro_ir(r.NUMCOMO, r.FECCOM), IdM21=r.IdM21, CODART=r.CODART, DESART=r.DESART,
                 cantidad=float(r.CANTID), unidad=r.unidad, proveedor=r.proveedor,
             )
             for r in rows
@@ -470,13 +489,18 @@ def obtener_remito(
     cursor = conn.cursor()
     cursor.execute(
         """
-        SELECT m.codigo_muestra, m.tipo_referencia, m.nro_referencia, m.erp_CODART, m.erp_DESART, m.fecha_muestreo,
+        SELECT e.id_envio,
+               m.codigo_muestra, m.tipo_referencia, m.nro_referencia, m.erp_CODART, m.erp_DESART, m.fecha_muestreo,
+               u.nombre + ' ' + u.apellido AS usuario_muestreo_nombre,
                e.fecha_despacho, e.temperatura_transporte, e.nro_remito, e.transportista,
                e.analisis_solicitados, e.protocolo_utilizar, e.cantidad_testigo,
                lab.nombre AS laboratorio_nombre, lab.direccion AS laboratorio_direccion,
-               t.codigo AS testigo_codigo, t.nombre AS testigo_nombre
+               lab.contacto AS laboratorio_contacto,
+               t.codigo AS testigo_codigo, t.nombre AS testigo_nombre,
+               t.nro_lote AS testigo_nro_lote, t.fecha_vencimiento AS testigo_fecha_vencimiento
         FROM lims_muestras m
         INNER JOIN lims_envios e ON e.id_muestra = m.id_muestra
+        INNER JOIN lims_usuarios u ON u.id_usuario = m.id_usuario_muestreo
         INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = e.id_laboratorio
         LEFT JOIN lims_testigos t ON t.id_testigo = e.id_testigo
         WHERE m.id_muestra = ?
@@ -488,14 +512,17 @@ def obtener_remito(
         raise HTTPException(status_code=404, detail="La muestra no tiene un envío confirmado todavía")
 
     return RemitoResponse(
+        id_envio=row.id_envio,
         codigo_muestra=row.codigo_muestra,
         tipo_referencia=row.tipo_referencia,
         nro_referencia=row.nro_referencia,
         erp_CODART=row.erp_CODART,
         erp_DESART=row.erp_DESART,
         fecha_muestreo=row.fecha_muestreo,
+        usuario_muestreo_nombre=row.usuario_muestreo_nombre,
         laboratorio_nombre=row.laboratorio_nombre,
         laboratorio_direccion=row.laboratorio_direccion,
+        laboratorio_contacto=row.laboratorio_contacto,
         fecha_despacho=row.fecha_despacho,
         temperatura_transporte=row.temperatura_transporte,
         nro_remito=row.nro_remito,
@@ -504,5 +531,66 @@ def obtener_remito(
         protocolo_utilizar=row.protocolo_utilizar,
         testigo_codigo=row.testigo_codigo,
         testigo_nombre=row.testigo_nombre,
+        testigo_nro_lote=row.testigo_nro_lote,
+        testigo_fecha_vencimiento=row.testigo_fecha_vencimiento,
         cantidad_testigo=float(row.cantidad_testigo) if row.cantidad_testigo is not None else None,
     )
+
+
+# ── Etiquetas (REQ-ENV-003) ────────────────────────────────────────
+
+@router.post("/{id_muestra}/etiqueta", response_model=EtiquetaResponse, status_code=201)
+def generar_etiqueta(
+    id_muestra: int,
+    user: dict = Depends(require_rol("muestreador", "qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Genera (e imprime) una etiqueta para la muestra. Cada llamada registra
+    una fila nueva en lims_etiquetas -- la primera es la impresión original,
+    las siguientes quedan marcadas como reimpresión."""
+    cursor = conn.cursor()
+    cursor.execute(_SELECT_MUESTRA + " WHERE m.id_muestra = ?", id_muestra)
+    muestra = cursor.fetchone()
+    if not muestra:
+        raise HTTPException(status_code=404, detail="Muestra no encontrada")
+
+    cursor.execute("SELECT COUNT(*) AS n FROM lims_etiquetas WHERE id_muestra = ?", id_muestra)
+    numero_impresion = cursor.fetchone().n + 1
+
+    cursor.execute(
+        "INSERT INTO lims_etiquetas (id_muestra, numero_impresion, id_usuario) VALUES (?, ?, ?)",
+        id_muestra, numero_impresion, user["id_usuario"],
+    )
+    cursor.execute("SELECT @@IDENTITY AS id")
+    id_etiqueta = int(cursor.fetchone().id)
+
+    audit.registrar(
+        conn, entidad="etiqueta", accion="imprimir" if numero_impresion == 1 else "reimprimir",
+        id_usuario=user["id_usuario"], id_entidad=id_etiqueta,
+        valor_nuevo={"id_muestra": id_muestra, "numero_impresion": numero_impresion},
+    )
+
+    cursor.execute("SELECT * FROM lims_etiquetas WHERE id_etiqueta = ?", id_etiqueta)
+    return _fila_a_etiqueta(cursor.fetchone(), muestra)
+
+
+@router.get("/{id_muestra}/etiqueta", response_model=EtiquetaResponse)
+def obtener_ultima_etiqueta(
+    id_muestra: int,
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    cursor.execute(_SELECT_MUESTRA + " WHERE m.id_muestra = ?", id_muestra)
+    muestra = cursor.fetchone()
+    if not muestra:
+        raise HTTPException(status_code=404, detail="Muestra no encontrada")
+
+    cursor.execute(
+        "SELECT TOP 1 * FROM lims_etiquetas WHERE id_muestra = ? ORDER BY numero_impresion DESC",
+        id_muestra,
+    )
+    fila = cursor.fetchone()
+    if not fila:
+        raise HTTPException(status_code=404, detail="Todavía no se generó ninguna etiqueta para esta muestra")
+    return _fila_a_etiqueta(fila, muestra)

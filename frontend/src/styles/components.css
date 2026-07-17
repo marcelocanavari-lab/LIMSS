@@ -350,23 +350,25 @@
   .printable .card { break-inside: avoid; }
 }
 
-/* --- Etiqueta de muestra (chica, no A4) --- */
+/* --- Etiqueta de muestra (~7cm x 4cm, REQ-ENV-003) --- */
 .printable-label {
   background: #fff;
   color: #111;
-  width: 10cm;
+  width: 7cm;
+  min-height: 4cm;
   margin: 0 auto;
-  padding: var(--sp-4);
+  padding: 0.25cm 0.35cm;
   border: 1px dashed #ccc;
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
+  gap: 2px;
+  box-sizing: border-box;
 }
 
-.printable-label h3 { color: #111; font-size: var(--fs-base); }
-.printable-label .label-row { display: flex; justify-content: space-between; font-size: var(--fs-sm); gap: var(--sp-3); }
-.printable-label .label-codigo { font-family: var(--font-mono); font-weight: 700; font-size: var(--fs-lg); }
+.printable-label h3 { color: #111; font-size: 0.7rem; }
+.printable-label .label-row { display: flex; justify-content: space-between; font-size: 0.65rem; gap: var(--sp-2); line-height: 1.3; }
+.printable-label .label-codigo { font-family: var(--font-mono); font-weight: 700; font-size: 0.95rem; line-height: 1.2; }
 
 @media print {
-  .printable-label { border: none; padding: 0; }
+  .printable-label { border: none; padding: 0.15cm; width: 7cm; min-height: 4cm; }
 }

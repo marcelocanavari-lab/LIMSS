@@ -1,0 +1,508 @@
+2026-07-16 22:53:34,009  INFO      Carpeta: \\LAMARSERVER\Empresa\Lamar\LIMSS\backend\WORDPT
+2026-07-16 22:53:34,010  INFO      Archivos encontrados: 42
+2026-07-16 22:53:34,012  INFO      Modo: DRY RUN
+2026-07-16 22:53:34,014  INFO      ============================================================
+2026-07-16 22:53:34,015  INFO      
+-> Amoxicilina 100 Comp  ESP.docx
+2026-07-16 22:53:37,140  INFO        Codigo:  PT001
+2026-07-16 22:53:37,141  INFO        Nombre:  AMOXICILINA LAMAR 100 mg comprimidos
+2026-07-16 22:53:37,144  INFO        Ensayos: 8
+2026-07-16 22:53:37,145  INFO          - Aspecto
+2026-07-16 22:53:37,147  INFO          - Peso promedio
+2026-07-16 22:53:37,150  INFO          - Uniformidad de peso
+2026-07-16 22:53:37,152  INFO          - Dureza
+2026-07-16 22:53:37,153  INFO          - Friabilidad
+2026-07-16 22:53:37,154  INFO          - Tiempo de desintegración
+2026-07-16 22:53:37,156  INFO          - Identificación
+2026-07-16 22:53:37,159  INFO          - Valoración
+2026-07-16 22:53:37,161  INFO      
+-> Amoxicilina 250 Comp  ESP.docx
+2026-07-16 22:53:37,271  INFO        Codigo:  PT002
+2026-07-16 22:53:37,272  INFO        Nombre:  AMOXICILINA 250 LAMAR comprimidos
+2026-07-16 22:53:37,279  INFO        Ensayos: 8
+2026-07-16 22:53:37,294  INFO          - Aspecto
+2026-07-16 22:53:37,298  INFO          - Peso promedio
+2026-07-16 22:53:37,314  INFO          - Uniformidad de peso
+2026-07-16 22:53:37,320  INFO          - Dureza
+2026-07-16 22:53:37,326  INFO          - Friabilidad
+2026-07-16 22:53:37,339  INFO          - Tiempo de desintegración
+2026-07-16 22:53:37,344  INFO          - Identificación
+2026-07-16 22:53:37,347  INFO          - Valoración
+2026-07-16 22:53:37,360  INFO      
+-> Amoxicilina 500 Comp  ESP.docx
+2026-07-16 22:53:37,512  INFO        Codigo:  PT003
+2026-07-16 22:53:37,528  INFO        Nombre:  AMOXICILINA 500 LAMAR comprimidos
+2026-07-16 22:53:37,531  INFO        Ensayos: 8
+2026-07-16 22:53:37,541  INFO          - Aspecto
+2026-07-16 22:53:37,545  INFO          - Peso promedio
+2026-07-16 22:53:37,562  INFO          - Uniformidad de peso
+2026-07-16 22:53:37,571  INFO          - Dureza
+2026-07-16 22:53:37,588  INFO          - Friabilidad
+2026-07-16 22:53:37,624  INFO          - Tiempo de desintegración
+2026-07-16 22:53:37,645  INFO          - Identificación
+2026-07-16 22:53:37,682  INFO          - Valoración
+2026-07-16 22:53:37,706  INFO      
+-> Amoxicilina Suspensión  ESP.docx
+2026-07-16 22:53:38,463  INFO        Codigo:  PT004
+2026-07-16 22:53:38,465  INFO        Nombre:  AMOXICILINA LAMAR SUSPENSION suspensión extemporánea 20 mg /ml
+2026-07-16 22:53:38,466  INFO        Ensayos: 5
+2026-07-16 22:53:38,467  INFO          - Aspecto
+2026-07-16 22:53:38,469  INFO          - pH
+2026-07-16 22:53:38,470  INFO          - Densidad
+2026-07-16 22:53:38,473  INFO          - Identificación
+2026-07-16 22:53:38,473  INFO          - Valoración
+2026-07-16 22:53:38,474  INFO      
+-> Bronco Tos  ESP.docx
+2026-07-16 22:53:38,554  INFO        Codigo:  PT006
+2026-07-16 22:53:38,569  INFO        Nombre:  BRONCO TOS jarabe
+2026-07-16 22:53:38,596  INFO        Ensayos: 9
+2026-07-16 22:53:38,617  INFO          - Aspecto
+2026-07-16 22:53:38,679  INFO          - pH
+2026-07-16 22:53:38,681  INFO          - Densidad
+2026-07-16 22:53:38,710  INFO          - Volumen de entrega
+2026-07-16 22:53:38,712  INFO          - Identificación general de Producto intermedio*
+2026-07-16 22:53:38,731  INFO          - Identificación de Tiocol
+2026-07-16 22:53:38,749  INFO          - Identificación de solución concentrada para jarabe de Tolú en Producto intermedio*
+2026-07-16 22:53:38,756  INFO          - Valoración de Tiocol
+2026-07-16 22:53:38,760  INFO          - Valoración de solución concentrada para jarabe de Tolú en Producto intermedio*
+2026-07-16 22:53:38,763  INFO      
+-> Bronco Tos Forte ESP.docx
+2026-07-16 22:53:38,923  INFO        Codigo:  PT005
+2026-07-16 22:53:38,981  INFO        Nombre:  BRONCO TOS FORTE jarabe
+2026-07-16 22:53:39,058  INFO        Ensayos: 9
+2026-07-16 22:53:39,073  INFO          - Aspecto
+2026-07-16 22:53:39,096  INFO          - pH
+2026-07-16 22:53:39,099  INFO          - Densidad
+2026-07-16 22:53:39,108  INFO          - Volumen de entrega
+2026-07-16 22:53:39,115  INFO          - Identificación general
+2026-07-16 22:53:39,128  INFO          - Identificación de Tiocol
+2026-07-16 22:53:39,131  INFO          - Identificación de solución concentrada para jarabe de Tolú
+2026-07-16 22:53:39,172  INFO          - Valoración de Tiocol
+2026-07-16 22:53:39,176  INFO          - Valoración de solución concentrada para jarabe de Tolú
+2026-07-16 22:53:39,207  INFO      
+-> Celam 1000 Comp  ESP.docx
+2026-07-16 22:53:39,309  INFO        Codigo:  PT008
+2026-07-16 22:53:39,321  INFO        Nombre:  CELAM 1000 mg comprimidos
+2026-07-16 22:53:39,327  INFO        Ensayos: 8
+2026-07-16 22:53:39,333  INFO          - Aspecto
+2026-07-16 22:53:39,335  INFO          - Peso promedio
+2026-07-16 22:53:39,338  INFO          - Uniformidad de peso
+2026-07-16 22:53:39,339  INFO          - Dureza
+2026-07-16 22:53:39,340  INFO          - Friabilidad
+2026-07-16 22:53:39,342  INFO          - Tiempo de desintegración
+2026-07-16 22:53:39,343  INFO          - Identificación
+2026-07-16 22:53:39,348  INFO          - Valoración
+2026-07-16 22:53:39,350  INFO      
+-> Celam 500 Comp  ESP.docx
+2026-07-16 22:53:39,425  INFO        Codigo:  PT007
+2026-07-16 22:53:39,426  INFO        Nombre:  CELAM 500 mg comprimidos
+2026-07-16 22:53:39,429  INFO        Ensayos: 8
+2026-07-16 22:53:39,432  INFO          - Aspecto
+2026-07-16 22:53:39,433  INFO          - Peso promedio
+2026-07-16 22:53:39,435  INFO          - Uniformidad de peso
+2026-07-16 22:53:39,436  INFO          - Dureza
+2026-07-16 22:53:39,440  INFO          - Friabilidad
+2026-07-16 22:53:39,442  INFO          - Tiempo de desintegración
+2026-07-16 22:53:39,444  INFO          - Identificación
+2026-07-16 22:53:39,445  INFO          - Valoración
+2026-07-16 22:53:39,447  INFO      
+-> Celam Suspensión  ESP.docx
+2026-07-16 22:53:39,513  INFO        Codigo:  PT009
+2026-07-16 22:53:39,513  INFO        Nombre:  CELAM SUSPENSIÓN 60 mg /ml
+2026-07-16 22:53:39,516  INFO        Ensayos: 5
+2026-07-16 22:53:39,518  INFO          - Aspecto
+2026-07-16 22:53:39,519  INFO          - pH
+2026-07-16 22:53:39,520  INFO          - Densidad
+2026-07-16 22:53:39,522  INFO          - Identificación
+2026-07-16 22:53:39,523  INFO          - Valoración
+2026-07-16 22:53:39,526  INFO      
+-> Clindamicin 110 mg Comp  ESP.docx
+2026-07-16 22:53:39,583  INFO        Codigo:  PT010
+2026-07-16 22:53:39,584  INFO        Nombre:  CLINDAMICIN 110 mg comprimidos
+2026-07-16 22:53:39,586  INFO        Ensayos: 8
+2026-07-16 22:53:39,589  INFO          - Aspecto
+2026-07-16 22:53:39,591  INFO          - Peso promedio
+2026-07-16 22:53:39,592  INFO          - Uniformidad de peso
+2026-07-16 22:53:39,593  INFO          - Dureza
+2026-07-16 22:53:39,594  INFO          - Friabilidad
+2026-07-16 22:53:39,597  INFO          - Tiempo de desintegración
+2026-07-16 22:53:39,599  INFO          - Identificación
+2026-07-16 22:53:39,600  INFO          - Valoración
+2026-07-16 22:53:39,602  INFO      
+-> Clindamicin 220 mg Comp  ESP.docx
+2026-07-16 22:53:39,667  INFO        Codigo:  PT011
+2026-07-16 22:53:39,668  INFO        Nombre:  CLINDAMICIN 220 mg comprimidos
+2026-07-16 22:53:39,670  INFO        Ensayos: 8
+2026-07-16 22:53:39,673  INFO          - Aspecto
+2026-07-16 22:53:39,674  INFO          - Peso promedio
+2026-07-16 22:53:39,676  INFO          - Uniformidad de peso
+2026-07-16 22:53:39,677  INFO          - Dureza
+2026-07-16 22:53:39,678  INFO          - Friabilidad
+2026-07-16 22:53:39,680  INFO          - Tiempo de desintegración
+2026-07-16 22:53:39,681  INFO          - Identificación
+2026-07-16 22:53:39,683  INFO          - Valoración
+2026-07-16 22:53:39,684  INFO      
+-> Clormadinona Lamar Comp  ESP.docx
+2026-07-16 22:53:39,744  INFO        Codigo:  PT012
+2026-07-16 22:53:39,745  INFO        Nombre:  CLORMADINONA LAMAR comprimidos
+2026-07-16 22:53:39,747  INFO        Ensayos: 8
+2026-07-16 22:53:39,749  INFO          - Aspecto
+2026-07-16 22:53:39,751  INFO          - Peso promedio
+2026-07-16 22:53:39,752  INFO          - Uniformidad de peso
+2026-07-16 22:53:39,753  INFO          - Dureza
+2026-07-16 22:53:39,755  INFO          - Friabilidad
+2026-07-16 22:53:39,757  INFO          - Tiempo de desintegración
+2026-07-16 22:53:39,758  INFO          - Identificación
+2026-07-16 22:53:39,759  INFO          - Valoración
+2026-07-16 22:53:39,761  INFO      
+-> Clorpromazina Lamar Comp  ESP.docx
+2026-07-16 22:53:39,821  INFO        Codigo:  PT013
+2026-07-16 22:53:39,822  INFO        Nombre:  CLORPROMAZINA LAMAR comprimidos
+2026-07-16 22:53:39,825  INFO        Ensayos: 8
+2026-07-16 22:53:39,826  INFO          - Aspecto
+2026-07-16 22:53:39,828  INFO          - Peso promedio
+2026-07-16 22:53:39,829  INFO          - Uniformidad de peso
+2026-07-16 22:53:39,831  INFO          - Dureza
+2026-07-16 22:53:39,832  INFO          - Friabilidad
+2026-07-16 22:53:39,833  INFO          - Tiempo de desintegración
+2026-07-16 22:53:39,835  INFO          - Identificación
+2026-07-16 22:53:39,836  INFO          - Valoración
+2026-07-16 22:53:39,837  INFO      
+-> Dexametasona iny ESP.docx
+2026-07-16 22:53:39,897  INFO        Codigo:  PT014
+2026-07-16 22:53:39,898  INFO        Nombre:  DEXAMETASONA LAMAR Inyectable
+2026-07-16 22:53:39,900  INFO        Ensayos: 5
+2026-07-16 22:53:39,902  INFO          - Aspecto
+2026-07-16 22:53:39,903  INFO          - pH
+2026-07-16 22:53:39,905  INFO          - Identificación
+2026-07-16 22:53:39,912  INFO          - Valoración
+2026-07-16 22:53:39,914  INFO          - Esterilidad
+2026-07-16 22:53:39,916  INFO      
+-> Dexametasona Lamar Comp  ESP.docx
+2026-07-16 22:53:39,989  INFO        Codigo:  PT015
+2026-07-16 22:53:39,990  INFO        Nombre:  DEXAMETASONA LAMAR comprimidos
+2026-07-16 22:53:39,993  INFO        Ensayos: 8
+2026-07-16 22:53:39,994  INFO          - Aspecto
+2026-07-16 22:53:39,995  INFO          - Peso promedio
+2026-07-16 22:53:39,997  INFO          - Uniformidad de peso
+2026-07-16 22:53:39,998  INFO          - Dureza
+2026-07-16 22:53:39,999  INFO          - Friabilidad
+2026-07-16 22:53:40,000  INFO          - Tiempo de desintegración
+2026-07-16 22:53:40,004  INFO          - Identificación
+2026-07-16 22:53:40,005  INFO          - Valoración
+2026-07-16 22:53:40,007  INFO      
+-> Diazepan iny ESP.docx
+2026-07-16 22:53:40,069  INFO        Codigo:  PT016
+2026-07-16 22:53:40,070  INFO        Nombre:  DIAZEPAN LAMAR Inyectable
+2026-07-16 22:53:40,072  INFO        Ensayos: 5
+2026-07-16 22:53:40,075  INFO          - Aspecto
+2026-07-16 22:53:40,076  INFO          - pH
+2026-07-16 22:53:40,077  INFO          - Identificación
+2026-07-16 22:53:40,079  INFO          - Valoración
+2026-07-16 22:53:40,081  INFO          - Esterilidad
+2026-07-16 22:53:40,083  INFO      
+-> Enrofloxacina 150 mg Comp  ESP.docx
+2026-07-16 22:53:40,145  INFO        Codigo:  PT018
+2026-07-16 22:53:40,146  INFO        Nombre:  ENROFLOXACINA 150 LAMAR comprimidos
+2026-07-16 22:53:40,149  INFO        Ensayos: 8
+2026-07-16 22:53:40,150  INFO          - Aspecto
+2026-07-16 22:53:40,151  INFO          - Peso promedio
+2026-07-16 22:53:40,153  INFO          - Uniformidad de peso
+2026-07-16 22:53:40,154  INFO          - Dureza
+2026-07-16 22:53:40,156  INFO          - Friabilidad
+2026-07-16 22:53:40,157  INFO          - Tiempo de desintegración
+2026-07-16 22:53:40,165  INFO          - Identificación
+2026-07-16 22:53:40,167  INFO          - Valoración
+2026-07-16 22:53:40,168  INFO      
+-> Enrofloxacina 50 mg Comp  ESP.docx
+2026-07-16 22:53:40,238  INFO        Codigo:  PT017
+2026-07-16 22:53:40,239  INFO        Nombre:  ENROFLOXACINA 50 LAMAR comprimidos
+2026-07-16 22:53:40,241  INFO        Ensayos: 8
+2026-07-16 22:53:40,244  INFO          - Aspecto
+2026-07-16 22:53:40,246  INFO          - Peso promedio
+2026-07-16 22:53:40,247  INFO          - Uniformidad de peso
+2026-07-16 22:53:40,248  INFO          - Dureza
+2026-07-16 22:53:40,254  INFO          - Friabilidad
+2026-07-16 22:53:40,265  INFO          - Tiempo de desintegración
+2026-07-16 22:53:40,269  INFO          - Identificación
+2026-07-16 22:53:40,272  INFO          - Valoración
+2026-07-16 22:53:40,274  INFO      
+-> Entero sulfatrin susp ESP.docx
+2026-07-16 22:53:40,721  INFO        Codigo:  PT019
+2026-07-16 22:53:40,726  INFO        Nombre:  ENTERO SULFATRIM SUSPENSIÓN
+2026-07-16 22:53:40,731  INFO        Ensayos: 5
+2026-07-16 22:53:40,735  INFO          - Aspecto
+2026-07-16 22:53:40,769  INFO          - pH
+2026-07-16 22:53:40,776  INFO          - Densidad
+2026-07-16 22:53:40,782  INFO          - Identificación
+2026-07-16 22:53:40,786  INFO          - Valoración
+2026-07-16 22:53:40,789  INFO      
+-> Fenbendazol susp  ESP.docx
+2026-07-16 22:53:41,606  INFO        Codigo:  PT020
+2026-07-16 22:53:41,814  INFO        Nombre:  FENBENDAZOL LAMAR SUSPENSIÓN
+2026-07-16 22:53:41,841  INFO        Ensayos: 5
+2026-07-16 22:53:42,018  INFO          - Aspecto
+2026-07-16 22:53:42,243  INFO          - pH
+2026-07-16 22:53:42,526  INFO          - Densidad
+2026-07-16 22:53:42,781  INFO          - Identificación
+2026-07-16 22:53:42,847  INFO          - Valoración
+2026-07-16 22:53:42,896  INFO      
+-> Glucosa inyESP.docx
+2026-07-16 22:53:43,202  INFO        Codigo:  PT021
+2026-07-16 22:53:43,214  INFO        Nombre:  GLUCOSA HIPERTONICA LAMAR inyectable
+2026-07-16 22:53:43,222  INFO        Ensayos: 5
+2026-07-16 22:53:43,247  INFO          - Aspecto
+2026-07-16 22:53:43,260  INFO          - pH
+2026-07-16 22:53:43,271  INFO          - Identificación
+2026-07-16 22:53:43,309  INFO          - Valoración
+2026-07-16 22:53:43,321  INFO          - Esterilidad
+2026-07-16 22:53:43,337  INFO      
+-> Griseofulvina Lamar Comp  ESP.docx
+2026-07-16 22:53:43,451  INFO        Codigo:  PT022
+2026-07-16 22:53:43,455  INFO        Nombre:  GRISEOFULVINA 250 LAMAR comprimidos
+2026-07-16 22:53:43,466  INFO        Ensayos: 8
+2026-07-16 22:53:43,471  INFO          - Aspecto
+2026-07-16 22:53:43,481  INFO          - Peso promedio
+2026-07-16 22:53:43,484  INFO          - Uniformidad de peso
+2026-07-16 22:53:43,488  INFO          - Dureza
+2026-07-16 22:53:43,498  INFO          - Friabilidad
+2026-07-16 22:53:43,500  INFO          - Tiempo de desintegración
+2026-07-16 22:53:43,504  INFO          - Identificación
+2026-07-16 22:53:43,510  INFO          - Valoración
+2026-07-16 22:53:43,516  INFO      
+-> Hidroxicina Lamar Comp  ESP.docx
+2026-07-16 22:53:43,665  INFO        Codigo:  PT023
+2026-07-16 22:53:43,690  INFO        Nombre:  HIDROXICINA LAMAR comprimidos
+2026-07-16 22:53:43,694  INFO        Ensayos: 8
+2026-07-16 22:53:43,697  INFO          - Aspecto
+2026-07-16 22:53:43,743  INFO          - Peso promedio
+2026-07-16 22:53:43,749  INFO          - Uniformidad de peso
+2026-07-16 22:53:43,752  INFO          - Dureza
+2026-07-16 22:53:43,757  INFO          - Friabilidad
+2026-07-16 22:53:43,760  INFO          - Tiempo de desintegración
+2026-07-16 22:53:43,766  INFO          - Identificación
+2026-07-16 22:53:43,767  INFO          - Valoración
+2026-07-16 22:53:43,769  INFO      
+-> Knock Out  ESP.docx
+2026-07-16 22:53:43,891  INFO        Codigo:  PT024
+2026-07-16 22:53:43,892  INFO        Nombre:  KNOCK OUT Perros Spot On
+2026-07-16 22:53:43,894  INFO        Ensayos: 5
+2026-07-16 22:53:43,895  INFO          - Aspecto
+2026-07-16 22:53:43,899  INFO          - Llenado mínimo
+2026-07-16 22:53:43,901  INFO          - Densidad
+2026-07-16 22:53:43,903  INFO          - Identificación
+2026-07-16 22:53:43,906  INFO          - Valoración
+2026-07-16 22:53:43,915  INFO      
+-> Levamisol Comp  ESP.docx
+2026-07-16 22:53:44,013  INFO        Codigo:  PT027
+2026-07-16 22:53:44,027  INFO        Nombre:  LEVAMISOL LAMAR COMPRIMIDOS
+2026-07-16 22:53:44,030  INFO        Ensayos: 8
+2026-07-16 22:53:44,033  INFO          - Aspecto
+2026-07-16 22:53:44,035  INFO          - Peso promedio
+2026-07-16 22:53:44,037  INFO          - Uniformidad de peso
+2026-07-16 22:53:44,040  INFO          - Dureza
+2026-07-16 22:53:44,041  INFO          - Friabilidad
+2026-07-16 22:53:44,043  INFO          - Tiempo de desintegración
+2026-07-16 22:53:44,044  INFO          - Identificación
+2026-07-16 22:53:44,046  INFO          - Valoración
+2026-07-16 22:53:44,050  INFO      
+-> Levamisol gotas ESP.docx
+2026-07-16 22:53:44,126  INFO        Codigo:  PT026
+2026-07-16 22:53:44,127  INFO        Nombre:  LEVAMISOL LAMAR GOTAS
+2026-07-16 22:53:44,130  INFO        Ensayos: 4
+2026-07-16 22:53:44,134  INFO          - Aspecto
+2026-07-16 22:53:44,137  INFO          - pH
+2026-07-16 22:53:44,138  INFO          - Identificación
+2026-07-16 22:53:44,139  INFO          - Valoración
+2026-07-16 22:53:44,141  INFO      
+-> Mebendazol comp ESP.docx
+2026-07-16 22:53:44,236  INFO        Codigo:  PT029
+2026-07-16 22:53:44,237  INFO        Nombre:  MEBENDAZOL LAMAR COMPRIMIDOS
+2026-07-16 22:53:44,239  INFO        Ensayos: 8
+2026-07-16 22:53:44,242  INFO          - Aspecto
+2026-07-16 22:53:44,243  INFO          - Peso promedio
+2026-07-16 22:53:44,244  INFO          - Uniformidad de peso
+2026-07-16 22:53:44,246  INFO          - Dureza
+2026-07-16 22:53:44,247  INFO          - Friabilidad
+2026-07-16 22:53:44,248  INFO          - Tiempo de desintegración
+2026-07-16 22:53:44,252  INFO          - Identificación
+2026-07-16 22:53:44,253  INFO          - Valoración
+2026-07-16 22:53:44,255  INFO      
+-> Mebendazol susp ESP.docx
+2026-07-16 22:53:44,328  INFO        Codigo:  PT028
+2026-07-16 22:53:44,329  INFO        Nombre:  MEBENDAZOL LAMAR SUSPENSION
+2026-07-16 22:53:44,332  INFO        Ensayos: 5
+2026-07-16 22:53:44,334  INFO          - Aspecto
+2026-07-16 22:53:44,336  INFO          - pH
+2026-07-16 22:53:44,337  INFO          - Densidad
+2026-07-16 22:53:44,339  INFO          - Identificación
+2026-07-16 22:53:44,340  INFO          - Valoración
+2026-07-16 22:53:44,343  INFO      
+-> Megestrol Comp  ESP.docx
+2026-07-16 22:53:44,425  INFO        Codigo:  PT030
+2026-07-16 22:53:44,426  INFO        Nombre:  MEGESTROL LAMAR comprimidos
+2026-07-16 22:53:44,428  INFO        Ensayos: 8
+2026-07-16 22:53:44,430  INFO          - Aspecto
+2026-07-16 22:53:44,431  INFO          - Peso promedio
+2026-07-16 22:53:44,433  INFO          - Uniformidad de peso
+2026-07-16 22:53:44,438  INFO          - Dureza
+2026-07-16 22:53:44,441  INFO          - Friabilidad
+2026-07-16 22:53:44,443  INFO          - Tiempo de desintegración
+2026-07-16 22:53:44,447  INFO          - Identificación
+2026-07-16 22:53:44,452  INFO          - Valoración
+2026-07-16 22:53:44,455  INFO      
+-> Metoclopramida gotas ESP.docx
+2026-07-16 22:53:44,550  INFO        Codigo:  PT031
+2026-07-16 22:53:44,552  INFO        Nombre:  METOCLOPRAMIDA LAMAR gotas
+2026-07-16 22:53:44,556  INFO        Ensayos: 4
+2026-07-16 22:53:44,559  INFO          - Aspecto
+2026-07-16 22:53:44,566  INFO          - pH
+2026-07-16 22:53:44,573  INFO          - Identificación
+2026-07-16 22:53:44,575  INFO          - Valoración
+2026-07-16 22:53:44,577  INFO      
+-> Metoclopramida iny ESP.docx
+2026-07-16 22:53:44,747  INFO        Codigo:  PT032
+2026-07-16 22:53:44,750  INFO        Nombre:  METOCLOPRAMIDA LAMAR INYECTABLE
+2026-07-16 22:53:44,765  INFO        Ensayos: 5
+2026-07-16 22:53:44,767  INFO          - Aspecto
+2026-07-16 22:53:44,768  INFO          - pH
+2026-07-16 22:53:44,772  INFO          - Identificación
+2026-07-16 22:53:44,776  INFO          - Valoración
+2026-07-16 22:53:44,780  INFO          - Esterilidad
+2026-07-16 22:53:44,784  INFO      
+-> Praziquantel  Lamar Comp  ESP.docx
+2026-07-16 22:53:44,979  INFO        Codigo:  PT034
+2026-07-16 22:53:44,982  INFO        Nombre:  PRAZIQUANTEL LAMAR 50 mg comprimidos
+2026-07-16 22:53:44,984  INFO        Ensayos: 8
+2026-07-16 22:53:44,986  INFO          - Aspecto
+2026-07-16 22:53:44,989  INFO          - Peso promedio
+2026-07-16 22:53:44,991  INFO          - Uniformidad de peso
+2026-07-16 22:53:44,992  INFO          - Dureza
+2026-07-16 22:53:44,996  INFO          - Friabilidad
+2026-07-16 22:53:45,008  INFO          - Tiempo de desintegración
+2026-07-16 22:53:45,010  INFO          - Identificación
+2026-07-16 22:53:45,014  INFO          - Valoración
+2026-07-16 22:53:45,016  INFO      
+-> Prednisolona 10 mg Comp  ESP.docx
+2026-07-16 22:53:45,107  INFO        Codigo:  PT035
+2026-07-16 22:53:45,108  INFO        Nombre:  PREDNISOLONA LAMAR 10 mg comprimidos
+2026-07-16 22:53:45,110  INFO        Ensayos: 8
+2026-07-16 22:53:45,112  INFO          - Aspecto
+2026-07-16 22:53:45,113  INFO          - Peso promedio
+2026-07-16 22:53:45,115  INFO          - Uniformidad de peso
+2026-07-16 22:53:45,116  INFO          - Dureza
+2026-07-16 22:53:45,118  INFO          - Friabilidad
+2026-07-16 22:53:45,119  INFO          - Tiempo de desintegración
+2026-07-16 22:53:45,120  INFO          - Identificación
+2026-07-16 22:53:45,124  INFO          - Valoración
+2026-07-16 22:53:45,126  INFO      
+-> Prednisolona 20 mg Comp  ESP.docx
+2026-07-16 22:53:45,204  INFO        Codigo:  PT036
+2026-07-16 22:53:45,205  INFO        Nombre:  PREDNISOLONA LAMAR 20 mg comprimidos
+2026-07-16 22:53:45,207  INFO        Ensayos: 8
+2026-07-16 22:53:45,209  INFO          - Aspecto
+2026-07-16 22:53:45,210  INFO          - Peso promedio
+2026-07-16 22:53:45,211  INFO          - Uniformidad de peso
+2026-07-16 22:53:45,213  INFO          - Dureza
+2026-07-16 22:53:45,214  INFO          - Friabilidad
+2026-07-16 22:53:45,215  INFO          - Tiempo de desintegración
+2026-07-16 22:53:45,217  INFO          - Identificación
+2026-07-16 22:53:45,218  INFO          - Valoración
+2026-07-16 22:53:45,220  INFO      
+-> Sedagotas ESP.docx
+2026-07-16 22:53:45,390  INFO        Codigo:  PT037
+2026-07-16 22:53:45,407  INFO        Nombre:  SEDAGOTAS gotas
+2026-07-16 22:53:45,411  INFO        Ensayos: 4
+2026-07-16 22:53:45,412  INFO          - Aspecto
+2026-07-16 22:53:45,423  INFO          - pH
+2026-07-16 22:53:45,431  INFO          - Identificación
+2026-07-16 22:53:45,438  INFO          - Valoración
+2026-07-16 22:53:45,443  INFO      
+-> Sulfatrim Comp  ESP.docx
+2026-07-16 22:53:45,568  INFO        Codigo:  PT040
+2026-07-16 22:53:45,569  INFO        Nombre:  SULFATRIM comprimidos
+2026-07-16 22:53:45,571  INFO        Ensayos: 8
+2026-07-16 22:53:45,572  INFO          - Aspecto
+2026-07-16 22:53:45,576  INFO          - Peso promedio
+2026-07-16 22:53:45,577  INFO          - Uniformidad de peso
+2026-07-16 22:53:45,580  INFO          - Dureza
+2026-07-16 22:53:45,588  INFO          - Friabilidad
+2026-07-16 22:53:45,594  INFO          - Tiempo de desintegración
+2026-07-16 22:53:45,599  INFO          - Identificación
+2026-07-16 22:53:45,602  INFO          - Valoración
+2026-07-16 22:53:45,611  INFO      
+-> Sulfatrim F Comp  ESP.docx
+2026-07-16 22:53:45,718  INFO        Codigo:  PT038
+2026-07-16 22:53:45,719  INFO        Nombre:  SULFATRIM F comprimidos
+2026-07-16 22:53:45,722  INFO        Ensayos: 8
+2026-07-16 22:53:45,723  INFO          - Aspecto
+2026-07-16 22:53:45,724  INFO          - Peso promedio
+2026-07-16 22:53:45,728  INFO          - Uniformidad de peso
+2026-07-16 22:53:45,731  INFO          - Dureza
+2026-07-16 22:53:45,734  INFO          - Friabilidad
+2026-07-16 22:53:45,738  INFO          - Tiempo de desintegración
+2026-07-16 22:53:45,740  INFO          - Identificación
+2026-07-16 22:53:45,743  INFO          - Valoración
+2026-07-16 22:53:45,746  INFO      
+-> Sulfatrim susp ESP.docx
+2026-07-16 22:53:45,863  INFO        Codigo:  PT039
+2026-07-16 22:53:45,865  INFO        Nombre:  SULFATRIM SUSPENSIÓN
+2026-07-16 22:53:45,868  INFO        Ensayos: 5
+2026-07-16 22:53:45,869  INFO          - Aspecto
+2026-07-16 22:53:45,872  INFO          - pH
+2026-07-16 22:53:45,874  INFO          - (3) Densidad
+2026-07-16 22:53:45,881  INFO          - Identificación
+2026-07-16 22:53:45,882  INFO          - Valoración
+2026-07-16 22:53:45,886  INFO      
+-> T4 Comp  ESP.docx
+2026-07-16 22:53:46,027  INFO        Codigo:  PT043
+2026-07-16 22:53:46,028  INFO        Nombre:  T 4 LAMAR comprimidos
+2026-07-16 22:53:46,031  INFO        Ensayos: 8
+2026-07-16 22:53:46,035  INFO          - Aspecto
+2026-07-16 22:53:46,039  INFO          - Peso promedio
+2026-07-16 22:53:46,040  INFO          - Uniformidad de peso
+2026-07-16 22:53:46,044  INFO          - Dureza
+2026-07-16 22:53:46,052  INFO          - Friabilidad
+2026-07-16 22:53:46,056  INFO          - Tiempo de desintegración
+2026-07-16 22:53:46,066  INFO          - Identificación
+2026-07-16 22:53:46,081  INFO          - Valoración
+2026-07-16 22:53:46,085  INFO      
+-> T4 F Comp  ESP.docx
+2026-07-16 22:53:46,167  INFO        Codigo:  PT044
+2026-07-16 22:53:46,171  INFO        Nombre:  T 4 “F” LAMAR comprimidos
+2026-07-16 22:53:46,174  INFO        Ensayos: 8
+2026-07-16 22:53:46,175  INFO          - Aspecto
+2026-07-16 22:53:46,176  INFO          - Peso promedio
+2026-07-16 22:53:46,179  INFO          - Uniformidad de peso
+2026-07-16 22:53:46,181  INFO          - Dureza
+2026-07-16 22:53:46,184  INFO          - Friabilidad
+2026-07-16 22:53:46,188  INFO          - Tiempo de desintegración
+2026-07-16 22:53:46,197  INFO          - Identificación
+2026-07-16 22:53:46,203  INFO          - Valoración
+2026-07-16 22:53:46,212  INFO      
+-> Triamcinolona 6 iny ESP.docx
+2026-07-16 22:53:46,285  INFO        Codigo:  PT047
+2026-07-16 22:53:46,287  INFO        Nombre:  TRIAMCINOLONA 6 LAMAR Inyectable
+2026-07-16 22:53:46,289  INFO        Ensayos: 6
+2026-07-16 22:53:46,291  INFO          - Aspecto
+2026-07-16 22:53:46,293  INFO          - pH
+2026-07-16 22:53:46,296  INFO          - Densidad
+2026-07-16 22:53:46,299  INFO          - Identificación
+2026-07-16 22:53:46,300  INFO          - Valoración
+2026-07-16 22:53:46,304  INFO          - Esterilidad
+2026-07-16 22:53:46,315  INFO      
+-> Vaselina Liquida ESP.docx
+2026-07-16 22:53:46,390  INFO        Codigo:  PT046
+2026-07-16 22:53:46,391  INFO        Nombre:  VASELINA LIQUIDA LAMAR
+2026-07-16 22:53:46,399  INFO        Ensayos: 4
+2026-07-16 22:53:46,401  INFO          - Aspecto
+2026-07-16 22:53:46,415  INFO          - Solubilidad
+2026-07-16 22:53:46,422  INFO          - Peso específico
+2026-07-16 22:53:46,424  INFO          - Volumen de entrega
+2026-07-16 22:53:46,434  INFO      
+============================================================
+2026-07-16 22:53:46,448  INFO      RESUMEN FINAL
+2026-07-16 22:53:46,451  INFO        Insertados: 42
+2026-07-16 22:53:46,454  INFO        Saltados:   0
+2026-07-16 22:53:46,457  INFO        Errores:    0
+2026-07-16 22:53:46,469  INFO      ============================================================

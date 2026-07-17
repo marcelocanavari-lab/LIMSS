@@ -129,7 +129,7 @@ export default function MuestraNuevaPage() {
               <input
                 className="field-input"
                 style={{ flex: 1 }}
-                placeholder={esMateriaPrima ? 'Ej. 12345' : 'Ej. LOTE-2026-001'}
+                placeholder={esMateriaPrima ? 'Ej. 262/20' : 'Ej. LOTE-2026-001'}
                 value={referencia}
                 onChange={(e) => setReferencia(e.target.value)}
                 disabled={buscando}

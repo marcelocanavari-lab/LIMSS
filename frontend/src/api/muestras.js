@@ -27,6 +27,10 @@ export const muestrasApi = {
   confirmarEnvio: (id, data) => api.post(`/api/muestras/${id}/envio`, data),
   obtenerRemito: (id) => api.get(`/api/muestras/${id}/remito`),
 
+  // Etiqueta (REQ-ENV-003)
+  generarEtiqueta: (id) => api.post(`/api/muestras/${id}/etiqueta`),
+  obtenerUltimaEtiqueta: (id) => api.get(`/api/muestras/${id}/etiqueta`),
+
   // Laboratorios
   listarLaboratorios: (activo) => {
     const params = new URLSearchParams();

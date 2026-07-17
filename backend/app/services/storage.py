@@ -21,9 +21,22 @@ def _sanitizar(codigo: str) -> str:
     return codigo.replace("/", "-").replace("\\", "-").replace(" ", "_")
 
 
-def _guardar_pdf(upload_file: UploadFile, subdir: str, nombre_archivo: str) -> str:
-    """Valida y guarda un PDF bajo `{storage_path}/{subdir}/{nombre_archivo}`.
+def _guardar_bytes(contenido: bytes, subdir: str, nombre_archivo: str) -> str:
+    """Escribe bytes ya validados bajo `{storage_path}/{subdir}/{nombre_archivo}`.
     Devuelve la ruta relativa a persistir en la base."""
+    ruta_relativa = os.path.join(subdir, nombre_archivo)
+    directorio = os.path.join(settings.storage_path, subdir)
+    os.makedirs(directorio, exist_ok=True)
+
+    with open(os.path.join(settings.storage_path, ruta_relativa), "wb") as f:
+        f.write(contenido)
+
+    return ruta_relativa
+
+
+def _guardar_pdf(upload_file: UploadFile, subdir: str, nombre_archivo: str) -> str:
+    """Valida un PDF subido por el usuario y lo guarda. Devuelve la ruta
+    relativa a persistir en la base."""
     if upload_file.content_type != "application/pdf":
         raise HTTPException(status_code=400, detail="El archivo debe ser un PDF")
 
@@ -33,14 +46,7 @@ def _guardar_pdf(upload_file: UploadFile, subdir: str, nombre_archivo: str) -> s
     if len(contenido) > MAX_PDF_SIZE_BYTES:
         raise HTTPException(status_code=400, detail="El PDF no puede superar los 10 MB")
 
-    ruta_relativa = os.path.join(subdir, nombre_archivo)
-    directorio = os.path.join(settings.storage_path, subdir)
-    os.makedirs(directorio, exist_ok=True)
-
-    with open(os.path.join(settings.storage_path, ruta_relativa), "wb") as f:
-        f.write(contenido)
-
-    return ruta_relativa
+    return _guardar_bytes(contenido, subdir, nombre_archivo)
 
 
 def guardar_pdf_testigo(upload_file: UploadFile, codigo_testigo: str) -> str:
@@ -55,6 +61,12 @@ def guardar_pdf_protocolo(upload_file: UploadFile, codigo_muestra: str) -> str:
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     nombre_archivo = f"LIMS_{_sanitizar(codigo_muestra)}_PROT_{timestamp}.pdf"
     return _guardar_pdf(upload_file, "protocolos", nombre_archivo)
+
+
+def guardar_pdf_remito(contenido: bytes, nro_remito_interno: str) -> str:
+    """Remito de envío generado por el sistema (REQ-ENV-004)."""
+    nombre_archivo = f"LIMSS_{_sanitizar(nro_remito_interno)}.pdf"
+    return _guardar_bytes(contenido, "remitos", nombre_archivo)
 
 
 def ruta_absoluta(ruta_relativa: str) -> str:

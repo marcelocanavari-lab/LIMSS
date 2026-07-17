@@ -1,23 +1,25 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import TopBar from '../../components/TopBar';
-import { muestrasApi } from '../../api/muestras';
-import { resultadosApi } from '../../api/resultados';
 import { dictamenesApi } from '../../api/dictamenes';
+import { resultadosApi } from '../../api/resultados';
+import TopBar from '../../components/TopBar';
 import { ApiError } from '../../api/client';
 
 const ESTADOS = [
-  { value: 'aprobado', label: 'Aprobado', className: 'btn-primary' },
-  { value: 'rechazado', label: 'Rechazado', className: 'btn-secondary' },
-  { value: 'cuarentena', label: 'Cuarentena', className: 'btn-secondary' },
+  { value: 'aprobado', label: 'Aprobado' },
+  { value: 'rechazado', label: 'Rechazado' },
+  { value: 'cuarentena', label: 'Cuarentena' },
 ];
+
+function labelEstado(valor) {
+  return ESTADOS.find((e) => e.value === valor)?.label || valor;
+}
 
 export default function DictamenDetallePage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const [muestra, setMuestra] = useState(null);
-  const [paraCarga, setParaCarga] = useState(null);
+  const [detalle, setDetalle] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -27,15 +29,16 @@ export default function DictamenDetallePage() {
   const [pin, setPin] = useState('');
   const [guardando, setGuardando] = useState(false);
 
-  useEffect(() => {
-    Promise.all([muestrasApi.obtenerMuestra(id), resultadosApi.obtenerParaCarga(id)])
-      .then(([m, pc]) => {
-        setMuestra(m);
-        setParaCarga(pc);
-      })
+  function cargar() {
+    setLoading(true);
+    dictamenesApi
+      .obtenerDetalle(id)
+      .then(setDetalle)
       .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo cargar la muestra'))
       .finally(() => setLoading(false));
-  }, [id]);
+  }
+
+  useEffect(cargar, [id]);
 
   async function verProtocolo() {
     try {
@@ -46,24 +49,16 @@ export default function DictamenDetallePage() {
     }
   }
 
-  const hayOos = paraCarga?.ensayos.some((e) => e.dentro_especificacion === false) || false;
+  const hayOos = detalle?.hay_oos || false;
+  const justificacionOk = !hayOos || justificacion.trim().length > 0;
+  const puedeConfirmar =
+    !!estadoDictamen && justificacionOk && pin.trim().length >= 4 && !guardando;
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
 
-    if (!estadoDictamen) {
-      setError('Seleccioná un estado de dictamen');
-      return;
-    }
-    if (hayOos && !justificacion.trim()) {
-      setError('Hay resultados OOS: la justificación es obligatoria');
-      return;
-    }
-    if (!pin.trim()) {
-      setError('Ingresá tu PIN para firmar el dictamen');
-      return;
-    }
+    if (!puedeConfirmar) return;
 
     setGuardando(true);
     try {
@@ -71,14 +66,14 @@ export default function DictamenDetallePage() {
         estado_dictamen: estadoDictamen,
         justificacion_oos: justificacion.trim() || null,
         observaciones: observaciones.trim() || null,
-        pin: pin.trim(),
+        pin_confirmacion: pin.trim(),
       });
       navigate('/dictamenes', { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo emitir el dictamen');
+      setPin('');
     } finally {
       setGuardando(false);
-      setPin('');
     }
   }
 
@@ -90,7 +85,7 @@ export default function DictamenDetallePage() {
     );
   }
 
-  if (error && !muestra) {
+  if (error && !detalle) {
     return (
       <div className="screen">
         <TopBar titulo="Dictamen" subtitulo="Dictamen QA" onBack={() => navigate('/dictamenes')} />
@@ -103,20 +98,48 @@ export default function DictamenDetallePage() {
 
   return (
     <div className="screen">
-      <TopBar titulo={muestra.codigo_muestra} subtitulo={muestra.erp_DESART} onBack={() => navigate('/dictamenes')} />
+      <TopBar titulo={detalle.codigo_muestra} subtitulo={detalle.erp_DESART} onBack={() => navigate('/dictamenes')} />
       <div className="screen-content">
         <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
           <table className="data-table">
             <tbody>
-              <tr><td>{muestra.tipo_referencia === 'ir' ? 'IR' : 'Lote'}</td><td style={{ textAlign: 'left', fontFamily: 'var(--font-mono)' }}>{muestra.nro_referencia}</td></tr>
-              <tr><td>Material</td><td style={{ textAlign: 'left' }}>{muestra.erp_CODART} — {muestra.erp_DESART}</td></tr>
-              <tr><td>Proveedor</td><td style={{ textAlign: 'left' }}>{muestra.erp_proveedor || '—'}</td></tr>
+              <tr><td>{detalle.tipo_referencia === 'ir' ? 'IR' : 'Lote'}</td><td style={{ textAlign: 'left', fontFamily: 'var(--font-mono)' }}>{detalle.nro_referencia}</td></tr>
+              <tr><td>Material</td><td style={{ textAlign: 'left' }}>{detalle.erp_CODART} — {detalle.erp_DESART}</td></tr>
+              <tr><td>Fecha de muestreo</td><td style={{ textAlign: 'left' }}>{new Date(detalle.fecha_muestreo).toLocaleString()}</td></tr>
+              <tr><td>Muestreador</td><td style={{ textAlign: 'left' }}>{detalle.usuario_muestreo_nombre}</td></tr>
             </tbody>
           </table>
-          <button className="btn btn-secondary" style={{ marginTop: 'var(--sp-3)' }} onClick={verProtocolo}>
-            Ver protocolo (PDF)
-          </button>
         </div>
+
+        {detalle.envio && (
+          <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
+            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Envío</h2>
+            <table className="data-table">
+              <tbody>
+                <tr><td>Laboratorio</td><td style={{ textAlign: 'left' }}>{detalle.envio.laboratorio_nombre}</td></tr>
+                <tr><td>Fecha de despacho</td><td style={{ textAlign: 'left' }}>{new Date(detalle.envio.fecha_despacho).toLocaleString()}</td></tr>
+                {detalle.envio.testigo_codigo && (
+                  <tr><td>Testigo</td><td style={{ textAlign: 'left' }}>{detalle.envio.testigo_codigo} — {detalle.envio.testigo_nombre}</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {detalle.protocolo && (
+          <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
+            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Protocolo</h2>
+            <table className="data-table">
+              <tbody>
+                <tr><td>N° protocolo externo</td><td style={{ textAlign: 'left' }}>{detalle.protocolo.nro_protocolo_ext}</td></tr>
+                <tr><td>Fecha de emisión</td><td style={{ textAlign: 'left' }}>{detalle.protocolo.fecha_emision}</td></tr>
+              </tbody>
+            </table>
+            <button className="btn btn-secondary" style={{ marginTop: 'var(--sp-3)' }} onClick={verProtocolo}>
+              Ver protocolo (PDF)
+            </button>
+          </div>
+        )}
 
         <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
           <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Resultados</h2>
@@ -130,7 +153,7 @@ export default function DictamenDetallePage() {
               </tr>
             </thead>
             <tbody>
-              {paraCarga.ensayos.map((en) => {
+              {detalle.ensayos.map((en) => {
                 const oos = en.dentro_especificacion === false;
                 return (
                   <tr key={en.id_ensayo} style={oos ? { background: 'var(--danger-soft)' } : undefined}>
@@ -145,9 +168,9 @@ export default function DictamenDetallePage() {
                       {en.dentro_especificacion === null ? (
                         <span className="badge badge-neutral">Sin resultado</span>
                       ) : oos ? (
-                        <span className="badge badge-danger">OOS</span>
+                        <span className="badge badge-danger">● OOS</span>
                       ) : (
-                        <span className="badge badge-ok">OK</span>
+                        <span className="badge badge-ok">● OK</span>
                       )}
                     </td>
                   </tr>
@@ -208,9 +231,26 @@ export default function DictamenDetallePage() {
                 disabled={guardando}
               />
             </div>
+          </div>
 
+          {estadoDictamen && (
+            <div className="card" style={{ marginBottom: 'var(--sp-5)', background: 'var(--surf-2)' }}>
+              <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Previsualización</h2>
+              <table className="data-table">
+                <tbody>
+                  <tr><td>Muestra</td><td style={{ textAlign: 'left' }}>{detalle.codigo_muestra}</td></tr>
+                  <tr><td>Dictamen</td><td style={{ textAlign: 'left' }}><b>{labelEstado(estadoDictamen)}</b></td></tr>
+                  {justificacion.trim() && <tr><td>Justificación</td><td style={{ textAlign: 'left' }}>{justificacion.trim()}</td></tr>}
+                  {observaciones.trim() && <tr><td>Observaciones</td><td style={{ textAlign: 'left' }}>{observaciones.trim()}</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
+            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Firma electrónica</h2>
             <div className="field">
-              <label className="field-label" htmlFor="pin">PIN (firma electrónica)</label>
+              <label className="field-label" htmlFor="pin">PIN de confirmación</label>
               <input
                 id="pin"
                 className="field-input field-input-lg"
@@ -225,8 +265,8 @@ export default function DictamenDetallePage() {
 
           {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}
 
-          <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={guardando}>
-            {guardando ? <span className="spinner" /> : 'Firmar dictamen'}
+          <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={!puedeConfirmar}>
+            {guardando ? <span className="spinner" /> : 'Firmar y dictaminar'}
           </button>
         </form>
       </div>

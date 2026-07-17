@@ -1,0 +1,730 @@
+2026-07-16 22:09:05,891  INFO      Log guardado en: \\LAMARSERVER\Empresa\Lamar\LIMSS\backend\WORD\importacion_20260716_220905.log
+2026-07-16 22:09:05,911  INFO      Carpeta: \\LAMARSERVER\Empresa\Lamar\LIMSS\backend\WORD
+2026-07-16 22:09:05,912  INFO      Archivos encontrados: 37
+2026-07-16 22:09:05,913  INFO      Modo: INSERCIÓN EN BD
+2026-07-16 22:09:05,914  INFO      ============================================================
+2026-07-16 22:09:06,067  INFO      ✓ Conexión a BD LIMSS OK
+2026-07-16 22:09:06,068  INFO      
+→ Acepromazina Maleato ESP MP.docx
+2026-07-16 22:09:08,441  INFO        Código:  MP001
+2026-07-16 22:09:08,442  INFO        Nombre:  ACEPROMAZINA, MALEATO
+2026-07-16 22:09:08,443  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:08,444  INFO        CAS:     
+2026-07-16 22:09:08,444  INFO        Ensayos: 10
+2026-07-16 22:09:08,445  INFO          • Aspecto
+2026-07-16 22:09:08,446  INFO          • Solubilidad
+2026-07-16 22:09:08,447  INFO          • Identificación por espectroscopia IR
+2026-07-16 22:09:08,448  INFO          • Identificación por HPLC
+2026-07-16 22:09:08,448  INFO          • Punto de fusión
+2026-07-16 22:09:08,449  INFO          • pH
+2026-07-16 22:09:08,450  INFO          • Agua
+2026-07-16 22:09:08,451  INFO          • Residuo de ignición
+2026-07-16 22:09:08,452  INFO          • Compuestos relacionados
+2026-07-16 22:09:08,452  INFO          • Valoración
+2026-07-16 22:09:08,454  WARNING     TRUNCAMIENTO en peso_molecular: len=1584 > 100 — '442,53 Envasado y almacenamiento: Conservar en envases bien cerrados. Proteger d...'
+2026-07-16 22:09:08,576  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:08,577  INFO      
+→ Amoxicilina trihidrato compacta ESP MP.docx
+2026-07-16 22:09:08,682  INFO        Código:  MP008
+2026-07-16 22:09:08,683  INFO        Nombre:  AMOXICILINA TRIHIDRATO COMPACTADA
+2026-07-16 22:09:08,686  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:08,687  INFO        CAS:     
+2026-07-16 22:09:08,688  INFO        Ensayos: 8
+2026-07-16 22:09:08,691  INFO          • Aspecto
+2026-07-16 22:09:08,693  INFO          • Solubilidad
+2026-07-16 22:09:08,695  INFO          • Identificación por espectroscopia IR
+2026-07-16 22:09:08,697  INFO          • Identificación por HPLC
+2026-07-16 22:09:08,699  INFO          • pH
+2026-07-16 22:09:08,701  INFO          • Agua
+2026-07-16 22:09:08,703  INFO          • Dimetilanilina
+2026-07-16 22:09:08,710  INFO          • Valoración
+2026-07-16 22:09:08,738  WARNING     TRUNCAMIENTO en peso_molecular: len=1473 > 100 — 'Anhidro: 365,41 Trihidrato: 419,45 Envasado y almacenamiento: Conservar en envas...'
+2026-07-16 22:09:08,809  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:08,810  INFO      
+→ Amoxicilina trihidrato polvo ESP MP.docx
+2026-07-16 22:09:08,934  INFO        Código:  MP009
+2026-07-16 22:09:08,935  INFO        Nombre:  AMOXICILINA TRIHIDRATO POLVO
+2026-07-16 22:09:08,940  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:08,943  INFO        CAS:     
+2026-07-16 22:09:08,944  INFO        Ensayos: 8
+2026-07-16 22:09:08,945  INFO          • Aspecto
+2026-07-16 22:09:08,947  INFO          • Solubilidad
+2026-07-16 22:09:08,948  INFO          • Identificación por espectroscopia IR
+2026-07-16 22:09:08,949  INFO          • Identificación por HPLC
+2026-07-16 22:09:08,952  INFO          • pH
+2026-07-16 22:09:08,963  INFO          • Agua
+2026-07-16 22:09:08,984  INFO          • Dimetilanilina
+2026-07-16 22:09:08,986  INFO          • Valoración
+2026-07-16 22:09:09,004  WARNING     TRUNCAMIENTO en peso_molecular: len=1476 > 100 — 'Anhidro: 365,41 Trihidrato: 419,45 Envasado y almacenamiento: Conservar en envas...'
+2026-07-16 22:09:09,317  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:09,319  INFO      
+→ Cefalexina monohidrato compactada ESP MP.docx
+2026-07-16 22:09:09,489  INFO        Código:  MP016
+2026-07-16 22:09:09,498  INFO        Nombre:  CEFALEXINA COMPACTADA
+2026-07-16 22:09:09,500  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:09,535  INFO        CAS:     
+2026-07-16 22:09:09,545  INFO        Ensayos: 12
+2026-07-16 22:09:09,548  INFO          • Aspecto
+2026-07-16 22:09:09,564  INFO          • Solubilidad
+2026-07-16 22:09:09,568  INFO          • Identificación por espectroscopia IR
+2026-07-16 22:09:09,578  INFO          • Identificación por espectroscopía UV
+2026-07-16 22:09:09,585  INFO          • Identificación por TLC
+2026-07-16 22:09:09,604  INFO          • Identificación por HPLC
+2026-07-16 22:09:09,609  INFO          • Rotación específica
+2026-07-16 22:09:09,645  INFO          • pH
+2026-07-16 22:09:09,650  INFO          • Agua
+2026-07-16 22:09:09,664  INFO          • Compuestos relacionados
+2026-07-16 22:09:09,680  INFO          • Dimetilanilina
+2026-07-16 22:09:09,685  INFO          • Valoración
+2026-07-16 22:09:09,690  WARNING     TRUNCAMIENTO en peso_molecular: len=2156 > 100 — 'Anhidro: 347,40 Monohidrato: 365,41 Envasado y almacenamiento: Conservar en enva...'
+2026-07-16 22:09:09,694  WARNING     TRUNCAMIENTO en envasado_almacenamiento: len=2093 > 2000 — 'Conservar en envases impermeables. Determinaciones: ENSAYO | ESPECIFICACIONES | ...'
+2026-07-16 22:09:09,837  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:09,838  INFO      
+→ Cefalexina monohidrato polvo ESP MP.docx
+2026-07-16 22:09:10,022  INFO        Código:  MP017
+2026-07-16 22:09:10,027  INFO        Nombre:  CEFALEXINA POLVO
+2026-07-16 22:09:10,043  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:10,063  INFO        CAS:     
+2026-07-16 22:09:10,134  INFO        Ensayos: 12
+2026-07-16 22:09:10,137  INFO          • Aspecto
+2026-07-16 22:09:10,139  INFO          • Solubilidad
+2026-07-16 22:09:10,142  INFO          • Identificación por espectroscopia IR
+2026-07-16 22:09:10,154  INFO          • Identificación por espectroscopía UV
+2026-07-16 22:09:10,250  INFO          • Identificación por TLC
+2026-07-16 22:09:10,278  INFO          • Identificación por HPLC
+2026-07-16 22:09:10,317  INFO          • Rotación específica
+2026-07-16 22:09:10,362  INFO          • pH
+2026-07-16 22:09:10,403  INFO          • Agua
+2026-07-16 22:09:10,449  INFO          • Compuestos relacionados
+2026-07-16 22:09:10,459  INFO          • Dimetilanilina
+2026-07-16 22:09:10,465  INFO          • Valoración
+2026-07-16 22:09:10,487  WARNING     TRUNCAMIENTO en peso_molecular: len=2156 > 100 — 'Anhidro: 347,40; Monohidrato: 365,41 Envasado y almacenamiento: Conservar en env...'
+2026-07-16 22:09:10,489  WARNING     TRUNCAMIENTO en envasado_almacenamiento: len=2092 > 2000 — 'Conservar en envases impermeables. Determinaciones: ENSAYO | ESPECIFICACIONES | ...'
+2026-07-16 22:09:10,633  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:10,634  INFO      
+→ Clindamicina , Clorhidrato ESP MP.docx
+2026-07-16 22:09:10,773  INFO        Código:  MP019
+2026-07-16 22:09:10,774  INFO        Nombre:  CLINDAMICINA, CLORHIDRATO
+2026-07-16 22:09:10,777  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:10,783  INFO        CAS:     
+2026-07-16 22:09:10,811  INFO        Ensayos: 8
+2026-07-16 22:09:10,854  INFO          • Aspecto
+2026-07-16 22:09:10,857  INFO          • Solubilidad
+2026-07-16 22:09:10,861  INFO          • Identificación por espectroscopía IR
+2026-07-16 22:09:10,867  INFO          • Identificación por HPLC
+2026-07-16 22:09:10,887  INFO          • pH
+2026-07-16 22:09:10,908  INFO          • Agua
+2026-07-16 22:09:10,934  INFO          • Compuestos relacionados
+2026-07-16 22:09:10,971  INFO          • Valoración
+2026-07-16 22:09:11,000  WARNING     TRUNCAMIENTO en peso_molecular: len=1647 > 100 — '461,45 Monohidrato: CAS N°: [58207-19-5] Peso molecular (PM): 479,47 Envasado y ...'
+2026-07-16 22:09:11,099  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:11,100  INFO      
+→ Clormadinona acetato ESP MP.docx
+2026-07-16 22:09:11,202  INFO        Código:  MP022
+2026-07-16 22:09:11,203  INFO        Nombre:  CLORMADINONA ACETATO
+2026-07-16 22:09:11,205  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:11,206  INFO        CAS:     
+2026-07-16 22:09:11,208  INFO        Ensayos: 12
+2026-07-16 22:09:11,210  INFO          • Aspecto
+2026-07-16 22:09:11,211  INFO          • Solubilidad
+2026-07-16 22:09:11,212  INFO          • Identificación por espectroscopía IR
+2026-07-16 22:09:11,214  INFO          • Identificación por HLPC
+2026-07-16 22:09:11,215  INFO          • Intervalo de fusión
+2026-07-16 22:09:11,218  INFO          • Rotación específica
+2026-07-16 22:09:11,221  INFO          • Pérdida por secado
+2026-07-16 22:09:11,225  INFO          • Residuo de ignición
+2026-07-16 22:09:11,245  INFO          • Metales pesados
+2026-07-16 22:09:11,248  INFO          • Arsénico
+2026-07-16 22:09:11,249  INFO          • Otros esteroides
+2026-07-16 22:09:11,253  INFO          • Valoración
+2026-07-16 22:09:11,265  WARNING     TRUNCAMIENTO en peso_molecular: len=1937 > 100 — '404,93 Envasado y almacenamiento: Conservar en envases bien cerrados, resistente...'
+2026-07-16 22:09:11,398  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:11,400  INFO      
+→ Clorpromazina clorhidrato ESP MP.docx
+2026-07-16 22:09:11,500  INFO        Código:  MP021
+2026-07-16 22:09:11,502  INFO        Nombre:  CLORPROMAZINA, CLORHIDRATO
+2026-07-16 22:09:11,506  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:11,509  INFO        CAS:     
+2026-07-16 22:09:11,510  INFO        Ensayos: 9
+2026-07-16 22:09:11,512  INFO          • Aspecto
+2026-07-16 22:09:11,514  INFO          • Solubilidad
+2026-07-16 22:09:11,515  INFO          • Identificación por espectroscopía IR
+2026-07-16 22:09:11,516  INFO          • Identificación por TLC
+2026-07-16 22:09:11,544  INFO          • Intervalo de fusión
+2026-07-16 22:09:11,547  INFO          • Pérdida por desecación
+2026-07-16 22:09:11,550  INFO          • Residuo de ignición
+2026-07-16 22:09:11,554  INFO          • Otras fenotiazinas con grupos alquilo
+2026-07-16 22:09:11,557  INFO          • Valoración
+2026-07-16 22:09:11,561  WARNING     TRUNCAMIENTO en peso_molecular: len=1839 > 100 — '355,33 Envasado y almacenamiento: Conservar en envases impermeables, resistentes...'
+2026-07-16 22:09:11,627  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:11,631  INFO      
+→ Dexametasona 21 fosfato ESP MP.docx
+2026-07-16 22:09:11,748  INFO        Código:  MP027
+2026-07-16 22:09:11,756  INFO        Nombre:  DEXAMETASONA 21-FOSFATO SÓDICA
+2026-07-16 22:09:11,759  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:11,761  INFO        CAS:     
+2026-07-16 22:09:11,762  INFO        Ensayos: 13
+2026-07-16 22:09:11,763  INFO          • Aspecto
+2026-07-16 22:09:11,775  INFO          • Solubilidad
+2026-07-16 22:09:11,778  INFO          • Identificación por espectroscopía IR
+2026-07-16 22:09:11,798  INFO          • Identificación por TLC
+2026-07-16 22:09:11,801  INFO          • Identificación por HPLC
+2026-07-16 22:09:11,802  INFO          • Pureza cromatográfica
+2026-07-16 22:09:11,807  INFO          • Rotación específica
+2026-07-16 22:09:11,809  INFO          • pH
+2026-07-16 22:09:11,814  INFO          • Agua
+2026-07-16 22:09:11,826  INFO          • Contenido de alcohol
+2026-07-16 22:09:11,830  INFO          • Límite de iones fosfato
+2026-07-16 22:09:11,835  INFO          • Límite de dexametasona libre
+2026-07-16 22:09:11,839  INFO          • Valoración
+2026-07-16 22:09:11,849  WARNING     TRUNCAMIENTO en peso_molecular: len=2135 > 100 — '516,41 Envasado y almacenamiento: Conservar en envases impermeables en heladera....'
+2026-07-16 22:09:11,852  WARNING     TRUNCAMIENTO en envasado_almacenamiento: len=2101 > 2000 — 'Conservar en envases impermeables en heladera. Determinaciones: ENSAYO | ESPECIF...'
+2026-07-16 22:09:12,006  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:12,007  INFO      
+→ Dexametasona ESP MP.docx
+2026-07-16 22:09:12,108  INFO        Código:  MP028
+2026-07-16 22:09:12,109  INFO        Nombre:  DEXAMETASONA
+2026-07-16 22:09:12,111  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:12,113  INFO        CAS:     
+2026-07-16 22:09:12,114  INFO        Ensayos: 11
+2026-07-16 22:09:12,116  INFO          • Aspecto
+2026-07-16 22:09:12,117  INFO          • Solubilidad
+2026-07-16 22:09:12,118  INFO          • Identificación por espectroscopía IR
+2026-07-16 22:09:12,120  INFO          • Identificación por espectroscopía UV
+2026-07-16 22:09:12,122  INFO          • Identificación por HPLC
+2026-07-16 22:09:12,142  INFO          • Punto de fusión:
+2026-07-16 22:09:12,144  INFO          • Rotación específica
+2026-07-16 22:09:12,158  INFO          • Pérdida por secado
+2026-07-16 22:09:12,160  INFO          • Residuo de ignición
+2026-07-16 22:09:12,164  INFO          • Pureza cromatográfica
+2026-07-16 22:09:12,180  INFO          • Valoración
+2026-07-16 22:09:12,187  WARNING     TRUNCAMIENTO en peso_molecular: len=1899 > 100 — '392,47 Envasado y almacenamiento: Conservar en envases bien cerrados. Determinac...'
+2026-07-16 22:09:12,350  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:12,351  INFO      
+→ Diazepam ESP MP.docx
+2026-07-16 22:09:12,464  INFO        Código:  MP029
+2026-07-16 22:09:12,465  INFO        Nombre:  DIAZEPAM
+2026-07-16 22:09:12,467  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:12,469  INFO        CAS:     
+2026-07-16 22:09:12,471  INFO        Ensayos: 10
+2026-07-16 22:09:12,472  INFO          • Aspecto
+2026-07-16 22:09:12,473  INFO          • Solubilidad
+2026-07-16 22:09:12,475  INFO          • Identificación por espectroscopía IR
+2026-07-16 22:09:12,487  INFO          • Identificación por TLC
+2026-07-16 22:09:12,495  INFO          • Identificación por HPLC
+2026-07-16 22:09:12,498  INFO          • Intervalo de fusión
+2026-07-16 22:09:12,500  INFO          • Pérdida por secado
+2026-07-16 22:09:12,503  INFO          • Residuo de ignición
+2026-07-16 22:09:12,516  INFO          • Compuestos relacionados
+2026-07-16 22:09:12,518  INFO          • Valoración
+2026-07-16 22:09:12,553  WARNING     TRUNCAMIENTO en peso_molecular: len=1701 > 100 — '284,75 Envasado y almacenamiento: Conservar en recipientes impermeables, resiste...'
+2026-07-16 22:09:12,621  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:12,622  INFO      
+→ Enrofloxacina ESP MP.docx
+2026-07-16 22:09:12,722  INFO        Código:  MP031
+2026-07-16 22:09:12,734  INFO        Nombre:  ENROFLOXACINA
+2026-07-16 22:09:12,765  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:12,825  INFO        CAS:     
+2026-07-16 22:09:12,990  INFO        Ensayos: 11
+2026-07-16 22:09:13,068  INFO          • Aspecto
+2026-07-16 22:09:13,082  INFO          • Solubilidad
+2026-07-16 22:09:13,093  INFO          • Identificación por espectroscopía IR
+2026-07-16 22:09:13,130  INFO          • Identificación por HPLC
+2026-07-16 22:09:13,157  INFO          • Intervalo de fusión
+2026-07-16 22:09:13,173  INFO          • Pérdida por desecación
+2026-07-16 22:09:13,177  INFO          • Residuo de ignición
+2026-07-16 22:09:13,219  INFO          • Metales pesados
+2026-07-16 22:09:13,238  INFO          • Ácido fluoroquinolónico
+2026-07-16 22:09:13,270  INFO          • Ciprofloxacina
+2026-07-16 22:09:13,301  INFO          • Valoración
+2026-07-16 22:09:13,311  WARNING     TRUNCAMIENTO en peso_molecular: len=2098 > 100 — '359,40 Envasado y almacenamiento: (Según proveedor) Conservar en envases bien ce...'
+2026-07-16 22:09:13,335  WARNING     TRUNCAMIENTO en envasado_almacenamiento: len=2064 > 2000 — '(Según proveedor) Conservar en envases bien cerrados, protegidos de la humedad, ...'
+2026-07-16 22:09:13,535  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:13,536  INFO      
+→ Extracto fluido de poligala ESP MP.docx
+2026-07-16 22:09:13,663  INFO        Código:  MP038
+2026-07-16 22:09:13,667  INFO        Nombre:  EXTRACTO FLUIDO DE POLÍGALA
+2026-07-16 22:09:13,670  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:13,675  INFO        CAS:     
+2026-07-16 22:09:13,679  INFO        Ensayos: 8
+2026-07-16 22:09:13,683  INFO          • Aspecto
+2026-07-16 22:09:13,685  INFO          • Solubilidad
+2026-07-16 22:09:13,692  INFO          • Identificación por TLC
+2026-07-16 22:09:13,694  INFO          • Grado alcohólico
+2026-07-16 22:09:13,695  INFO          • Densidad
+2026-07-16 22:09:13,696  INFO          • Presencia de saponinas
+2026-07-16 22:09:13,700  INFO          • Residuo seco
+2026-07-16 22:09:13,702  INFO          • Análisis microbiológico
+2026-07-16 22:09:13,716  WARNING     TRUNCAMIENTO en peso_molecular: len=1637 > 100 — 'N/A Envasado y almacenamiento: Almacenar en envase original, bien cerrado, prote...'
+2026-07-16 22:09:13,787  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:13,788  INFO      
+→ Fenbendazol  ESP MP.docx
+2026-07-16 22:09:13,914  INFO        Código:  MP040
+2026-07-16 22:09:13,915  INFO        Nombre:  FENBENDAZOL
+2026-07-16 22:09:13,922  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:13,930  INFO        CAS:     
+2026-07-16 22:09:13,931  INFO        Ensayos: 8
+2026-07-16 22:09:13,943  INFO          • Aspecto
+2026-07-16 22:09:13,962  INFO          • Solubilidad
+2026-07-16 22:09:13,965  INFO          • Identificación por espectroscopía IR
+2026-07-16 22:09:13,969  INFO          • Pérdida por desecación
+2026-07-16 22:09:13,971  INFO          • Cenizas sulfatadas
+2026-07-16 22:09:13,972  INFO          • Metales pesados
+2026-07-16 22:09:13,973  INFO          • Sustancias relacionadas.
+2026-07-16 22:09:13,975  INFO          • Valoración
+2026-07-16 22:09:13,978  WARNING     TRUNCAMIENTO en peso_molecular: len=1493 > 100 — '299,4 Envasado y almacenamiento: Conservar en envases bien cerrados, protegidos ...'
+2026-07-16 22:09:14,105  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:14,106  INFO      
+→ Glucosa anhidra  ESP MP.docx
+2026-07-16 22:09:14,258  INFO        Código:  MP041
+2026-07-16 22:09:14,259  INFO        Nombre:  GLUCOSA ANHIDRA
+2026-07-16 22:09:14,263  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:14,265  INFO        CAS:     
+2026-07-16 22:09:14,266  INFO        Ensayos: 16
+2026-07-16 22:09:14,271  INFO          • Aspecto
+2026-07-16 22:09:14,274  INFO          • Solubilidad
+2026-07-16 22:09:14,279  INFO          • Identificación química
+2026-07-16 22:09:14,290  INFO          • Identificación por TLC
+2026-07-16 22:09:14,295  INFO          • Color de la solución.
+2026-07-16 22:09:14,297  INFO          • Rotación específica
+2026-07-16 22:09:14,314  INFO          • Acidez
+2026-07-16 22:09:14,327  INFO          • Agua
+2026-07-16 22:09:14,331  INFO          • Residuo de ignición
+2026-07-16 22:09:14,345  INFO          • Metales pesados
+2026-07-16 22:09:14,348  INFO          • cloruros
+2026-07-16 22:09:14,362  INFO          • Sulfatos
+2026-07-16 22:09:14,365  INFO          • Arsénico
+2026-07-16 22:09:14,449  INFO          • Dextrina
+2026-07-16 22:09:14,451  INFO          • Almidón soluble, sulfitos.
+2026-07-16 22:09:14,456  INFO          • Valoración
+2026-07-16 22:09:14,462  WARNING     TRUNCAMIENTO en peso_molecular: len=2161 > 100 — '180.16 Envasado y almacenamiento: Conservar en envases bien cerrados. Determinac...'
+2026-07-16 22:09:14,464  WARNING     TRUNCAMIENTO en envasado_almacenamiento: len=2127 > 2000 — 'Conservar en envases bien cerrados. Determinaciones: ENSAYO | ESPECIFICACIONES |...'
+2026-07-16 22:09:14,639  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:14,640  INFO      
+→ Griseofulvina ESP MP.docx
+2026-07-16 22:09:14,759  INFO        Código:  MP047
+2026-07-16 22:09:14,760  INFO        Nombre:  GRISEOFULVINA
+2026-07-16 22:09:14,762  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:14,764  INFO        CAS:     
+2026-07-16 22:09:14,765  INFO        Ensayos: 10
+2026-07-16 22:09:14,768  INFO          • Aspecto
+2026-07-16 22:09:14,769  INFO          • Solubilidad
+2026-07-16 22:09:14,770  INFO          • Identificación por espectroscopía IR
+2026-07-16 22:09:14,776  INFO          • Identificación por HPLC
+2026-07-16 22:09:14,777  INFO          • Intervalo de fusión
+2026-07-16 22:09:14,781  INFO          • Rotación específica
+2026-07-16 22:09:14,785  INFO          • Agua
+2026-07-16 22:09:14,813  INFO          • Residuo de ignición
+2026-07-16 22:09:14,820  INFO          • Metales pesados
+2026-07-16 22:09:14,826  INFO          • Valoración
+2026-07-16 22:09:14,833  WARNING     TRUNCAMIENTO en peso_molecular: len=1563 > 100 — '352,77 Envasado y almacenamiento: Conservar en envases impermeables. Determinaci...'
+2026-07-16 22:09:15,019  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:15,020  INFO      
+→ hidroxicina clorhidrato ESP MP.docx
+2026-07-16 22:09:15,149  INFO        Código:  MP043
+2026-07-16 22:09:15,151  INFO        Nombre:  HIDROXICINA, CLORHIDRATO
+2026-07-16 22:09:15,154  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:15,160  INFO        CAS:     
+2026-07-16 22:09:15,166  INFO        Ensayos: 11
+2026-07-16 22:09:15,209  INFO          • Aspecto
+2026-07-16 22:09:15,211  INFO          • Solubilidad
+2026-07-16 22:09:15,213  INFO          • Identificación por espectroscopía IR
+2026-07-16 22:09:15,216  INFO          • Identificación por espectroscopía UV
+2026-07-16 22:09:15,218  INFO          • Identificación por HPLC
+2026-07-16 22:09:15,223  INFO          • Punto de fusión
+2026-07-16 22:09:15,235  INFO          • Pérdida por desecación
+2026-07-16 22:09:15,252  INFO          • Residuo de ignición
+2026-07-16 22:09:15,254  INFO          • Metales pesados
+2026-07-16 22:09:15,257  INFO          • Pureza cromatográfica
+2026-07-16 22:09:15,261  INFO          • Valoración
+2026-07-16 22:09:15,264  WARNING     TRUNCAMIENTO en peso_molecular: len=2423 > 100 — '447,83 Envasado y almacenamiento: Conservar en envases impermeables. Determinaci...'
+2026-07-16 22:09:15,266  WARNING     TRUNCAMIENTO en envasado_almacenamiento: len=2389 > 2000 — 'Conservar en envases impermeables. Determinaciones: ENSAYO | ENSAYO | ESPECIFICA...'
+2026-07-16 22:09:15,438  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:15,439  INFO      
+→ Imidacloprid  ESP MP.docx
+2026-07-16 22:09:15,692  INFO        Código:  MP045
+2026-07-16 22:09:15,700  INFO        Nombre:  IMIDACLOPRID
+2026-07-16 22:09:15,747  INFO        Tipo:    Principio activo
+2026-07-16 22:09:15,773  INFO        CAS:     
+2026-07-16 22:09:15,825  INFO        Ensayos: 5
+2026-07-16 22:09:15,858  INFO          • Aspecto
+2026-07-16 22:09:15,898  INFO          • Identificación por HPLC
+2026-07-16 22:09:15,902  INFO          • Acidez
+2026-07-16 22:09:15,918  INFO          • Pérdida por desecación
+2026-07-16 22:09:15,938  INFO          • Valoración
+2026-07-16 22:09:15,968  WARNING     TRUNCAMIENTO en peso_molecular: len=1056 > 100 — '255.7 Envasado y almacenamiento: Conservar en envases bien cerrados, protegidos ...'
+2026-07-16 22:09:16,076  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:16,077  INFO      
+→ jarabe de Desessartz ESP MP.docx
+2026-07-16 22:09:16,213  INFO        Código:  MP070
+2026-07-16 22:09:16,213  INFO        Nombre:  SOLUCIÓN CONCENTRADA PARA JARABE DE DESESSARTZ
+2026-07-16 22:09:16,216  INFO        Tipo:    Excipiente
+2026-07-16 22:09:16,217  INFO        CAS:     
+2026-07-16 22:09:16,218  INFO        Ensayos: 7
+2026-07-16 22:09:16,220  INFO          • Aspecto
+2026-07-16 22:09:16,221  INFO          • Solubilidad
+2026-07-16 22:09:16,224  INFO          • Identificación por TLC
+2026-07-16 22:09:16,225  INFO          • Identificación química de oxhidrilos fenólicos
+2026-07-16 22:09:16,226  INFO          • Densidad
+2026-07-16 22:09:16,228  INFO          • Residuo seco
+2026-07-16 22:09:16,232  INFO          • Identificación química de alcaloides: (a) Con reactivo de Mayer (b) Con reactivo de Dragendorff (c) Con reactivo de Bouchardt
+2026-07-16 22:09:16,236  WARNING     TRUNCAMIENTO en peso_molecular: len=1702 > 100 — 'N/A Envasado y almacenamiento: Almacenar en envase original, bien cerrado, prote...'
+2026-07-16 22:09:16,332  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:16,333  INFO      
+→ jarabe de Tolu ESP MP.docx
+2026-07-16 22:09:16,469  INFO        Código:  MP071
+2026-07-16 22:09:16,475  INFO        Nombre:  SOLUCIÓN CONCENTRADA PARA JARABE DE TOLÚ
+2026-07-16 22:09:16,485  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:16,487  INFO        CAS:     
+2026-07-16 22:09:16,489  INFO        Ensayos: 7
+2026-07-16 22:09:16,494  INFO          • Aspecto
+2026-07-16 22:09:16,501  INFO          • Solubilidad
+2026-07-16 22:09:16,503  INFO          • Identificación por TLC
+2026-07-16 22:09:16,508  INFO          • Identificación química
+2026-07-16 22:09:16,511  INFO          • Densidad
+2026-07-16 22:09:16,527  INFO          • Residuo seco
+2026-07-16 22:09:16,540  INFO          • Valoración
+2026-07-16 22:09:16,556  WARNING     TRUNCAMIENTO en peso_molecular: len=1477 > 100 — 'N/A Envasado y almacenamiento: Almacenar en envase original, bien cerrado, prote...'
+2026-07-16 22:09:16,664  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:16,666  INFO      
+→ Levamisol clorhidrato ESP MP.docx
+2026-07-16 22:09:16,810  INFO        Código:  MP048
+2026-07-16 22:09:16,819  INFO        Nombre:  LEVAMISOL, CLORHIDRATO
+2026-07-16 22:09:16,822  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:16,823  INFO        CAS:     
+2026-07-16 22:09:16,825  INFO        Ensayos: 13
+2026-07-16 22:09:16,826  INFO          • Aspecto
+2026-07-16 22:09:16,829  INFO          • Solubilidad
+2026-07-16 22:09:16,832  INFO          • Identificación por espectroscopía IR
+2026-07-16 22:09:16,836  INFO          • Identificación por TLC
+2026-07-16 22:09:16,838  INFO          • Identificación por HPLC
+2026-07-16 22:09:16,841  INFO          • Intervalo de fusión
+2026-07-16 22:09:16,847  INFO          • Rotación específica
+2026-07-16 22:09:16,858  INFO          • pH
+2026-07-16 22:09:16,886  INFO          • Pérdida por secado
+2026-07-16 22:09:16,888  INFO          • Residuo de ignición
+2026-07-16 22:09:16,889  INFO          • Metales pesados
+2026-07-16 22:09:16,892  INFO          • Pureza cromatográfica
+2026-07-16 22:09:16,897  INFO          • Valoración
+2026-07-16 22:09:16,911  WARNING     TRUNCAMIENTO en peso_molecular: len=1990 > 100 — '240,75 Envasado y almacenamiento: Conservar en envases bien cerrados, protegido ...'
+2026-07-16 22:09:17,043  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:17,044  INFO      
+→ Levotiroxina Sódica ESP MP.docx
+2026-07-16 22:09:17,211  INFO        Código:  MP049
+2026-07-16 22:09:17,226  INFO        Nombre:  LEVOTIROXINA, SÓDICA
+2026-07-16 22:09:17,234  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:17,236  INFO        CAS:     
+2026-07-16 22:09:17,241  INFO        Ensayos: 9
+2026-07-16 22:09:17,251  INFO          • Aspecto
+2026-07-16 22:09:17,255  INFO          • Solubilidad
+2026-07-16 22:09:17,256  INFO          • Identificación por HPLC
+2026-07-16 22:09:17,258  INFO          • Rotación específica
+2026-07-16 22:09:17,260  INFO          • pH
+2026-07-16 22:09:17,261  INFO          • Agua
+2026-07-16 22:09:17,266  INFO          • Límite de yoduro inorgánico
+2026-07-16 22:09:17,272  INFO          • Límite de liotironina sódica
+2026-07-16 22:09:17,274  INFO          • Valoración
+2026-07-16 22:09:17,281  WARNING     TRUNCAMIENTO en peso_molecular: len=1693 > 100 — '(anhidro) 798,85 Envasado y almacenamiento: Conservar en envases impermeables. P...'
+2026-07-16 22:09:17,425  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:17,426  INFO      
+→ Liotironina Sódica ESP MP.docx
+2026-07-16 22:09:17,553  INFO        Código:  MP076
+2026-07-16 22:09:17,557  INFO        Nombre:  LIOTIRONINA, SÓDICA
+2026-07-16 22:09:17,560  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:17,562  INFO        CAS:     
+2026-07-16 22:09:17,564  INFO        Ensayos: 13
+2026-07-16 22:09:17,567  INFO          • Aspecto
+2026-07-16 22:09:17,577  INFO          • Solubilidad
+2026-07-16 22:09:17,580  INFO          • Identificación por espectroscopía UV
+2026-07-16 22:09:17,598  INFO          • Identificación por HPLC
+2026-07-16 22:09:17,652  INFO          • Identificación: Ensayo de iodo
+2026-07-16 22:09:17,664  INFO          • Identificación: Ensayo de sodio
+2026-07-16 22:09:17,672  INFO          • Rotación específica
+2026-07-16 22:09:17,678  INFO          • Pérdida por desecación
+2026-07-16 22:09:17,679  INFO          • Límite de yoduro inorgánico
+2026-07-16 22:09:17,683  INFO          • Límite de levotiroxina sódica
+2026-07-16 22:09:17,684  INFO          • Contenido de cloruro
+2026-07-16 22:09:17,686  INFO          • Contenido de sodio
+2026-07-16 22:09:17,687  INFO          • Valoración
+2026-07-16 22:09:17,692  WARNING     TRUNCAMIENTO en peso_molecular: len=2071 > 100 — '672,96 Envasado y almacenamiento: Conservar en envases impermeables. Determinaci...'
+2026-07-16 22:09:17,698  WARNING     TRUNCAMIENTO en envasado_almacenamiento: len=2037 > 2000 — 'Conservar en envases impermeables. Determinaciones: ENSAYO | ESPECIFICACIONES | ...'
+2026-07-16 22:09:17,832  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:17,833  INFO      
+→ Mebendazol ESP MP.docx
+2026-07-16 22:09:17,946  INFO        Código:  MP050
+2026-07-16 22:09:17,947  INFO        Nombre:  MEBENDAZOL
+2026-07-16 22:09:17,950  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:17,951  INFO        CAS:     
+2026-07-16 22:09:17,952  INFO        Ensayos: 11
+2026-07-16 22:09:17,953  INFO          • Aspecto
+2026-07-16 22:09:17,955  INFO          • Solubilidad
+2026-07-16 22:09:17,956  INFO          • Identificación por espectroscopía IR
+2026-07-16 22:09:17,959  INFO          • Identificación por TLC
+2026-07-16 22:09:17,979  INFO          • Identificación por HPLC
+2026-07-16 22:09:17,982  INFO          • Punto de fusión
+2026-07-16 22:09:17,989  INFO          • Pérdida por secado
+2026-07-16 22:09:17,994  INFO          • Residuo de ignición
+2026-07-16 22:09:17,996  INFO          • Metales pesados
+2026-07-16 22:09:17,999  INFO          • Pureza cromatográfica
+2026-07-16 22:09:18,012  INFO          • Valoración
+2026-07-16 22:09:18,029  WARNING     TRUNCAMIENTO en peso_molecular: len=1962 > 100 — '295,29 Envasado y almacenamiento: Conservar en envases bien cerrados. Determinac...'
+2026-07-16 22:09:18,225  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:18,233  INFO      
+→ Megestrol, acetato ESP MP.docx
+2026-07-16 22:09:18,402  INFO        Código:  MP051
+2026-07-16 22:09:18,406  INFO        Nombre:  MEGESTROL, ACETATO
+2026-07-16 22:09:18,444  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:18,447  INFO        CAS:     
+2026-07-16 22:09:18,448  INFO        Ensayos: 10
+2026-07-16 22:09:18,451  INFO          • Aspecto
+2026-07-16 22:09:18,466  INFO          • Solubilidad
+2026-07-16 22:09:18,496  INFO          • Identificación por espectroscopía IR
+2026-07-16 22:09:18,503  INFO          • Identificación por HPLC
+2026-07-16 22:09:18,506  INFO          • Intervalo de fusión
+2026-07-16 22:09:18,510  INFO          • Rotación específica
+2026-07-16 22:09:18,516  INFO          • Agua
+2026-07-16 22:09:18,518  INFO          • Residuo de ignición
+2026-07-16 22:09:18,520  INFO          • Metales pesados
+2026-07-16 22:09:18,523  INFO          • Valoración
+2026-07-16 22:09:18,535  WARNING     TRUNCAMIENTO en peso_molecular: len=1899 > 100 — '384,51 Envasado y almacenamiento: Conservar en envases bien cerrados, protegido ...'
+2026-07-16 22:09:18,653  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:18,653  INFO      
+→ Metoclopramida  ESP MP.docx
+2026-07-16 22:09:18,765  INFO        Código:  MP052
+2026-07-16 22:09:18,766  INFO        Nombre:  METOCLOPRAMIDA CLORHIDATO
+2026-07-16 22:09:18,769  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:18,770  INFO        CAS:     
+2026-07-16 22:09:18,771  INFO        Ensayos: 9
+2026-07-16 22:09:18,772  INFO          • Aspecto
+2026-07-16 22:09:18,774  INFO          • Solubilidad
+2026-07-16 22:09:18,775  INFO          • Identificación por espectroscopía IR
+2026-07-16 22:09:18,776  INFO          • Identificación por TLC
+2026-07-16 22:09:18,780  INFO          • Identificación por HPLC
+2026-07-16 22:09:18,784  INFO          • Agua
+2026-07-16 22:09:18,787  INFO          • Residuo de ignición
+2026-07-16 22:09:18,803  INFO          • Pureza cromatográfica
+2026-07-16 22:09:18,822  INFO          • Valoración
+2026-07-16 22:09:18,832  WARNING     TRUNCAMIENTO en peso_molecular: len=1895 > 100 — '354,27 Envasado y almacenamiento: Conservar en envases impermeables, resistentes...'
+2026-07-16 22:09:19,172  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:19,179  INFO      
+→ N-metil 2-Pirrolidona  ESP MP.docx
+2026-07-16 22:09:19,315  INFO        Código:  MP057
+2026-07-16 22:09:19,318  INFO        Nombre:  N-Metil-2-pirrolidona
+2026-07-16 22:09:19,321  INFO        Tipo:    Excipiente
+2026-07-16 22:09:19,323  INFO        CAS:     
+2026-07-16 22:09:19,324  INFO        Ensayos: 6
+2026-07-16 22:09:19,325  INFO          • Aspecto
+2026-07-16 22:09:19,327  INFO          • Identificación por CG
+2026-07-16 22:09:19,328  INFO          • Densidad
+2026-07-16 22:09:19,329  INFO          • Índice de refracción
+2026-07-16 22:09:19,345  INFO          • Humedad
+2026-07-16 22:09:19,355  INFO          • Valoración
+2026-07-16 22:09:19,369  WARNING     TRUNCAMIENTO en peso_molecular: len=1066 > 100 — '99.13 Envasado y almacenamiento: Conservar en envases bien cerrados. Almacenar e...'
+2026-07-16 22:09:19,447  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:19,447  INFO      
+→ Permetrina  ESP MP.docx
+2026-07-16 22:09:19,565  INFO        Código:  MP059
+2026-07-16 22:09:19,574  INFO        Nombre:  PERMETRINA
+2026-07-16 22:09:19,575  INFO        Tipo:    Principio activo
+2026-07-16 22:09:19,576  INFO        CAS:     
+2026-07-16 22:09:19,578  INFO        Ensayos: 8
+2026-07-16 22:09:19,580  INFO          • Aspecto
+2026-07-16 22:09:19,581  INFO          • Identificación por HLPC
+2026-07-16 22:09:19,587  INFO          • Densidad ()
+2026-07-16 22:09:19,591  INFO          • pH
+2026-07-16 22:09:19,605  INFO          • Agua
+2026-07-16 22:09:19,607  INFO          • Alcohol m-Fenoxibencílico
+2026-07-16 22:09:19,613  INFO          • Relación de isómeros
+2026-07-16 22:09:19,615  INFO          • Valoración
+2026-07-16 22:09:19,620  WARNING     TRUNCAMIENTO en peso_molecular: len=1257 > 100 — '391.29 Envasado y almacenamiento: Conservar en envases bien cerrados. Almacenar ...'
+2026-07-16 22:09:19,716  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:19,717  INFO      
+→ Piroxicam  ESP MP.docx
+2026-07-16 22:09:19,830  INFO        Código:  MP060
+2026-07-16 22:09:19,831  INFO        Nombre:  PIROXICAM
+2026-07-16 22:09:19,833  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:19,835  INFO        CAS:     
+2026-07-16 22:09:19,838  INFO        Ensayos: 10
+2026-07-16 22:09:19,839  INFO          • Aspecto
+2026-07-16 22:09:19,841  INFO          • Solubilidad
+2026-07-16 22:09:19,842  INFO          • Identificación por espectroscopía IR
+2026-07-16 22:09:19,845  INFO          • Identificación por espectroscopía UV
+2026-07-16 22:09:19,847  INFO          • Identificación por TLC
+2026-07-16 22:09:19,849  INFO          • Identificación por HPLC
+2026-07-16 22:09:19,850  INFO          • Agua
+2026-07-16 22:09:19,866  INFO          • Residuo de ignición
+2026-07-16 22:09:19,873  INFO          • Metales pesados
+2026-07-16 22:09:19,879  INFO          • Valoración
+2026-07-16 22:09:19,893  WARNING     TRUNCAMIENTO en peso_molecular: len=1831 > 100 — '331,35 Envasado y almacenamiento: Conservar en envases impermeables, resistentes...'
+2026-07-16 22:09:20,001  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:20,004  INFO      
+→ Praziquantel ESP MP.docx
+2026-07-16 22:09:20,095  INFO        Código:  MP062
+2026-07-16 22:09:20,096  INFO        Nombre:  PRAZIQUANTEL
+2026-07-16 22:09:20,098  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:20,100  INFO        CAS:     
+2026-07-16 22:09:20,101  INFO        Ensayos: 11
+2026-07-16 22:09:20,102  INFO          • Aspecto
+2026-07-16 22:09:20,105  INFO          • Solubilidad
+2026-07-16 22:09:20,110  INFO          • Identificación por espectroscopía IR
+2026-07-16 22:09:20,113  INFO          • Identificación por HPLC
+2026-07-16 22:09:20,119  INFO          • Intervalo de fusión
+2026-07-16 22:09:20,126  INFO          • Pérdida por secado
+2026-07-16 22:09:20,128  INFO          • Residuo de ignición
+2026-07-16 22:09:20,137  INFO          • Fosfato
+2026-07-16 22:09:20,144  INFO          • Metales pesados
+2026-07-16 22:09:20,152  INFO          • Compuestos relacionados
+2026-07-16 22:09:20,169  INFO          • Valoración
+2026-07-16 22:09:20,186  WARNING     TRUNCAMIENTO en peso_molecular: len=1692 > 100 — '312,41 Envasado y almacenamiento: Conservar en envases bien cerrados, resistente...'
+2026-07-16 22:09:20,275  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:20,276  INFO      
+→ Prednisolona ESP MP.docx
+2026-07-16 22:09:20,423  INFO        Código:  MP063
+2026-07-16 22:09:20,425  INFO        Nombre:  PREDNISOLONA
+2026-07-16 22:09:20,428  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:20,433  INFO        CAS:     
+2026-07-16 22:09:20,435  INFO        Ensayos: 12
+2026-07-16 22:09:20,440  INFO          • Aspecto
+2026-07-16 22:09:20,492  INFO          • Solubilidad
+2026-07-16 22:09:20,526  INFO          • Identificación por espectroscopía IR
+2026-07-16 22:09:20,605  INFO          • Identificación por espectroscopía UV
+2026-07-16 22:09:20,641  INFO          • Identificación por HPLC
+2026-07-16 22:09:20,663  INFO          • Punto de fusión
+2026-07-16 22:09:20,672  INFO          • Rotación específica
+2026-07-16 22:09:20,701  INFO          • Pérdida por desecación
+2026-07-16 22:09:20,726  INFO          • Residuo de ignición
+2026-07-16 22:09:20,771  INFO          • Selenio
+2026-07-16 22:09:20,791  INFO          • Pureza cromatográfica
+2026-07-16 22:09:20,797  INFO          • Valoración
+2026-07-16 22:09:20,810  WARNING     TRUNCAMIENTO en peso_molecular: len=2074 > 100 — 'Anhidro: 360,45 Sesquihidrato: 387,48 Envasado y almacenamiento: Conservar en en...'
+2026-07-16 22:09:20,832  WARNING     TRUNCAMIENTO en envasado_almacenamiento: len=2009 > 2000 — 'Conservar en envase bien cerrados. Determinaciones: ENSAYO | ESPECIFICACIONES | ...'
+2026-07-16 22:09:21,041  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:21,043  INFO      
+→ Propilenglicol  ESP MP.docx
+2026-07-16 22:09:21,168  INFO        Código:  MP064
+2026-07-16 22:09:21,178  INFO        Nombre:  PROPILENGLICOL
+2026-07-16 22:09:21,181  INFO        Tipo:    Excipiente
+2026-07-16 22:09:21,186  INFO        CAS:     
+2026-07-16 22:09:21,188  INFO        Ensayos: 13
+2026-07-16 22:09:21,194  INFO          • Aspecto
+2026-07-16 22:09:21,200  INFO          • Solubilidad
+2026-07-16 22:09:21,204  INFO          • Identificación por espectroscopía IR
+2026-07-16 22:09:21,210  INFO          • Identificación por cromatografía gaseosa
+2026-07-16 22:09:21,217  INFO          • Peso específico
+2026-07-16 22:09:21,226  INFO          • Acidez
+2026-07-16 22:09:21,232  INFO          • Determinación de ausencia de Dietilenglicol
+2026-07-16 22:09:21,236  INFO          • Agua
+2026-07-16 22:09:21,267  INFO          • Residuo de incineración
+2026-07-16 22:09:21,269  INFO          • Metales pesados
+2026-07-16 22:09:21,276  INFO          • Cloruros
+2026-07-16 22:09:21,279  INFO          • Sulfatos
+2026-07-16 22:09:21,281  INFO          • Valoración
+2026-07-16 22:09:21,295  WARNING     TRUNCAMIENTO en peso_molecular: len=1985 > 100 — '76,09 Envasado y almacenamiento: Conservar en envases impermeables. Determinacio...'
+2026-07-16 22:09:21,401  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:21,402  INFO      
+→ Sulfametoxazol ESP MP.docx
+2026-07-16 22:09:21,513  INFO        Código:  MP073
+2026-07-16 22:09:21,514  INFO        Nombre:  SULFAMETOXAZOL
+2026-07-16 22:09:21,516  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:21,517  INFO        CAS:     
+2026-07-16 22:09:21,519  INFO        Ensayos: 12
+2026-07-16 22:09:21,520  INFO          • Aspecto
+2026-07-16 22:09:21,522  INFO          • Solubilidad
+2026-07-16 22:09:21,524  INFO          • Identificación por espectroscopía IR
+2026-07-16 22:09:21,525  INFO          • Identificación por espectroscopía UV
+2026-07-16 22:09:21,526  INFO          • Identificación por TLC
+2026-07-16 22:09:21,530  INFO          • Identificación por HPLC
+2026-07-16 22:09:21,533  INFO          • Intervalo de fusión
+2026-07-16 22:09:21,536  INFO          • Pérdida por secado
+2026-07-16 22:09:21,544  INFO          • Residuo de ignición
+2026-07-16 22:09:21,565  INFO          • Sulfanilamida
+2026-07-16 22:09:21,567  INFO          • Ácido sulfanílico
+2026-07-16 22:09:21,577  INFO          • Valoración
+2026-07-16 22:09:21,582  WARNING     TRUNCAMIENTO en peso_molecular: len=2105 > 100 — '253,28 Envasado y almacenamiento: Conservar en envases bien cerrados, resistente...'
+2026-07-16 22:09:21,592  WARNING     TRUNCAMIENTO en envasado_almacenamiento: len=2071 > 2000 — 'Conservar en envases bien cerrados, resistentes a la luz. Almacenar a 25º, con v...'
+2026-07-16 22:09:21,772  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:21,774  INFO      
+→ Tiocol (sulfaguayacolato de potasio)  ESP MP.docx
+2026-07-16 22:09:21,913  INFO        Código:  MP074
+2026-07-16 22:09:21,914  INFO        Nombre:  TIOCOL
+2026-07-16 22:09:21,917  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:21,918  INFO        CAS:     
+2026-07-16 22:09:21,920  INFO        Ensayos: 10
+2026-07-16 22:09:21,929  INFO          • Aspecto
+2026-07-16 22:09:21,933  INFO          • Solubilidad
+2026-07-16 22:09:21,939  INFO          • Identificación por espectroscopía IR
+2026-07-16 22:09:21,950  INFO          • Identificación por espectroscopía UV
+2026-07-16 22:09:21,960  INFO          • Identificación por HLPC
+2026-07-16 22:09:21,961  INFO          • Agua
+2026-07-16 22:09:21,963  INFO          • Selenio
+2026-07-16 22:09:21,967  INFO          • Metales pesados
+2026-07-16 22:09:21,971  INFO          • Sulfato
+2026-07-16 22:09:21,975  INFO          • Valoración
+2026-07-16 22:09:21,982  WARNING     TRUNCAMIENTO en peso_molecular: len=2654 > 100 — '251,30 Envasado y almacenamiento: Conservar en envases bien cerrados, resistente...'
+2026-07-16 22:09:21,985  WARNING     TRUNCAMIENTO en envasado_almacenamiento: len=2620 > 2000 — 'Conservar en envases bien cerrados, resistentes a la luz. Determinaciones: ENSAY...'
+2026-07-16 22:09:22,083  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:22,086  INFO      
+→ Triamcinolona acetónido  ESP MP.docx
+2026-07-16 22:09:22,210  INFO        Código:  MP075
+2026-07-16 22:09:22,220  INFO        Nombre:  TRIAMCINOLONA, ACETÓNIDO
+2026-07-16 22:09:22,223  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:22,225  INFO        CAS:     
+2026-07-16 22:09:22,228  INFO        Ensayos: 9
+2026-07-16 22:09:22,230  INFO          • Aspecto
+2026-07-16 22:09:22,235  INFO          • Solubilidad
+2026-07-16 22:09:22,258  INFO          • Identificación por espectroscopía IR
+2026-07-16 22:09:22,261  INFO          • Identificación por espectroscopía UV
+2026-07-16 22:09:22,263  INFO          • Identificación por HPLC
+2026-07-16 22:09:22,265  INFO          • Rotación específica
+2026-07-16 22:09:22,269  INFO          • Pérdida por desecación
+2026-07-16 22:09:22,272  INFO          • Metales pesados
+2026-07-16 22:09:22,275  INFO          • Valoración
+2026-07-16 22:09:22,279  WARNING     TRUNCAMIENTO en peso_molecular: len=1715 > 100 — '434,51 Envasado y almacenamiento: Conservar en envases bien cerrados. Almacenar ...'
+2026-07-16 22:09:22,369  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:22,370  INFO      
+→ Trimetoprima ESP MP.docx
+2026-07-16 22:09:22,475  INFO        Código:  MP077
+2026-07-16 22:09:22,476  INFO        Nombre:  TRIMETOPRIMA
+2026-07-16 22:09:22,478  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:22,479  INFO        CAS:     
+2026-07-16 22:09:22,481  INFO        Ensayos: 10
+2026-07-16 22:09:22,482  INFO          • Aspecto
+2026-07-16 22:09:22,486  INFO          • Solubilidad
+2026-07-16 22:09:22,493  INFO          • Identificación por espectroscopía IR
+2026-07-16 22:09:22,495  INFO          • Identificación por espectroscopía UV
+2026-07-16 22:09:22,507  INFO          • Identificación por HPLC
+2026-07-16 22:09:22,510  INFO          • Intervalo de fusión
+2026-07-16 22:09:22,523  INFO          • Pérdida por secado
+2026-07-16 22:09:22,539  INFO          • Residuo de ignición
+2026-07-16 22:09:22,543  INFO          • Pureza cromatográfica
+2026-07-16 22:09:22,546  INFO          • Valoración
+2026-07-16 22:09:22,552  WARNING     TRUNCAMIENTO en peso_molecular: len=2010 > 100 — '290.32 Envasado y almacenamiento: Conservar en envases impermeables y resistente...'
+2026-07-16 22:09:22,932  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:22,942  INFO      
+→ Vaselina líquida ESP MP.docx
+2026-07-16 22:09:23,118  INFO        Código:  MP078
+2026-07-16 22:09:23,134  INFO        Nombre:  VASELINA LÍQUIDA
+2026-07-16 22:09:23,170  INFO        Tipo:    Principio Activo
+2026-07-16 22:09:23,194  INFO        CAS:     
+2026-07-16 22:09:23,201  INFO        Ensayos: 10
+2026-07-16 22:09:23,232  INFO          • Aspecto
+2026-07-16 22:09:23,237  INFO          • Solubilidad
+2026-07-16 22:09:23,245  INFO          • Identificación por espectroscopía IR
+2026-07-16 22:09:23,271  INFO          • Peso específico
+2026-07-16 22:09:23,290  INFO          • Viscosidad
+2026-07-16 22:09:23,319  INFO          • Ácidos y álcalis
+2026-07-16 22:09:23,326  INFO          • Azufre y sulfuros
+2026-07-16 22:09:23,350  INFO          • Sustancias fácilmente carbonizables
+2026-07-16 22:09:23,375  INFO          • Parafina sólida
+2026-07-16 22:09:23,391  INFO          • Límite de compuestos polinucleares
+2026-07-16 22:09:23,421  WARNING     TRUNCAMIENTO en peso_molecular: len=1836 > 100 — 'N/A Envasado y almacenamiento: Conservar en envases impermeables. Determinacione...'
+2026-07-16 22:09:23,497  INFO        ✓ Insertado correctamente
+2026-07-16 22:09:23,500  INFO      
+============================================================
+2026-07-16 22:09:23,501  INFO      RESUMEN FINAL
+2026-07-16 22:09:23,502  INFO        Total archivos procesados: 37
+2026-07-16 22:09:23,504  INFO        ✓ Insertados correctamente: 37
+2026-07-16 22:09:23,505  INFO        ⏭  Saltados (ya existían):  0
+2026-07-16 22:09:23,508  INFO        ✗ Errores:                 0
+2026-07-16 22:09:23,511  INFO        Log guardado en:            \\LAMARSERVER\Empresa\Lamar\LIMSS\backend\WORD\importacion_20260716_220905.log
+2026-07-16 22:09:23,528  INFO      ============================================================

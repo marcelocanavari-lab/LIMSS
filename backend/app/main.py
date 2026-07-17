@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
-from app.api.routes import auth, maestros, muestras, resultados, dictamenes, materiales
+from app.api.routes import auth, maestros, muestras, resultados, dictamenes, materiales, envios
 
 settings = get_settings()
 
@@ -19,6 +19,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Remito-Numero", "X-Remito-Fecha"],
 )
 
 # Routers
@@ -28,6 +29,7 @@ app.include_router(muestras.router)
 app.include_router(resultados.router)
 app.include_router(dictamenes.router)
 app.include_router(materiales.router)
+app.include_router(envios.router)
 
 
 @app.get("/api/health")

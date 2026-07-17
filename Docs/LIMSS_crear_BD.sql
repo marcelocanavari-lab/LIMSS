@@ -239,6 +239,40 @@ BEGIN
 END
 GO
 
+-- Impresión de etiquetas de muestra (REQ-ENV-003, append-only)
+-- numero_impresion=1 es la impresión original; >1 es reimpresión.
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'lims_etiquetas')
+BEGIN
+    CREATE TABLE lims_etiquetas (
+        id_etiqueta      INT IDENTITY(1,1)   PRIMARY KEY,
+        id_muestra       INT                 NOT NULL REFERENCES lims_muestras(id_muestra),
+        numero_impresion INT                 NOT NULL,
+        id_usuario       INT                 NOT NULL REFERENCES lims_usuarios(id_usuario),
+        fecha_hora       DATETIME            NOT NULL DEFAULT GETDATE()
+    );
+    CREATE INDEX ix_etiquetas_muestra ON lims_etiquetas(id_muestra, numero_impresion);
+    PRINT 'Tabla lims_etiquetas creada OK';
+END
+GO
+
+-- Remito de envío en PDF (REQ-ENV-004, append-only). nro_remito_interno
+-- (REM-YYYY-NNNN) es la numeración propia de LIMSS, distinta del número de
+-- remito/guía externo del transportista (lims_envios.nro_remito).
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'lims_remitos')
+BEGIN
+    CREATE TABLE lims_remitos (
+        id_remito           INT IDENTITY(1,1)   PRIMARY KEY,
+        id_envio            INT                 NOT NULL REFERENCES lims_envios(id_envio),
+        nro_remito_interno  VARCHAR(20)         NOT NULL UNIQUE,
+        pdf_path            VARCHAR(300)        NOT NULL,
+        id_usuario_genera   INT                 NOT NULL REFERENCES lims_usuarios(id_usuario),
+        fecha_generacion    DATETIME            NOT NULL DEFAULT GETDATE()
+    );
+    CREATE INDEX ix_remitos_envio ON lims_remitos(id_envio, fecha_generacion);
+    PRINT 'Tabla lims_remitos creada OK';
+END
+GO
+
 -- Movimientos de stock de testigos (inmutable)
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'lims_testigo_movimientos')
 BEGIN
@@ -342,11 +376,12 @@ BEGIN
         estado          VARCHAR(20)         NOT NULL
                         CHECK (estado IN ('aprobado','rechazado','cuarentena','pendiente')),
         id_dictamen     INT                 NOT NULL REFERENCES lims_dictamenes(id_dictamen),
-        fecha_hora      DATETIME            NOT NULL DEFAULT GETDATE(),
-        -- Inmutable: no se borra, se agrega una fila nueva si cambia
-        CONSTRAINT UQ_lims_aprobaciones_lote_referencia UNIQUE (nro_referencia, erp_CODART)
+        fecha_hora      DATETIME            NOT NULL DEFAULT GETDATE()
+        -- Inmutable: no se borra, se agrega una fila nueva si cambia (sin
+        -- UNIQUE sobre nro_referencia+erp_CODART a propósito -- el eBR toma
+        -- siempre la más reciente por fecha_hora)
     );
-    CREATE INDEX ix_aprobaciones_ir ON lims_aprobaciones_lote(nro_referencia, estado);
+    CREATE INDEX ix_aprobaciones_ir ON lims_aprobaciones_lote(nro_referencia, estado, fecha_hora);
     PRINT 'Tabla lims_aprobaciones_lote creada OK';
 END
 GO

@@ -9,14 +9,14 @@ export default function MuestraEtiquetaPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const [muestra, setMuestra] = useState(null);
+  const [etiqueta, setEtiqueta] = useState(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     muestrasApi
-      .obtenerMuestra(id)
-      .then(setMuestra)
-      .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo cargar la muestra'));
+      .generarEtiqueta(id)
+      .then(setEtiqueta)
+      .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo generar la etiqueta'));
   }, [id]);
 
   return (
@@ -29,21 +29,26 @@ export default function MuestraEtiquetaPage() {
 
         {error && <div className="alert alert-danger no-print" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}
 
-        {!muestra ? (
-          <div className="state-block no-print"><span className="spinner" /><span>Cargando...</span></div>
+        {!etiqueta ? (
+          !error && <div className="state-block no-print"><span className="spinner" /><span>Generando etiqueta...</span></div>
         ) : (
           <div className="printable-label">
+            {etiqueta.es_reimpresion && (
+              <div className="label-row" style={{ justifyContent: 'center' }}>
+                <span className="badge badge-warn">REIMPRESIÓN (#{etiqueta.numero_impresion})</span>
+              </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <div className="label-codigo">{muestra.codigo_muestra}</div>
-                <div className="label-row"><span>{muestra.tipo_referencia === 'ir' ? 'IR' : 'Lote'}</span><span>{muestra.nro_referencia}</span></div>
+                <div className="label-codigo">{etiqueta.codigo_muestra}</div>
+                <div className="label-row"><span>{etiqueta.tipo_referencia === 'ir' ? 'IR' : 'Lote'}</span><span>{etiqueta.nro_referencia}</span></div>
               </div>
-              <QRCodeSVG value={muestra.codigo_muestra} size={80} />
+              <QRCodeSVG value={etiqueta.codigo_muestra} size={56} />
             </div>
-            <div className="label-row"><span>Material</span><span>{muestra.erp_CODART}</span></div>
-            <div style={{ fontSize: 'var(--fs-sm)' }}>{muestra.erp_DESART}</div>
-            <div className="label-row"><span>Fecha de muestreo</span><span>{new Date(muestra.fecha_muestreo).toLocaleDateString()}</span></div>
-            <div className="label-row"><span>Muestreador</span><span>{muestra.usuario_muestreo_nombre}</span></div>
+            <div className="label-row"><span>Material</span><span>{etiqueta.erp_CODART}</span></div>
+            <div style={{ fontSize: '0.65rem', lineHeight: 1.3 }}>{etiqueta.erp_DESART}</div>
+            <div className="label-row"><span>Fecha de muestreo</span><span>{new Date(etiqueta.fecha_muestreo).toLocaleDateString()}</span></div>
+            <div className="label-row"><span>Muestreador</span><span>{etiqueta.usuario_muestreo_nombre}</span></div>
           </div>
         )}
       </div>

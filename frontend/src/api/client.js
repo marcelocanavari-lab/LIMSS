@@ -127,6 +127,38 @@ async function requestBlob(path) {
   return res.blob();
 }
 
+async function requestBlobConMeta(path) {
+  const headers = {};
+  const token = getToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${path}`, { headers });
+  } catch (e) {
+    throw new ApiError('No se pudo conectar con el servidor. Verificá la red.', 0, null);
+  }
+  if (!res.ok) {
+    if (res.status === 401) clearToken();
+    let msg = `Error ${res.status}`;
+    if (res.status !== 404) {
+      try {
+        const data = await res.json();
+        if (typeof data?.detail === 'string') msg = data.detail;
+      } catch {
+        // respuesta sin body JSON (ej. 404 de ruta no encontrada)
+      }
+    }
+    throw new ApiError(msg, res.status, null);
+  }
+  const blob = await res.blob();
+  return {
+    blob,
+    numero: res.headers.get('X-Remito-Numero'),
+    fecha: res.headers.get('X-Remito-Fecha'),
+  };
+}
+
 export const api = {
   get: (path) => request(path),
   post: (path, body) => request(path, { method: 'POST', body }),
@@ -135,6 +167,7 @@ export const api = {
   postPublic: (path, body) => request(path, { method: 'POST', body, auth: false }),
   postForm: (path, formData) => requestForm(path, formData),
   getBlob: (path) => requestBlob(path),
+  getBlobConMeta: (path) => requestBlobConMeta(path),
 };
 
 export { ApiError };

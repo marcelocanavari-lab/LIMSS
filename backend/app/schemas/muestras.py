@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional
-from datetime import datetime
+from datetime import date, datetime
 
 
 # ── ERP: líneas de un IR (solo lectura) ───────────────────────
@@ -114,14 +114,17 @@ class EnvioResponse(BaseModel):
 
 
 class RemitoResponse(BaseModel):
+    id_envio: int
     codigo_muestra: str
     tipo_referencia: str
     nro_referencia: str
     erp_CODART: str
     erp_DESART: str
     fecha_muestreo: datetime
+    usuario_muestreo_nombre: str
     laboratorio_nombre: str
     laboratorio_direccion: Optional[str] = None
+    laboratorio_contacto: Optional[str] = None
     fecha_despacho: datetime
     temperatura_transporte: Optional[str] = None
     nro_remito: Optional[str] = None
@@ -130,4 +133,24 @@ class RemitoResponse(BaseModel):
     protocolo_utilizar: Optional[str] = None
     testigo_codigo: Optional[str] = None
     testigo_nombre: Optional[str] = None
+    testigo_nro_lote: Optional[str] = None
+    testigo_fecha_vencimiento: Optional[date] = None
     cantidad_testigo: Optional[float] = None
+
+
+# ── Etiquetas (REQ-ENV-003) ───────────────────────────────────────
+
+class EtiquetaResponse(BaseModel):
+    id_etiqueta: int
+    id_muestra: int
+    codigo_muestra: str
+    erp_CODART: str
+    erp_DESART: str
+    tipo_referencia: str
+    nro_referencia: str
+    fecha_muestreo: datetime
+    usuario_muestreo_nombre: str
+    numero_impresion: int
+    es_reimpresion: bool
+    id_usuario_impresion: int
+    fecha_hora: datetime
