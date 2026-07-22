@@ -5,26 +5,46 @@ import TopBar from '../../components/TopBar';
 import { maestrosApi } from '../../api/maestros';
 import { ApiError } from '../../api/client';
 
+const BADGE_COMPACTO = { padding: '2px var(--sp-2)' };
+
 function badgesEstado(t) {
   const badges = [];
-  if (t.vencido) badges.push(<span key="v" className="badge badge-danger">Vencido</span>);
-  else if (t.por_vencer) badges.push(<span key="pv" className="badge badge-warn">Por vencer</span>);
-  if (t.stock_bajo) badges.push(<span key="sb" className="badge badge-warn">Stock bajo</span>);
-  if (!t.activo) badges.push(<span key="ia" className="badge badge-neutral">Inactivo</span>);
-  if (badges.length === 0) badges.push(<span key="ok" className="badge badge-ok">Normal</span>);
+  if (t.vencido) badges.push(<span key="v" className="badge badge-danger" style={BADGE_COMPACTO}>Vencido</span>);
+  else if (t.por_vencer) badges.push(<span key="pv" className="badge badge-warn" style={BADGE_COMPACTO}>Por vencer</span>);
+  if (t.stock_bajo) badges.push(<span key="sb" className="badge badge-warn" style={BADGE_COMPACTO}>Stock bajo</span>);
+  if (!t.activo) badges.push(<span key="ia" className="badge badge-neutral" style={BADGE_COMPACTO}>Inactivo</span>);
+  if (badges.length === 0) badges.push(<span key="ok" className="badge badge-ok" style={BADGE_COMPACTO}>Normal</span>);
   return badges;
+}
+
+function formatFecha(iso) {
+  if (!iso) return '—';
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
 }
 
 export default function TestigosPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const puedeGestionar = ['admin', 'qa'].includes(user?.rol);
+  const puedeGestionar = ['analista_qc', 'qa', 'admin'].includes(user?.rol);
+  const puedeVerReporte = ['qa', 'admin'].includes(user?.rol);
 
   const [testigos, setTestigos] = useState([]);
   const [buscar, setBuscar] = useState('');
   const [soloAlertas, setSoloAlertas] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  async function verCertificado(e, idTestigo) {
+    e.stopPropagation();
+    try {
+      const blob = await maestrosApi.descargarCertificado(idTestigo);
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo descargar el certificado');
+    }
+  }
 
   useEffect(() => {
     let activo = true;
@@ -58,6 +78,16 @@ export default function TestigosPage() {
           >
             {soloAlertas ? 'Con alertas' : 'Todos'}
           </button>
+          {puedeVerReporte && (
+            <button className="btn btn-secondary" onClick={() => navigate('/maestros/testigos/reporte')}>
+              Reporte
+            </button>
+          )}
+          {puedeGestionar && (
+            <button className="btn btn-secondary" onClick={() => navigate('/maestros/testigos/remitos')}>
+              Remitos
+            </button>
+          )}
           {puedeGestionar && (
             <button className="btn btn-primary" onClick={() => navigate('/maestros/testigos/nuevo')}>
               + Nuevo testigo
@@ -75,15 +105,28 @@ export default function TestigosPage() {
             <span>No hay testigos cargados con estos filtros</span>
           </div>
         ) : (
-          <table className="data-table">
+          <div className="table-scroll">
+          <table className="data-table" style={{ tableLayout: 'fixed' }}>
+            <colgroup>
+              <col style={{ width: 90 }} />
+              <col style={{ width: '25%' }} />
+              <col style={{ width: '18%' }} />
+              <col style={{ width: 90 }} />
+              <col style={{ width: 100 }} />
+              <col style={{ width: 90 }} />
+              <col style={{ width: 110 }} />
+              <col style={{ width: 110 }} />
+            </colgroup>
             <thead>
               <tr>
                 <th>Código</th>
                 <th>Nombre</th>
                 <th>Lote</th>
+                <th>N° IR</th>
                 <th>Vencimiento</th>
                 <th>Stock</th>
                 <th>Estado</th>
+                <th>Certificado</th>
               </tr>
             </thead>
             <tbody>
@@ -93,16 +136,34 @@ export default function TestigosPage() {
                   style={{ cursor: 'pointer' }}
                   onClick={() => navigate(`/maestros/testigos/${t.id_testigo}`)}
                 >
-                  <td style={{ fontFamily: 'var(--font-mono)' }}>{t.codigo}</td>
+                  <td style={{ fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{t.codigo}</td>
                   <td>{t.nombre}</td>
                   <td>{t.nro_lote}</td>
-                  <td className="num">{t.fecha_vencimiento}</td>
-                  <td className="num">{t.stock_actual} {t.unidad_medida || ''}</td>
-                  <td style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{badgesEstado(t)}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}>{t.nro_ir || '—'}</td>
+                  <td className="num" style={{ whiteSpace: 'nowrap' }}>{formatFecha(t.fecha_vencimiento)}</td>
+                  <td className="num" style={{ whiteSpace: 'nowrap' }}>{t.stock_actual} {t.unidad_medida || ''}</td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{badgesEstado(t)}</div>
+                  </td>
+                  <td>
+                    {t.pdf_certificado ? (
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        style={{ color: 'var(--ok)', padding: 0 }}
+                        onClick={(e) => verCertificado(e, t.id_testigo)}
+                      >
+                        ✓ Ver
+                      </button>
+                    ) : (
+                      <span style={{ color: 'var(--ink-2)' }}>Sin cert.</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

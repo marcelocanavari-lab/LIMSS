@@ -26,6 +26,16 @@ class UsuarioCreate(BaseModel):
     rol: str = Field(..., pattern=r"^(muestreador|analista_qc|qa|admin)$")
 
 
+class UsuarioUpdate(BaseModel):
+    nombre: str = Field(..., min_length=1, max_length=100)
+    apellido: str = Field(..., min_length=1, max_length=100)
+    rol: str = Field(..., pattern=r"^(muestreador|analista_qc|qa|admin)$")
+
+
+class UsuarioPinReset(BaseModel):
+    pin: str = Field(..., min_length=4, max_length=6, pattern=r"^\d+$")
+
+
 class UsuarioResponse(BaseModel):
     id_usuario: int
     codigo: str

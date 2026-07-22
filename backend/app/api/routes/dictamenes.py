@@ -96,19 +96,20 @@ def detalle_para_dictamen(
 
     cursor.execute(
         """
-        SELECT e.id_ensayo, e.orden, e.nombre_ensayo, e.metodologia, e.tipo_dato,
-               e.limite_inferior, e.limite_superior, e.unidad_medida, e.valor_requerido, e.obligatorio,
+        SELECT se.id_espec_ensayo, se.orden, m.nombre_ensayo, se.metodologia, se.tipo_dato,
+               se.limite_inferior, se.limite_superior, se.unidad_medida, se.valor_requerido, se.obligatorio,
                r.valor_numerico, r.valor_cualitativo, r.dentro_especificacion
-        FROM lims_ensayos e
-        LEFT JOIN lims_resultados r ON r.id_ensayo = e.id_ensayo AND r.id_muestra = ?
-        WHERE e.id_especificacion = ?
-        ORDER BY e.orden
+        FROM lims_especificacion_ensayos se
+        INNER JOIN lims_ensayos_maestro m ON m.id_ensayo_maestro = se.id_ensayo_maestro
+        LEFT JOIN lims_resultados r ON r.id_espec_ensayo = se.id_espec_ensayo AND r.id_muestra = ?
+        WHERE se.id_especificacion = ?
+        ORDER BY se.orden
         """,
         id_muestra, muestra.id_especificacion,
     )
     ensayos = [
         EnsayoResultado(
-            id_ensayo=e.id_ensayo,
+            id_espec_ensayo=e.id_espec_ensayo,
             orden=e.orden,
             nombre_ensayo=e.nombre_ensayo,
             metodologia=e.metodologia,

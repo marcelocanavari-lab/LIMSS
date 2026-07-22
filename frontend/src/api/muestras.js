@@ -4,8 +4,8 @@ export const muestrasApi = {
   // ERP: búsqueda de IR
   buscarIR: (nroIr) => api.get(`/api/muestras/erp/ir/${encodeURIComponent(nroIr)}`),
 
-  // Búsqueda unificada por tipo de material: IR (materia prima, ERP) o
-  // número de lote interno (resto, eBR)
+  // Búsqueda unificada por tipo de material: IR (materia prima) o número de
+  // lote (resto) -- ambas contra el ERP, ver buscar_material en el backend
   buscarMaterial: (tipo, referencia) => {
     const params = new URLSearchParams();
     params.set('tipo', tipo);
@@ -26,6 +26,7 @@ export const muestrasApi = {
   // Envío
   confirmarEnvio: (id, data) => api.post(`/api/muestras/${id}/envio`, data),
   obtenerRemito: (id) => api.get(`/api/muestras/${id}/remito`),
+  ensayosParaEnvio: (id, idLaboratorio) => api.get(`/api/muestras/${id}/ensayos-para-envio?id_laboratorio=${idLaboratorio}`),
 
   // Etiqueta (REQ-ENV-003)
   generarEtiqueta: (id) => api.post(`/api/muestras/${id}/etiqueta`),

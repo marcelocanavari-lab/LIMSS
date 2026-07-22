@@ -5,19 +5,6 @@ import { maestrosApi } from '../../api/maestros';
 import { materialesApi } from '../../api/materiales';
 import { ApiError } from '../../api/client';
 
-const ENSAYO_VACIO = {
-  orden: 1,
-  nombre_ensayo: '',
-  metodologia: '',
-  tipo_dato: 'numerico',
-  limite_inferior: '',
-  limite_superior: '',
-  unidad_medida: '',
-  valor_requerido: '',
-  obligatorio: true,
-  observaciones: '',
-};
-
 const TIPOS_MATERIAL = [
   { value: 'materia_prima', label: 'Materia Prima' },
   { value: 'granel', label: 'Granel' },
@@ -42,7 +29,9 @@ export default function EspecificacionFormPage({ modo }) {
   const [articulos, setArticulos] = useState([]);
   const [articulo, setArticulo] = useState(null);
   const [tipoMaterial, setTipoMaterial] = useState('');
-  const [ensayos, setEnsayos] = useState([{ ...ENSAYO_VACIO }]);
+  const [cantidadMuestra, setCantidadMuestra] = useState('');
+  const [unidadMuestra, setUnidadMuestra] = useState('');
+  const [versionActual, setVersionActual] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(esRevision);
   const [guardando, setGuardando] = useState(false);
@@ -54,20 +43,9 @@ export default function EspecificacionFormPage({ modo }) {
       .then((esp) => {
         setArticulo({ IdM21: esp.erp_IdM21, CODART: esp.erp_CODART, DESART: esp.erp_DESART });
         setTipoMaterial(esp.tipo_material);
-        setEnsayos(
-          esp.ensayos.map((en) => ({
-            orden: en.orden,
-            nombre_ensayo: en.nombre_ensayo,
-            metodologia: en.metodologia || '',
-            tipo_dato: en.tipo_dato,
-            limite_inferior: en.limite_inferior ?? '',
-            limite_superior: en.limite_superior ?? '',
-            unidad_medida: en.unidad_medida || '',
-            valor_requerido: en.valor_requerido || '',
-            obligatorio: en.obligatorio,
-            observaciones: en.observaciones || '',
-          }))
-        );
+        setCantidadMuestra(esp.cantidad_muestra ?? '');
+        setUnidadMuestra(esp.unidad_muestra || '');
+        setVersionActual(esp.version);
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo cargar la especificación'))
       .finally(() => setLoading(false));
@@ -110,54 +88,14 @@ export default function EspecificacionFormPage({ modo }) {
     setPaso(2);
   }
 
-  function actualizarEnsayo(idx, campo, valor) {
-    setEnsayos((prev) => prev.map((en, i) => (i === idx ? { ...en, [campo]: valor } : en)));
-  }
-
-  function agregarEnsayo() {
-    setEnsayos((prev) => [...prev, { ...ENSAYO_VACIO, orden: prev.length + 1 }]);
-  }
-
-  function quitarEnsayo(idx) {
-    setEnsayos((prev) => prev.filter((_, i) => i !== idx).map((en, i) => ({ ...en, orden: i + 1 })));
-  }
-
-  function validar() {
-    if (!esRevision && !tipoMaterial) return 'Elegí el tipo de material';
-    if (!esRevision && !articulo) return 'Seleccioná un artículo del ERP';
-    if (ensayos.length === 0) return 'Agregá al menos un ensayo';
-    for (const en of ensayos) {
-      if (!en.nombre_ensayo.trim()) return 'Todos los ensayos necesitan un nombre';
-      if (en.tipo_dato === 'numerico' && en.limite_inferior === '' && en.limite_superior === '') {
-        return `El ensayo "${en.nombre_ensayo}" necesita al menos un límite (inferior o superior)`;
-      }
-      if (en.tipo_dato === 'cualitativo' && !en.valor_requerido.trim()) {
-        return `El ensayo "${en.nombre_ensayo}" necesita el valor cualitativo requerido`;
-      }
-    }
-    return '';
-  }
-
-  function ensayosParaEnviar() {
-    return ensayos.map((en) => ({
-      orden: en.orden,
-      nombre_ensayo: en.nombre_ensayo.trim(),
-      metodologia: en.metodologia.trim() || null,
-      tipo_dato: en.tipo_dato,
-      limite_inferior: en.tipo_dato === 'numerico' && en.limite_inferior !== '' ? Number(en.limite_inferior) : null,
-      limite_superior: en.tipo_dato === 'numerico' && en.limite_superior !== '' ? Number(en.limite_superior) : null,
-      unidad_medida: en.unidad_medida.trim() || null,
-      valor_requerido: en.tipo_dato === 'cualitativo' ? en.valor_requerido.trim() : null,
-      obligatorio: en.obligatorio,
-      observaciones: en.observaciones.trim() || null,
-    }));
-  }
-
   async function handleSubmit(e) {
     e.preventDefault();
-    const msg = validar();
-    if (msg) {
-      setError(msg);
+    if (!esRevision && !tipoMaterial) {
+      setError('Elegí el tipo de material');
+      return;
+    }
+    if (!esRevision && !articulo) {
+      setError('Seleccioná un artículo del ERP');
       return;
     }
     setError('');
@@ -165,14 +103,15 @@ export default function EspecificacionFormPage({ modo }) {
     try {
       let resultado;
       if (esRevision) {
-        resultado = await maestrosApi.revisarEspecificacion(id, ensayosParaEnviar());
+        resultado = await maestrosApi.revisarEspecificacion(id);
       } else {
         resultado = await maestrosApi.crearEspecificacion({
           erp_IdM21: articulo.IdM21,
           erp_CODART: articulo.CODART,
           erp_DESART: articulo.DESART,
           tipo_material: tipoMaterial,
-          ensayos: ensayosParaEnviar(),
+          cantidad_muestra: cantidadMuestra !== '' ? Number(cantidadMuestra) : null,
+          unidad_muestra: unidadMuestra.trim() || null,
         });
       }
       navigate(`/maestros/especificaciones/${resultado.id_especificacion}`, { replace: true });
@@ -191,9 +130,9 @@ export default function EspecificacionFormPage({ modo }) {
     );
   }
 
-  // En modo "crear" el formulario de ensayos recién se muestra en el paso 3
-  // (tipo + artículo ya elegidos). En "revisar" siempre se muestra: el tipo y
-  // el artículo ya vienen fijos de la especificación vigente.
+  // En modo "crear" el formulario recién se muestra en el paso 3 (tipo +
+  // artículo ya elegidos). En "revisar" siempre se muestra: el tipo y el
+  // artículo ya vienen fijos de la especificación vigente.
   const mostrarFormulario = esRevision || paso === 3;
 
   return (
@@ -275,125 +214,39 @@ export default function EspecificacionFormPage({ modo }) {
               </div>
 
               <span className="badge badge-neutral">{labelTipo(tipoMaterial)}</span>
-            </div>
-          )}
+              {esRevision && <span className="badge badge-neutral" style={{ marginLeft: 'var(--sp-2)' }}>Versión actual: {versionActual}</span>}
 
-          {mostrarFormulario && (
-            <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--sp-3)' }}>
-                <h2 style={{ fontSize: 'var(--fs-lg)' }}>Ensayos</h2>
-                <button type="button" className="btn btn-secondary" onClick={agregarEnsayo}>
-                  + Agregar ensayo
-                </button>
+              <div style={{ display: 'flex', gap: 'var(--sp-3)', marginTop: 'var(--sp-4)' }}>
+                <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+                  <label className="field-label">Cantidad de muestra a enviar</label>
+                  <input
+                    className="field-input"
+                    type="number"
+                    step="any"
+                    placeholder="Ej. 50"
+                    value={cantidadMuestra}
+                    disabled={esRevision}
+                    onChange={(e) => setCantidadMuestra(e.target.value)}
+                  />
+                </div>
+                <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+                  <label className="field-label">Unidad</label>
+                  <input
+                    className="field-input"
+                    placeholder="Ej. g, ml, unidades"
+                    value={unidadMuestra}
+                    disabled={esRevision}
+                    onChange={(e) => setUnidadMuestra(e.target.value)}
+                  />
+                </div>
               </div>
 
-              {ensayos.map((en, idx) => (
-                <div key={idx} className="card" style={{ marginBottom: 'var(--sp-3)', background: 'var(--surf-2)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--sp-2)' }}>
-                    <span style={{ fontWeight: 600 }}>Ensayo {idx + 1}</span>
-                    {ensayos.length > 1 && (
-                      <button type="button" className="btn btn-ghost" style={{ color: 'var(--danger)' }} onClick={() => quitarEnsayo(idx)}>
-                        Quitar
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="field">
-                    <label className="field-label">Nombre del ensayo</label>
-                    <input
-                      className="field-input"
-                      placeholder="Ej. pH, Aspecto, Valoración"
-                      value={en.nombre_ensayo}
-                      onChange={(e) => actualizarEnsayo(idx, 'nombre_ensayo', e.target.value)}
-                    />
-                  </div>
-
-                  <div className="field">
-                    <label className="field-label">Metodología</label>
-                    <input
-                      className="field-input"
-                      placeholder="Ej. USP, PE, Interna M-04"
-                      value={en.metodologia}
-                      onChange={(e) => actualizarEnsayo(idx, 'metodologia', e.target.value)}
-                    />
-                  </div>
-
-                  <div className="field">
-                    <label className="field-label">Tipo de dato</label>
-                    <select
-                      className="field-input"
-                      value={en.tipo_dato}
-                      onChange={(e) => actualizarEnsayo(idx, 'tipo_dato', e.target.value)}
-                    >
-                      <option value="numerico">Numérico</option>
-                      <option value="cualitativo">Cualitativo</option>
-                    </select>
-                  </div>
-
-                  {en.tipo_dato === 'numerico' ? (
-                    <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
-                      <div className="field" style={{ flex: 1 }}>
-                        <label className="field-label">Límite inferior</label>
-                        <input
-                          className="field-input"
-                          type="number"
-                          step="any"
-                          value={en.limite_inferior}
-                          onChange={(e) => actualizarEnsayo(idx, 'limite_inferior', e.target.value)}
-                        />
-                      </div>
-                      <div className="field" style={{ flex: 1 }}>
-                        <label className="field-label">Límite superior</label>
-                        <input
-                          className="field-input"
-                          type="number"
-                          step="any"
-                          value={en.limite_superior}
-                          onChange={(e) => actualizarEnsayo(idx, 'limite_superior', e.target.value)}
-                        />
-                      </div>
-                      <div className="field" style={{ flex: 1 }}>
-                        <label className="field-label">Unidad</label>
-                        <input
-                          className="field-input"
-                          placeholder="%, g/mL, pH..."
-                          value={en.unidad_medida}
-                          onChange={(e) => actualizarEnsayo(idx, 'unidad_medida', e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="field">
-                      <label className="field-label">Valor exacto requerido</label>
-                      <input
-                        className="field-input"
-                        placeholder='Ej. "Polvo cristalino blanco"'
-                        value={en.valor_requerido}
-                        onChange={(e) => actualizarEnsayo(idx, 'valor_requerido', e.target.value)}
-                      />
-                    </div>
-                  )}
-
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', marginTop: 'var(--sp-2)', marginBottom: 'var(--sp-3)' }}>
-                    <input
-                      type="checkbox"
-                      checked={en.obligatorio}
-                      onChange={(e) => actualizarEnsayo(idx, 'obligatorio', e.target.checked)}
-                    />
-                    Obligatorio
-                  </label>
-
-                  <div className="field" style={{ marginBottom: 0 }}>
-                    <label className="field-label">Observaciones</label>
-                    <input
-                      className="field-input"
-                      placeholder="Notas adicionales (opcional)"
-                      value={en.observaciones}
-                      onChange={(e) => actualizarEnsayo(idx, 'observaciones', e.target.value)}
-                    />
-                  </div>
-                </div>
-              ))}
+              {esRevision && (
+                <p style={{ color: 'var(--ink-2)', fontSize: 'var(--fs-sm)', marginTop: 'var(--sp-3)', marginBottom: 0 }}>
+                  La nueva versión arranca con una copia de los ensayos de la versión actual. Los vas a poder
+                  agregar, editar o quitar desde la ficha de la especificación una vez creada.
+                </p>
+              )}
             </div>
           )}
 
@@ -401,7 +254,7 @@ export default function EspecificacionFormPage({ modo }) {
 
           {mostrarFormulario && (
             <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={guardando}>
-              {guardando ? <span className="spinner" /> : esRevision ? 'Guardar nueva versión' : 'Crear especificación'}
+              {guardando ? <span className="spinner" /> : esRevision ? 'Confirmar nueva versión' : 'Crear especificación'}
             </button>
           )}
         </form>

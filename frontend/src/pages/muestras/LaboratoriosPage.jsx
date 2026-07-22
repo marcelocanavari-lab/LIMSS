@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import TopBar from '../../components/TopBar';
 import { muestrasApi } from '../../api/muestras';
 import { ApiError } from '../../api/client';
@@ -8,6 +9,8 @@ const FORM_VACIO = { nombre: '', direccion: '', contacto: '', email: '', telefon
 
 export default function LaboratoriosPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const puedeGestionar = ['analista_qc', 'qa', 'admin'].includes(user?.rol);
 
   const [laboratorios, setLaboratorios] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -104,15 +107,17 @@ export default function LaboratoriosPage() {
 
   return (
     <div className="screen">
-      <TopBar titulo="Laboratorios externos" subtitulo="Muestras" onBack={() => navigate('/muestras')} />
+      <TopBar titulo="Laboratorios" subtitulo="Muestras" onBack={() => navigate('/menu')} />
       <div className="screen-content">
-        <button className="btn btn-primary" style={{ marginBottom: 'var(--sp-4)' }} onClick={() => (mostrarForm ? cerrarForm() : abrirNuevo())}>
-          {mostrarForm ? 'Cancelar' : '+ Nuevo laboratorio'}
-        </button>
+        {puedeGestionar && (
+          <button className="btn btn-primary" style={{ marginBottom: 'var(--sp-4)' }} onClick={() => (mostrarForm ? cerrarForm() : abrirNuevo())}>
+            {mostrarForm ? 'Cancelar' : '+ Nuevo laboratorio'}
+          </button>
+        )}
 
         {successMsg && <div className="alert alert-ok" style={{ marginBottom: 'var(--sp-4)' }}>{successMsg}</div>}
 
-        {mostrarForm && (
+        {puedeGestionar && mostrarForm && (
           <form onSubmit={handleSubmit} className="card" style={{ marginBottom: 'var(--sp-5)' }}>
             <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>
               {editandoId ? 'Editar laboratorio' : 'Nuevo laboratorio'}
@@ -162,6 +167,7 @@ export default function LaboratoriosPage() {
         ) : laboratorios.length === 0 ? (
           <div className="state-block"><span className="state-block-title">Sin laboratorios</span></div>
         ) : (
+          <div className="table-scroll">
           <table className="data-table">
             <thead>
               <tr>
@@ -170,7 +176,7 @@ export default function LaboratoriosPage() {
                 <th>Email</th>
                 <th>Teléfono</th>
                 <th>Estado</th>
-                <th></th>
+                {puedeGestionar && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -181,16 +187,19 @@ export default function LaboratoriosPage() {
                   <td>{l.email || '—'}</td>
                   <td>{l.telefono || '—'}</td>
                   <td><span className={l.activo ? 'badge badge-ok' : 'badge badge-neutral'}>{l.activo ? 'Activo' : 'Inactivo'}</span></td>
-                  <td style={{ display: 'flex', gap: 'var(--sp-2)' }}>
-                    <button className="btn btn-ghost" onClick={() => abrirEdicion(l)}>Editar</button>
-                    <button className="btn btn-ghost" onClick={() => toggleEstado(l)}>
-                      {l.activo ? 'Desactivar' : 'Activar'}
-                    </button>
-                  </td>
+                  {puedeGestionar && (
+                    <td style={{ display: 'flex', gap: 'var(--sp-2)' }}>
+                      <button className="btn btn-ghost" onClick={() => abrirEdicion(l)}>Editar</button>
+                      <button className="btn btn-ghost" onClick={() => toggleEstado(l)}>
+                        {l.activo ? 'Desactivar' : 'Activar'}
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

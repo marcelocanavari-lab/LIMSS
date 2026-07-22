@@ -12,12 +12,14 @@ export default function TestigoFormPage({ modo }) {
   const [codigo, setCodigo] = useState('');
   const [nombre, setNombre] = useState('');
   const [nroLote, setNroLote] = useState('');
+  const [nroIr, setNroIr] = useState('');
   const [fechaVencimiento, setFechaVencimiento] = useState('');
   const [stockActual, setStockActual] = useState('');
   const [stockMinimo, setStockMinimo] = useState('');
   const [unidadMedida, setUnidadMedida] = useState('');
   const [observaciones, setObservaciones] = useState('');
   const [archivo, setArchivo] = useState(null);
+  const [tieneCertificado, setTieneCertificado] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(esEdicion);
   const [guardando, setGuardando] = useState(false);
@@ -30,14 +32,26 @@ export default function TestigoFormPage({ modo }) {
         setCodigo(t.codigo);
         setNombre(t.nombre);
         setNroLote(t.nro_lote);
+        setNroIr(t.nro_ir || '');
         setFechaVencimiento(t.fecha_vencimiento);
         setStockMinimo(String(t.stock_minimo));
         setUnidadMedida(t.unidad_medida || '');
         setObservaciones(t.observaciones || '');
+        setTieneCertificado(!!t.pdf_certificado);
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo cargar el testigo'))
       .finally(() => setLoading(false));
   }, [esEdicion, id]);
+
+  async function verCertificado() {
+    try {
+      const blob = await maestrosApi.descargarCertificado(id);
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo descargar el certificado');
+    }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -47,11 +61,7 @@ export default function TestigoFormPage({ modo }) {
       setError('Completá todos los campos obligatorios');
       return;
     }
-    if (!esEdicion && !archivo) {
-      setError('El certificado analítico en PDF es obligatorio');
-      return;
-    }
-    if (!esEdicion && archivo.type !== 'application/pdf') {
+    if (archivo && archivo.type !== 'application/pdf') {
       setError('El archivo debe ser un PDF');
       return;
     }
@@ -59,26 +69,29 @@ export default function TestigoFormPage({ modo }) {
     setGuardando(true);
     try {
       if (esEdicion) {
-        await maestrosApi.editarTestigo(id, {
-          nombre: nombre.trim(),
-          nro_lote: nroLote.trim(),
-          fecha_vencimiento: fechaVencimiento,
-          stock_minimo: Number(stockMinimo || 0),
-          unidad_medida: unidadMedida.trim() || null,
-          observaciones: observaciones.trim() || null,
-        });
+        const formData = new FormData();
+        formData.append('nombre', nombre.trim());
+        formData.append('nro_lote', nroLote.trim());
+        if (nroIr.trim()) formData.append('nro_ir', nroIr.trim());
+        formData.append('fecha_vencimiento', fechaVencimiento);
+        formData.append('stock_minimo', stockMinimo || '0');
+        if (unidadMedida.trim()) formData.append('unidad_medida', unidadMedida.trim());
+        if (observaciones.trim()) formData.append('observaciones', observaciones.trim());
+        if (archivo) formData.append('pdf_certificado', archivo);
+        await maestrosApi.editarTestigo(id, formData);
         navigate(`/maestros/testigos/${id}`, { replace: true });
       } else {
         const formData = new FormData();
         formData.append('codigo', codigo.trim().toUpperCase());
         formData.append('nombre', nombre.trim());
         formData.append('nro_lote', nroLote.trim());
+        if (nroIr.trim()) formData.append('nro_ir', nroIr.trim());
         formData.append('fecha_vencimiento', fechaVencimiento);
         formData.append('stock_actual', stockActual || '0');
         formData.append('stock_minimo', stockMinimo || '0');
         if (unidadMedida.trim()) formData.append('unidad_medida', unidadMedida.trim());
         if (observaciones.trim()) formData.append('observaciones', observaciones.trim());
-        formData.append('pdf_certificado', archivo);
+        if (archivo) formData.append('pdf_certificado', archivo);
         const testigo = await maestrosApi.crearTestigo(formData);
         navigate(`/maestros/testigos/${testigo.id_testigo}`, { replace: true });
       }
@@ -142,6 +155,19 @@ export default function TestigoFormPage({ modo }) {
                 className="field-input"
                 value={nroLote}
                 onChange={(e) => setNroLote(e.target.value)}
+                disabled={guardando}
+              />
+            </div>
+
+            <div className="field">
+              <label className="field-label" htmlFor="nroIr">N° de IR (ej. 262/20)</label>
+              <input
+                id="nroIr"
+                className="field-input"
+                placeholder="Ej. 262/20"
+                value={nroIr}
+                onChange={(e) => setNroIr(e.target.value)}
+                maxLength={6}
                 disabled={guardando}
               />
             </div>
@@ -212,19 +238,29 @@ export default function TestigoFormPage({ modo }) {
               />
             </div>
 
-            {!esEdicion && (
-              <div className="field">
-                <label className="field-label" htmlFor="pdf">Certificado analítico (PDF)</label>
-                <input
-                  id="pdf"
-                  className="field-input"
-                  type="file"
-                  accept="application/pdf"
-                  onChange={(e) => setArchivo(e.target.files?.[0] || null)}
-                  disabled={guardando}
-                />
-              </div>
-            )}
+            <div className="field">
+              <label className="field-label" htmlFor="pdf">Certificado analítico (PDF) (opcional)</label>
+              {esEdicion && tieneCertificado && !archivo && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', marginBottom: 'var(--sp-2)' }}>
+                  <button type="button" className="btn btn-ghost" onClick={verCertificado}>
+                    Ver certificado actual
+                  </button>
+                </div>
+              )}
+              <input
+                id="pdf"
+                className="field-input"
+                type="file"
+                accept="application/pdf"
+                onChange={(e) => setArchivo(e.target.files?.[0] || null)}
+                disabled={guardando}
+              />
+              {esEdicion && (
+                <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--ink-2)' }}>
+                  {tieneCertificado ? 'Dejalo vacío para conservar el certificado actual, o subí uno nuevo para reemplazarlo.' : 'Todavía no tiene certificado cargado.'}
+                </span>
+              )}
+            </div>
           </div>
 
           {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}

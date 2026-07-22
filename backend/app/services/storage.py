@@ -69,5 +69,18 @@ def guardar_pdf_remito(contenido: bytes, nro_remito_interno: str) -> str:
     return _guardar_bytes(contenido, "remitos", nombre_archivo)
 
 
+def guardar_pdf_remito_testigo(contenido: bytes, nro_remito: str) -> str:
+    """Remito de envío de testigos/estándares a laboratorio externo."""
+    nombre_archivo = f"LIMSS_{_sanitizar(nro_remito)}.pdf"
+    return _guardar_bytes(contenido, "remitos_testigos", nombre_archivo)
+
+
+def guardar_pdf_copia_firmada(upload_file: UploadFile, nro_remito: str) -> str:
+    """Copia del remito de testigos firmada por el laboratorio como constancia
+    de recepción, escaneada y subida por el usuario."""
+    nombre_archivo = f"LIMSS_{_sanitizar(nro_remito)}_FIRMADO.pdf"
+    return _guardar_pdf(upload_file, os.path.join("remitos", "firmados"), nombre_archivo)
+
+
 def ruta_absoluta(ruta_relativa: str) -> str:
     return os.path.join(settings.storage_path, ruta_relativa)

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import TopBar from '../../components/TopBar';
 import { muestrasApi } from '../../api/muestras';
 import { ApiError } from '../../api/client';
+
+const ESTADOS_PENDIENTES = ['en_transito', 'en_carga_resultados', 'pendiente_dictamen'];
 
 const ESTADOS = [
   { value: '', label: 'Todos los estados' },
@@ -29,7 +31,9 @@ const BADGE_POR_ESTADO = {
 export default function MuestrasPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const puedeCrear = ['muestreador', 'qa', 'admin'].includes(user?.rol);
+  const [searchParams] = useSearchParams();
+  const vistaPendientes = searchParams.get('vista') === 'pendientes';
+  const puedeCrear = ['muestreador', 'analista_qc', 'qa', 'admin'].includes(user?.rol);
 
   const [muestras, setMuestras] = useState([]);
   const [estado, setEstado] = useState('');
@@ -51,9 +55,17 @@ export default function MuestrasPage() {
     };
   }, [estado, buscar]);
 
+  const muestrasVisibles = vistaPendientes
+    ? muestras.filter((m) => ESTADOS_PENDIENTES.includes(m.estado))
+    : muestras;
+
   return (
     <div className="screen">
-      <TopBar titulo="Muestras" subtitulo="Muestreo y envío a laboratorio externo" onBack={() => navigate('/menu')} />
+      <TopBar
+        titulo={vistaPendientes ? 'Muestras pendientes' : 'Muestras'}
+        subtitulo={vistaPendientes ? 'Envío, resultados y dictamen' : 'Muestreo y envío a laboratorio'}
+        onBack={() => navigate('/menu')}
+      />
       <div className="screen-content">
         <div style={{ display: 'flex', gap: 'var(--sp-3)', marginBottom: 'var(--sp-4)', flexWrap: 'wrap' }}>
           <input
@@ -79,12 +91,13 @@ export default function MuestrasPage() {
 
         {loading ? (
           <div className="state-block"><span className="spinner" /></div>
-        ) : muestras.length === 0 ? (
+        ) : muestrasVisibles.length === 0 ? (
           <div className="state-block">
             <span className="state-block-title">Sin muestras</span>
             <span>No hay muestras cargadas con estos filtros</span>
           </div>
         ) : (
+          <div className="table-scroll">
           <table className="data-table">
             <thead>
               <tr>
@@ -96,7 +109,7 @@ export default function MuestrasPage() {
               </tr>
             </thead>
             <tbody>
-              {muestras.map((m) => (
+              {muestrasVisibles.map((m) => (
                 <tr key={m.id_muestra} style={{ cursor: 'pointer' }} onClick={() => navigate(`/muestras/${m.id_muestra}`)}>
                   <td style={{ fontFamily: 'var(--font-mono)' }}>{m.codigo_muestra}</td>
                   <td style={{ fontFamily: 'var(--font-mono)' }}>
@@ -110,6 +123,7 @@ export default function MuestrasPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

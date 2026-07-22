@@ -4,7 +4,7 @@ from datetime import date, datetime
 
 
 class EnsayoParaCarga(BaseModel):
-    id_ensayo: int
+    id_espec_ensayo: int
     orden: int
     nombre_ensayo: str
     metodologia: Optional[str] = None
@@ -39,7 +39,7 @@ class MuestraParaCarga(BaseModel):
 
 
 class ResultadoInput(BaseModel):
-    id_ensayo: int
+    id_espec_ensayo: int
     valor_numerico: Optional[float] = None
     valor_cualitativo: Optional[str] = None
 

@@ -156,7 +156,7 @@ export default function DictamenDetallePage() {
               {detalle.ensayos.map((en) => {
                 const oos = en.dentro_especificacion === false;
                 return (
-                  <tr key={en.id_ensayo} style={oos ? { background: 'var(--danger-soft)' } : undefined}>
+                  <tr key={en.id_espec_ensayo} style={oos ? { background: 'var(--danger-soft)' } : undefined}>
                     <td>{en.nombre_ensayo}</td>
                     <td>
                       {en.tipo_dato === 'numerico'

@@ -12,7 +12,7 @@ from app.core.config import get_settings
 from app.core.security import hash_pin, verify_pin, create_access_token, get_current_user
 from app.db.connections import limss_db
 from app.schemas.auth import (
-    LoginRequest, LoginResponse, UsuarioCreate, UsuarioResponse,
+    LoginRequest, LoginResponse, UsuarioCreate, UsuarioPinReset, UsuarioResponse, UsuarioUpdate,
 )
 from app.services import audit
 
@@ -265,4 +265,81 @@ def cambiar_estado_usuario(
         rol=row.rol,
         activo=bool(row.activo),
         fecha_creacion=row.fecha_creacion,
+    )
+
+
+@router.put("/usuarios/{id_usuario}", response_model=UsuarioResponse)
+def editar_usuario(
+    id_usuario: int,
+    body: UsuarioUpdate,
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Edita nombre, apellido y rol. El código no es editable. Solo admins."""
+    if user["rol"] != "admin":
+        raise HTTPException(status_code=403, detail="Solo administradores pueden modificar usuarios")
+
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM lims_usuarios WHERE id_usuario = ?", id_usuario)
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    cursor.execute(
+        "UPDATE lims_usuarios SET nombre = ?, apellido = ?, rol = ? WHERE id_usuario = ?",
+        body.nombre, body.apellido, body.rol, id_usuario,
+    )
+
+    audit.registrar(
+        conn,
+        entidad="usuario",
+        accion="modificar",
+        id_usuario=user["id_usuario"],
+        id_entidad=id_usuario,
+        valor_anterior={"nombre": row.nombre, "apellido": row.apellido, "rol": row.rol},
+        valor_nuevo={"nombre": body.nombre, "apellido": body.apellido, "rol": body.rol},
+    )
+
+    cursor.execute("SELECT * FROM lims_usuarios WHERE id_usuario = ?", id_usuario)
+    row = cursor.fetchone()
+    return UsuarioResponse(
+        id_usuario=row.id_usuario,
+        codigo=row.codigo,
+        nombre=row.nombre,
+        apellido=row.apellido,
+        rol=row.rol,
+        activo=bool(row.activo),
+        fecha_creacion=row.fecha_creacion,
+    )
+
+
+@router.put("/usuarios/{id_usuario}/pin", status_code=204)
+def resetear_pin_usuario(
+    id_usuario: int,
+    body: UsuarioPinReset,
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Resetea el PIN de un usuario. El hash se genera acá, nunca se recibe
+    ni se devuelve en texto plano. Solo admins."""
+    if user["rol"] != "admin":
+        raise HTTPException(status_code=403, detail="Solo administradores pueden modificar usuarios")
+
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM lims_usuarios WHERE id_usuario = ?", id_usuario)
+    if not cursor.fetchone():
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    pin_hash = hash_pin(body.pin)
+    cursor.execute(
+        "UPDATE lims_usuarios SET pin_hash = ? WHERE id_usuario = ?",
+        pin_hash, id_usuario,
+    )
+
+    audit.registrar(
+        conn,
+        entidad="usuario",
+        accion="resetear_pin",
+        id_usuario=user["id_usuario"],
+        id_entidad=id_usuario,
     )

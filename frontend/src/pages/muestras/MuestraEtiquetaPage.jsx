@@ -33,11 +33,6 @@ export default function MuestraEtiquetaPage() {
           !error && <div className="state-block no-print"><span className="spinner" /><span>Generando etiqueta...</span></div>
         ) : (
           <div className="printable-label">
-            {etiqueta.es_reimpresion && (
-              <div className="label-row" style={{ justifyContent: 'center' }}>
-                <span className="badge badge-warn">REIMPRESIÓN (#{etiqueta.numero_impresion})</span>
-              </div>
-            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div className="label-codigo">{etiqueta.codigo_muestra}</div>

@@ -3,26 +3,316 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import TopBar from '../../components/TopBar';
 import { maestrosApi } from '../../api/maestros';
+import { muestrasApi } from '../../api/muestras';
+import { materialesApi } from '../../api/materiales';
 import { ApiError } from '../../api/client';
+
+const TIPOS_MATERIAL = [
+  { value: 'materia_prima', label: 'Materia Prima' },
+  { value: 'granel', label: 'Granel' },
+  { value: 'semi_elaborado', label: 'Semi-Elaborado' },
+  { value: 'producto_terminado', label: 'Producto Terminado' },
+];
+
+function formatearEspecificacion(en) {
+  if (en.tipo_dato === 'numerico') {
+    const unidad = en.unidad_medida ? ` ${en.unidad_medida}` : '';
+    if (en.limite_inferior != null && en.limite_superior != null) {
+      return `${en.limite_inferior} – ${en.limite_superior}${unidad}`;
+    }
+    if (en.limite_superior != null) {
+      return `≤ ${en.limite_superior}${unidad}`;
+    }
+    if (en.limite_inferior != null) {
+      return `≥ ${en.limite_inferior}${unidad}`;
+    }
+    return en.especificacion_texto || '—';
+  }
+  return en.valor_requerido || en.especificacion_texto || '—';
+}
+
+const ENSAYO_FORM_VACIO = {
+  orden: 1,
+  metodologia: '',
+  tipo_dato: 'numerico',
+  limite_inferior: '',
+  limite_superior: '',
+  unidad_medida: '',
+  valor_requerido: '',
+  especificacion_texto: '',
+  obligatorio: true,
+  requerido_por_defecto: true,
+  id_laboratorio: '',
+};
 
 export default function EspecificacionDetallePage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const puedeGestionar = ['admin', 'qa'].includes(user?.rol);
+  const puedeGestionar = ['analista_qc', 'qa', 'admin'].includes(user?.rol);
 
   const [especificacion, setEspecificacion] = useState(null);
+  const [ensayos, setEnsayos] = useState([]);
+  const [laboratorios, setLaboratorios] = useState([]);
+  const [testigosAsociados, setTestigosAsociados] = useState([]);
+  const [testigosDisponibles, setTestigosDisponibles] = useState([]);
+  const [idTestigoNuevo, setIdTestigoNuevo] = useState('');
+  const [errorTestigos, setErrorTestigos] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
+  // ── Modal de agregar/editar ensayo ──────────────────────────────
+  const [modalAbierto, setModalAbierto] = useState(false);
+  const [editandoIdEspecEnsayo, setEditandoIdEspecEnsayo] = useState(null);
+  const [catalogoBuscar, setCatalogoBuscar] = useState('');
+  const [catalogoResultados, setCatalogoResultados] = useState([]);
+  const [ensayoMaestroElegido, setEnsayoMaestroElegido] = useState(null);
+  const [nombreNuevoEnsayo, setNombreNuevoEnsayo] = useState('');
+  const [formEnsayo, setFormEnsayo] = useState(ENSAYO_FORM_VACIO);
+  const [errorEnsayo, setErrorEnsayo] = useState('');
+  const [guardandoEnsayo, setGuardandoEnsayo] = useState(false);
+
+  // ── Modal de copiar como nueva especificación ───────────────────
+  const [copiarModalAbierto, setCopiarModalAbierto] = useState(false);
+  const [copiarTipo, setCopiarTipo] = useState('');
+  const [copiarNombre, setCopiarNombre] = useState('');
+  const [copiarVersion, setCopiarVersion] = useState('1.0');
+  const [copiarArticuloBuscar, setCopiarArticuloBuscar] = useState('');
+  const [copiarArticulos, setCopiarArticulos] = useState([]);
+  const [copiarArticuloElegido, setCopiarArticuloElegido] = useState(null);
+  const [errorCopiar, setErrorCopiar] = useState('');
+  const [guardandoCopia, setGuardandoCopia] = useState(false);
+
+  const puedeEditarEnsayos = puedeGestionar && especificacion?.vigente;
+
+  function cargarTestigosAsociados() {
+    return maestrosApi.listarTestigosEspecificacion(id).then(setTestigosAsociados);
+  }
+
+  function cargarEnsayos() {
+    return maestrosApi.listarEnsayosEspecificacion(id).then(setEnsayos);
+  }
+
   useEffect(() => {
     setLoading(true);
-    maestrosApi
-      .obtenerEspecificacion(id)
-      .then(setEspecificacion)
+    Promise.all([
+      maestrosApi.obtenerEspecificacion(id).then(setEspecificacion),
+      cargarEnsayos(),
+      cargarTestigosAsociados(),
+      maestrosApi.listarTestigos({ activo: true }).then(setTestigosDisponibles),
+      muestrasApi.listarLaboratorios(true).then(setLaboratorios),
+    ])
       .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo cargar la especificación'))
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    if (!modalAbierto || ensayoMaestroElegido || catalogoBuscar.trim().length < 2) {
+      setCatalogoResultados([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      maestrosApi.listarEnsayosMaestro(catalogoBuscar).then(setCatalogoResultados).catch(() => setCatalogoResultados([]));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [catalogoBuscar, modalAbierto, ensayoMaestroElegido]);
+
+  useEffect(() => {
+    if (!copiarModalAbierto || copiarArticuloElegido || copiarArticuloBuscar.trim().length < 2) {
+      setCopiarArticulos([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      materialesApi.buscarMateriales(copiarTipo, copiarArticuloBuscar).then(setCopiarArticulos).catch(() => setCopiarArticulos([]));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [copiarArticuloBuscar, copiarModalAbierto, copiarArticuloElegido, copiarTipo]);
+
+  async function handleAsociarTestigo() {
+    if (!idTestigoNuevo) return;
+    setErrorTestigos('');
+    try {
+      await maestrosApi.asociarTestigoEspecificacion(id, Number(idTestigoNuevo));
+      setIdTestigoNuevo('');
+      await cargarTestigosAsociados();
+    } catch (err) {
+      setErrorTestigos(err instanceof ApiError ? err.message : 'No se pudo asociar el testigo');
+    }
+  }
+
+  async function handleDesasociarTestigo(idTestigo) {
+    setErrorTestigos('');
+    try {
+      await maestrosApi.desasociarTestigoEspecificacion(id, idTestigo);
+      await cargarTestigosAsociados();
+    } catch (err) {
+      setErrorTestigos(err instanceof ApiError ? err.message : 'No se pudo quitar el testigo');
+    }
+  }
+
+  function abrirAgregarEnsayo() {
+    setEditandoIdEspecEnsayo(null);
+    setEnsayoMaestroElegido(null);
+    setCatalogoBuscar('');
+    setCatalogoResultados([]);
+    setNombreNuevoEnsayo('');
+    setFormEnsayo({ ...ENSAYO_FORM_VACIO, orden: ensayos.length + 1 });
+    setErrorEnsayo('');
+    setModalAbierto(true);
+  }
+
+  function abrirEditarEnsayo(en) {
+    setEditandoIdEspecEnsayo(en.id_espec_ensayo);
+    setEnsayoMaestroElegido({ id_ensayo_maestro: en.id_ensayo_maestro, nombre_ensayo: en.nombre_ensayo });
+    setCatalogoBuscar('');
+    setCatalogoResultados([]);
+    setNombreNuevoEnsayo('');
+    setFormEnsayo({
+      orden: en.orden,
+      metodologia: en.metodologia || '',
+      tipo_dato: en.tipo_dato,
+      limite_inferior: en.limite_inferior ?? '',
+      limite_superior: en.limite_superior ?? '',
+      unidad_medida: en.unidad_medida || '',
+      valor_requerido: en.valor_requerido || '',
+      especificacion_texto: en.especificacion_texto || '',
+      obligatorio: en.obligatorio,
+      requerido_por_defecto: en.requerido_por_defecto,
+      id_laboratorio: en.id_laboratorio ?? '',
+    });
+    setErrorEnsayo('');
+    setModalAbierto(true);
+  }
+
+  function cerrarModal() {
+    setModalAbierto(false);
+  }
+
+  async function handleCrearEnsayoCatalogo() {
+    if (!nombreNuevoEnsayo.trim()) return;
+    setErrorEnsayo('');
+    try {
+      const creado = await maestrosApi.crearEnsayoMaestro({ nombre_ensayo: nombreNuevoEnsayo.trim() });
+      setEnsayoMaestroElegido(creado);
+      setCatalogoResultados([]);
+    } catch (err) {
+      setErrorEnsayo(err instanceof ApiError ? err.message : 'No se pudo crear el ensayo en el catálogo');
+    }
+  }
+
+  async function handleGuardarEnsayo(e) {
+    e.preventDefault();
+    if (!ensayoMaestroElegido) {
+      setErrorEnsayo('Elegí un ensayo del catálogo o creá uno nuevo');
+      return;
+    }
+    if (formEnsayo.tipo_dato === 'numerico' && formEnsayo.limite_inferior === '' && formEnsayo.limite_superior === '') {
+      setErrorEnsayo('Necesita al menos un límite (inferior o superior)');
+      return;
+    }
+    if (formEnsayo.tipo_dato === 'cualitativo' && !formEnsayo.valor_requerido.trim()) {
+      setErrorEnsayo('Necesita el valor cualitativo requerido');
+      return;
+    }
+
+    const body = {
+      id_ensayo_maestro: ensayoMaestroElegido.id_ensayo_maestro,
+      orden: Number(formEnsayo.orden),
+      metodologia: formEnsayo.metodologia.trim() || null,
+      tipo_dato: formEnsayo.tipo_dato,
+      limite_inferior: formEnsayo.tipo_dato === 'numerico' && formEnsayo.limite_inferior !== '' ? Number(formEnsayo.limite_inferior) : null,
+      limite_superior: formEnsayo.tipo_dato === 'numerico' && formEnsayo.limite_superior !== '' ? Number(formEnsayo.limite_superior) : null,
+      unidad_medida: formEnsayo.unidad_medida.trim() || null,
+      valor_requerido: formEnsayo.tipo_dato === 'cualitativo' ? formEnsayo.valor_requerido.trim() : null,
+      especificacion_texto: formEnsayo.especificacion_texto.trim() || null,
+      obligatorio: formEnsayo.obligatorio,
+      requerido_por_defecto: formEnsayo.requerido_por_defecto,
+      id_laboratorio: formEnsayo.id_laboratorio !== '' ? Number(formEnsayo.id_laboratorio) : null,
+    };
+
+    setGuardandoEnsayo(true);
+    setErrorEnsayo('');
+    try {
+      if (editandoIdEspecEnsayo) {
+        await maestrosApi.editarEnsayoEspecificacion(id, editandoIdEspecEnsayo, body);
+      } else {
+        await maestrosApi.agregarEnsayoEspecificacion(id, body);
+      }
+      await cargarEnsayos();
+      setModalAbierto(false);
+    } catch (err) {
+      setErrorEnsayo(err instanceof ApiError ? err.message : 'No se pudo guardar el ensayo');
+    } finally {
+      setGuardandoEnsayo(false);
+    }
+  }
+
+  async function handleEliminarEnsayo(en) {
+    if (!window.confirm(`¿Quitar el ensayo "${en.nombre_ensayo}" de esta especificación?`)) return;
+    try {
+      await maestrosApi.eliminarEnsayoEspecificacion(id, en.id_espec_ensayo);
+      await cargarEnsayos();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo quitar el ensayo');
+    }
+  }
+
+  function abrirCopiar() {
+    setCopiarTipo(especificacion.tipo_material);
+    setCopiarNombre(especificacion.erp_DESART);
+    setCopiarVersion('1.0');
+    setCopiarArticuloBuscar('');
+    setCopiarArticulos([]);
+    setCopiarArticuloElegido(null);
+    setErrorCopiar('');
+    setCopiarModalAbierto(true);
+  }
+
+  function cerrarCopiar() {
+    setCopiarModalAbierto(false);
+  }
+
+  function cambiarCopiarTipo(valor) {
+    setCopiarTipo(valor);
+    setCopiarArticuloElegido(null);
+    setCopiarArticuloBuscar('');
+    setCopiarArticulos([]);
+  }
+
+  function elegirCopiarArticulo(articulo) {
+    setCopiarArticuloElegido(articulo);
+    setCopiarNombre(articulo.DESART);
+    setCopiarArticuloBuscar('');
+    setCopiarArticulos([]);
+  }
+
+  async function handleCopiar(e) {
+    e.preventDefault();
+    if (!copiarArticuloElegido) {
+      setErrorCopiar('Buscá y seleccioná el artículo de la nueva especificación');
+      return;
+    }
+    if (!copiarNombre.trim()) {
+      setErrorCopiar('El nombre es obligatorio');
+      return;
+    }
+    setErrorCopiar('');
+    setGuardandoCopia(true);
+    try {
+      const nueva = await maestrosApi.copiarEspecificacion(id, {
+        erp_IdM21: copiarArticuloElegido.IdM21,
+        erp_CODART: copiarArticuloElegido.CODART,
+        erp_DESART: copiarNombre.trim(),
+        tipo_material: copiarTipo,
+        version: copiarVersion.trim() || '1.0',
+      });
+      navigate(`/maestros/especificaciones/${nueva.id_especificacion}`, { replace: true });
+    } catch (err) {
+      setErrorCopiar(err instanceof ApiError ? err.message : 'No se pudo copiar la especificación');
+    } finally {
+      setGuardandoCopia(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -67,49 +357,423 @@ export default function EspecificacionDetallePage() {
             <span>Versión: <strong style={{ color: 'var(--ink-1)' }}>{especificacion.version}</strong></span>
           </div>
 
-          {especificacion.vigente && puedeGestionar && (
-            <button
-              className="btn btn-secondary"
-              style={{ marginTop: 'var(--sp-4)' }}
-              onClick={() => navigate(`/maestros/especificaciones/${id}/revisar`)}
-            >
-              Revisar (crear nueva versión) →
-            </button>
+          {puedeGestionar && (
+            <div style={{ display: 'flex', gap: 'var(--sp-3)', marginTop: 'var(--sp-4)', flexWrap: 'wrap' }}>
+              {especificacion.vigente && (
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => navigate(`/maestros/especificaciones/${id}/revisar`)}
+                >
+                  Revisar (crear nueva versión) →
+                </button>
+              )}
+              <button className="btn btn-secondary" onClick={abrirCopiar}>
+                Copiar como nueva especificación
+              </button>
+            </div>
           )}
         </div>
 
-        <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Ensayos ({especificacion.ensayos.length})</h2>
-        <table className="data-table">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--sp-3)' }}>
+          <h2 style={{ fontSize: 'var(--fs-lg)' }}>Ensayos ({ensayos.length})</h2>
+          {puedeEditarEnsayos && (
+            <button className="btn btn-secondary" onClick={abrirAgregarEnsayo}>
+              + Agregar ensayo
+            </button>
+          )}
+        </div>
+        <table className="data-table data-table-compact" style={{ marginBottom: 'var(--sp-5)' }}>
           <thead>
             <tr>
-              <th>#</th>
-              <th>Ensayo</th>
+              <th style={{ textAlign: 'center' }}>Orden</th>
+              <th>Nombre del ensayo</th>
               <th>Metodología</th>
               <th>Tipo</th>
-              <th>Límites / Valor requerido</th>
-              <th>Obligatorio</th>
-              <th>Observaciones</th>
+              <th>Especificación/Límites</th>
+              <th>Unidad</th>
+              <th>Laboratorio</th>
+              {puedeEditarEnsayos && <th>Acciones</th>}
             </tr>
           </thead>
           <tbody>
-            {especificacion.ensayos.map((en) => (
-              <tr key={en.id_ensayo}>
-                <td className="num">{en.orden}</td>
+            {ensayos.map((en) => (
+              <tr key={en.id_espec_ensayo}>
+                <td style={{ textAlign: 'center' }}>{en.orden}</td>
                 <td>{en.nombre_ensayo}</td>
                 <td>{en.metodologia || '—'}</td>
-                <td>{en.tipo_dato}</td>
                 <td>
-                  {en.tipo_dato === 'numerico'
-                    ? `${en.limite_inferior ?? '—'} a ${en.limite_superior ?? '—'} ${en.unidad_medida || ''}`
-                    : en.valor_requerido || '—'}
+                  {en.tipo_dato === 'numerico' ? (
+                    <span className="badge badge-info">Numérico</span>
+                  ) : (
+                    <span className="badge badge-neutral">Cualitativo</span>
+                  )}
                 </td>
-                <td>{en.obligatorio ? 'Sí' : 'No'}</td>
-                <td>{en.observaciones || '—'}</td>
+                <td>{formatearEspecificacion(en)}</td>
+                <td>{en.tipo_dato === 'numerico' ? (en.unidad_medida || '—') : '—'}</td>
+                <td>{en.laboratorio_nombre || '—'}</td>
+                {puedeEditarEnsayos && (
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    <button className="btn btn-ghost" onClick={() => abrirEditarEnsayo(en)}>Editar</button>
+                    <button className="btn btn-ghost" style={{ color: 'var(--danger)', marginLeft: 'var(--sp-2)' }} onClick={() => handleEliminarEnsayo(en)}>
+                      Eliminar
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
         </table>
+
+        <h2 style={{ fontSize: 'var(--fs-lg)', margin: 'var(--sp-5) 0 var(--sp-3)' }}>
+          Testigos asociados ({testigosAsociados.length})
+        </h2>
+        <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
+          {testigosAsociados.length === 0 ? (
+            <p style={{ color: 'var(--ink-2)' }}>Ningún testigo asociado todavía.</p>
+          ) : (
+            <table className="data-table" style={{ marginBottom: puedeGestionar ? 'var(--sp-4)' : 0 }}>
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Nombre</th>
+                  {puedeGestionar && <th></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {testigosAsociados.map((t) => (
+                  <tr key={t.id_testigo}>
+                    <td style={{ textAlign: 'left', fontFamily: 'var(--font-mono)' }}>{t.codigo}</td>
+                    <td style={{ textAlign: 'left' }}>{t.nombre}</td>
+                    {puedeGestionar && (
+                      <td style={{ textAlign: 'left' }}>
+                        <button className="btn btn-ghost" style={{ color: 'var(--danger)' }} onClick={() => handleDesasociarTestigo(t.id_testigo)}>
+                          Quitar
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {puedeGestionar && (
+            <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+              <select className="field-input" style={{ flex: 1 }} value={idTestigoNuevo} onChange={(e) => setIdTestigoNuevo(e.target.value)}>
+                <option value="">Seleccioná un testigo para asociar...</option>
+                {testigosDisponibles
+                  .filter((t) => !testigosAsociados.some((ta) => ta.id_testigo === t.id_testigo))
+                  .map((t) => (
+                    <option key={t.id_testigo} value={t.id_testigo}>{t.codigo} — {t.nombre}</option>
+                  ))}
+              </select>
+              <button type="button" className="btn btn-secondary" disabled={!idTestigoNuevo} onClick={handleAsociarTestigo}>
+                Asociar
+              </button>
+            </div>
+          )}
+
+          {errorTestigos && <div className="alert alert-danger" style={{ marginTop: 'var(--sp-3)' }}>{errorTestigos}</div>}
+        </div>
       </div>
+
+      {modalAbierto && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 'var(--sp-4)',
+          }}
+          onClick={cerrarModal}
+        >
+          <form
+            onSubmit={handleGuardarEnsayo}
+            className="card"
+            style={{ width: '90%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>
+              {editandoIdEspecEnsayo ? 'Editar ensayo' : 'Agregar ensayo'}
+            </h2>
+
+            {!ensayoMaestroElegido ? (
+              <div className="field">
+                <label className="field-label">Buscar en el catálogo de ensayos</label>
+                <input
+                  className="field-input"
+                  placeholder="Ej. pH, Aspecto, Valoración..."
+                  value={catalogoBuscar}
+                  onChange={(e) => setCatalogoBuscar(e.target.value)}
+                  autoFocus
+                />
+                {catalogoResultados.length > 0 && (
+                  <div className="select-list" style={{ marginTop: 'var(--sp-2)' }}>
+                    {catalogoResultados.map((em) => (
+                      <button
+                        type="button"
+                        key={em.id_ensayo_maestro}
+                        className="select-item"
+                        onClick={() => setEnsayoMaestroElegido(em)}
+                      >
+                        <span className="select-item-title">{em.nombre_ensayo}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {catalogoBuscar.trim().length >= 2 && catalogoResultados.length === 0 && (
+                  <div style={{ marginTop: 'var(--sp-3)' }}>
+                    <p style={{ color: 'var(--ink-2)', fontSize: 'var(--fs-sm)', marginBottom: 'var(--sp-2)' }}>
+                      No se encontró ningún ensayo con ese nombre en el catálogo.
+                    </p>
+                    <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
+                      <input
+                        className="field-input"
+                        placeholder="Nombre del ensayo nuevo"
+                        value={nombreNuevoEnsayo}
+                        onChange={(e) => setNombreNuevoEnsayo(e.target.value)}
+                      />
+                      <button type="button" className="btn btn-secondary" onClick={handleCrearEnsayoCatalogo}>
+                        Crear nuevo
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="select-item select-item-active" style={{ marginBottom: 'var(--sp-3)' }}>
+                  <span className="select-item-title">{ensayoMaestroElegido.nombre_ensayo}</span>
+                  {!editandoIdEspecEnsayo && (
+                    <button type="button" className="btn btn-ghost" onClick={() => setEnsayoMaestroElegido(null)}>
+                      Cambiar
+                    </button>
+                  )}
+                </div>
+
+                <div className="field">
+                  <label className="field-label">Orden</label>
+                  <input
+                    className="field-input"
+                    type="number"
+                    value={formEnsayo.orden}
+                    onChange={(e) => setFormEnsayo((prev) => ({ ...prev, orden: e.target.value }))}
+                  />
+                </div>
+
+                <div className="field">
+                  <label className="field-label">Metodología</label>
+                  <input
+                    className="field-input"
+                    placeholder="Ej. USP, PE, Interna M-04"
+                    value={formEnsayo.metodologia}
+                    onChange={(e) => setFormEnsayo((prev) => ({ ...prev, metodologia: e.target.value }))}
+                  />
+                </div>
+
+                <div className="field">
+                  <label className="field-label">Tipo de dato</label>
+                  <select
+                    className="field-input"
+                    value={formEnsayo.tipo_dato}
+                    onChange={(e) => setFormEnsayo((prev) => ({ ...prev, tipo_dato: e.target.value }))}
+                  >
+                    <option value="numerico">Numérico</option>
+                    <option value="cualitativo">Cualitativo</option>
+                  </select>
+                </div>
+
+                {formEnsayo.tipo_dato === 'numerico' ? (
+                  <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+                    <div className="field" style={{ flex: 1 }}>
+                      <label className="field-label">Límite inferior</label>
+                      <input
+                        className="field-input"
+                        type="number"
+                        step="any"
+                        value={formEnsayo.limite_inferior}
+                        onChange={(e) => setFormEnsayo((prev) => ({ ...prev, limite_inferior: e.target.value }))}
+                      />
+                    </div>
+                    <div className="field" style={{ flex: 1 }}>
+                      <label className="field-label">Límite superior</label>
+                      <input
+                        className="field-input"
+                        type="number"
+                        step="any"
+                        value={formEnsayo.limite_superior}
+                        onChange={(e) => setFormEnsayo((prev) => ({ ...prev, limite_superior: e.target.value }))}
+                      />
+                    </div>
+                    <div className="field" style={{ flex: 1 }}>
+                      <label className="field-label">Unidad</label>
+                      <input
+                        className="field-input"
+                        placeholder="%, g/mL, pH..."
+                        value={formEnsayo.unidad_medida}
+                        onChange={(e) => setFormEnsayo((prev) => ({ ...prev, unidad_medida: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="field">
+                    <label className="field-label">Valor exacto requerido</label>
+                    <input
+                      className="field-input"
+                      placeholder='Ej. "Polvo cristalino blanco"'
+                      value={formEnsayo.valor_requerido}
+                      onChange={(e) => setFormEnsayo((prev) => ({ ...prev, valor_requerido: e.target.value }))}
+                    />
+                  </div>
+                )}
+
+                <div className="field">
+                  <label className="field-label">Especificación (texto libre, opcional)</label>
+                  <input
+                    className="field-input"
+                    placeholder="Notas de la especificación para este ensayo"
+                    value={formEnsayo.especificacion_texto}
+                    onChange={(e) => setFormEnsayo((prev) => ({ ...prev, especificacion_texto: e.target.value }))}
+                  />
+                </div>
+
+                <div className="field">
+                  <label className="field-label">Laboratorio</label>
+                  <select
+                    className="field-input"
+                    value={formEnsayo.id_laboratorio}
+                    onChange={(e) => setFormEnsayo((prev) => ({ ...prev, id_laboratorio: e.target.value }))}
+                  >
+                    <option value="">(sin asignar)</option>
+                    {laboratorios.map((lab) => (
+                      <option key={lab.id_laboratorio} value={lab.id_laboratorio}>{lab.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', marginTop: 'var(--sp-2)', marginBottom: 'var(--sp-3)' }}>
+                  <input
+                    type="checkbox"
+                    checked={formEnsayo.requerido_por_defecto}
+                    onChange={(e) => setFormEnsayo((prev) => ({ ...prev, requerido_por_defecto: e.target.checked }))}
+                  />
+                  Requerido por defecto al confirmar el envío
+                </label>
+              </>
+            )}
+
+            {errorEnsayo && <div className="alert alert-danger" style={{ marginTop: 'var(--sp-3)' }}>{errorEnsayo}</div>}
+
+            <div style={{ display: 'flex', gap: 'var(--sp-3)', marginTop: 'var(--sp-4)' }}>
+              <button type="button" className="btn btn-ghost" onClick={cerrarModal} disabled={guardandoEnsayo}>Cancelar</button>
+              <button type="submit" className="btn btn-primary" disabled={guardandoEnsayo || !ensayoMaestroElegido}>
+                {guardandoEnsayo ? <span className="spinner" /> : 'Guardar'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {copiarModalAbierto && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 'var(--sp-4)',
+          }}
+          onClick={cerrarCopiar}
+        >
+          <form
+            onSubmit={handleCopiar}
+            className="card"
+            style={{ width: '90%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Copiar como nueva especificación</h2>
+            <p style={{ color: 'var(--ink-2)', fontSize: 'var(--fs-sm)', marginBottom: 'var(--sp-4)' }}>
+              Crea una especificación nueva e independiente, con los mismos ensayos y datos descriptivos que{' '}
+              {especificacion.erp_DESART}. No modifica la especificación original ni copia sus testigos asociados.
+            </p>
+
+            <div className="field">
+              <label className="field-label">Tipo de material</label>
+              <select
+                className="field-input"
+                value={copiarTipo}
+                onChange={(e) => cambiarCopiarTipo(e.target.value)}
+              >
+                {TIPOS_MATERIAL.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {!copiarArticuloElegido ? (
+              <div className="field">
+                <label className="field-label">Artículo (código o descripción)</label>
+                <input
+                  className="field-input"
+                  placeholder="Buscar en el ERP..."
+                  value={copiarArticuloBuscar}
+                  onChange={(e) => setCopiarArticuloBuscar(e.target.value)}
+                  autoFocus
+                />
+                {copiarArticulos.length > 0 && (
+                  <div className="select-list" style={{ marginTop: 'var(--sp-2)' }}>
+                    {copiarArticulos.slice(0, 8).map((a) => (
+                      <button
+                        type="button"
+                        key={a.IdM21}
+                        className="select-item"
+                        onClick={() => elegirCopiarArticulo(a)}
+                      >
+                        <span className="select-item-main">
+                          <span className="select-item-title">{a.DESART}</span>
+                          <span className="select-item-sub">{a.CODART}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="select-item select-item-active" style={{ marginBottom: 'var(--sp-3)' }}>
+                <span className="select-item-main">
+                  <span className="select-item-title">{copiarArticuloElegido.DESART}</span>
+                  <span className="select-item-sub">{copiarArticuloElegido.CODART}</span>
+                </span>
+                <button type="button" className="btn btn-ghost" onClick={() => setCopiarArticuloElegido(null)}>
+                  Cambiar
+                </button>
+              </div>
+            )}
+
+            <div className="field">
+              <label className="field-label">Nombre</label>
+              <input
+                className="field-input"
+                value={copiarNombre}
+                onChange={(e) => setCopiarNombre(e.target.value)}
+              />
+            </div>
+
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label className="field-label">Versión</label>
+              <input
+                className="field-input"
+                value={copiarVersion}
+                onChange={(e) => setCopiarVersion(e.target.value)}
+              />
+            </div>
+
+            {errorCopiar && <div className="alert alert-danger" style={{ marginTop: 'var(--sp-3)' }}>{errorCopiar}</div>}
+
+            <div style={{ display: 'flex', gap: 'var(--sp-3)', marginTop: 'var(--sp-4)' }}>
+              <button type="button" className="btn btn-ghost" onClick={cerrarCopiar} disabled={guardandoCopia}>Cancelar</button>
+              <button type="submit" className="btn btn-primary" disabled={guardandoCopia || !copiarArticuloElegido}>
+                {guardandoCopia ? <span className="spinner" /> : 'Crear copia'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

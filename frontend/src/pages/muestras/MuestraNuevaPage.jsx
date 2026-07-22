@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import TopBar from '../../components/TopBar';
 import { muestrasApi } from '../../api/muestras';
+import { maestrosApi } from '../../api/maestros';
 import { ApiError } from '../../api/client';
 
 const TIPOS_MATERIAL = [
@@ -23,6 +24,9 @@ export default function MuestraNuevaPage() {
   const [referencia, setReferencia] = useState('');
   const [lineas, setLineas] = useState(null);
   const [linea, setLinea] = useState(null);
+  const [advertencia, setAdvertencia] = useState('');
+  const [cantidadEnviada, setCantidadEnviada] = useState('');
+  const [unidadEnviada, setUnidadEnviada] = useState('');
   const [observaciones, setObservaciones] = useState('');
   const [buscando, setBuscando] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -30,11 +34,28 @@ export default function MuestraNuevaPage() {
 
   const esMateriaPrima = tipo === 'materia_prima';
 
+  useEffect(() => {
+    if (!linea) return;
+    setCantidadEnviada('');
+    setUnidadEnviada('');
+    maestrosApi
+      .listarEspecificaciones({ vigente: true, buscar: linea.CODART })
+      .then((specs) => {
+        const spec = specs.find((s) => s.erp_IdM21 === linea.IdM21);
+        if (spec) {
+          setCantidadEnviada(spec.cantidad_muestra ?? '');
+          setUnidadEnviada(spec.unidad_muestra || '');
+        }
+      })
+      .catch(() => {});
+  }, [linea]);
+
   function elegirTipo(valor) {
     setTipo(valor);
     setReferencia('');
     setLineas(null);
     setLinea(null);
+    setAdvertencia('');
     setPaso(2);
   }
 
@@ -43,6 +64,7 @@ export default function MuestraNuevaPage() {
     setReferencia('');
     setLineas(null);
     setLinea(null);
+    setAdvertencia('');
     setPaso(1);
   }
 
@@ -57,10 +79,12 @@ export default function MuestraNuevaPage() {
     setError('');
     setLinea(null);
     setLineas(null);
+    setAdvertencia('');
     setBuscando(true);
     try {
       const data = await muestrasApi.buscarMaterial(tipo, referencia.trim());
       setLineas(data);
+      setAdvertencia(data.find((l) => l.advertencia)?.advertencia || '');
       if (data.length === 1) {
         setLinea(data[0]);
         setPaso(3);
@@ -89,6 +113,8 @@ export default function MuestraNuevaPage() {
         erp_DESART: linea.DESART,
         erp_cantidad_lote: linea.cantidad,
         erp_proveedor: linea.proveedor || null,
+        cantidad_enviada: cantidadEnviada !== '' ? Number(cantidadEnviada) : null,
+        unidad_enviada: unidadEnviada.trim() || null,
         observaciones: observaciones.trim() || null,
       });
       navigate(`/muestras/${muestra.id_muestra}`, { replace: true });
@@ -129,7 +155,7 @@ export default function MuestraNuevaPage() {
               <input
                 className="field-input"
                 style={{ flex: 1 }}
-                placeholder={esMateriaPrima ? 'Ej. 262/20' : 'Ej. LOTE-2026-001'}
+                placeholder={esMateriaPrima ? 'Ej. 262/20' : 'Ej. 642'}
                 value={referencia}
                 onChange={(e) => setReferencia(e.target.value)}
                 disabled={buscando}
@@ -139,6 +165,10 @@ export default function MuestraNuevaPage() {
                 {buscando ? <span className="spinner" /> : 'Buscar'}
               </button>
             </form>
+
+            {advertencia && (
+              <div className="alert alert-warn" style={{ marginTop: 'var(--sp-4)' }}>{advertencia}</div>
+            )}
 
             {lineas && lineas.length > 1 && (
               <div className="select-list" style={{ marginTop: 'var(--sp-4)' }}>
@@ -165,6 +195,10 @@ export default function MuestraNuevaPage() {
 
         {paso === 3 && linea && (
           <form onSubmit={handleSubmit}>
+            {advertencia && (
+              <div className="alert alert-warn" style={{ marginBottom: 'var(--sp-4)' }}>{advertencia}</div>
+            )}
+
             <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
               <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Datos del material</h2>
               <table className="data-table">
@@ -179,6 +213,35 @@ export default function MuestraNuevaPage() {
               <button type="button" className="btn btn-ghost" onClick={cambiarMaterial} style={{ marginTop: 'var(--sp-2)' }}>
                 Cambiar material
               </button>
+            </div>
+
+            <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
+              <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Cantidad a enviar</h2>
+              <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+                <div className="field" style={{ flex: 1 }}>
+                  <label className="field-label" htmlFor="cantidadEnviada">Cantidad</label>
+                  <input
+                    id="cantidadEnviada"
+                    className="field-input"
+                    type="number"
+                    step="any"
+                    value={cantidadEnviada}
+                    onChange={(e) => setCantidadEnviada(e.target.value)}
+                    disabled={guardando}
+                  />
+                </div>
+                <div className="field" style={{ flex: 1 }}>
+                  <label className="field-label" htmlFor="unidadEnviada">Unidad</label>
+                  <input
+                    id="unidadEnviada"
+                    className="field-input"
+                    placeholder="Ej. g, ml, unidades"
+                    value={unidadEnviada}
+                    onChange={(e) => setUnidadEnviada(e.target.value)}
+                    disabled={guardando}
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>

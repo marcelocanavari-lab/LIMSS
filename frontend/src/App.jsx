@@ -4,12 +4,18 @@ import RequireAuth from './components/RequireAuth';
 
 import LoginPage from './pages/LoginPage';
 import MenuPage from './pages/MenuPage';
+import UsuariosPage from './pages/UsuariosPage';
 import EspecificacionesPage from './pages/maestros/EspecificacionesPage';
 import EspecificacionFormPage from './pages/maestros/EspecificacionFormPage';
 import EspecificacionDetallePage from './pages/maestros/EspecificacionDetallePage';
+import CatalogoEnsayosPage from './pages/maestros/CatalogoEnsayosPage';
 import TestigosPage from './pages/maestros/TestigosPage';
 import TestigoFormPage from './pages/maestros/TestigoFormPage';
 import TestigoDetallePage from './pages/maestros/TestigoDetallePage';
+import ReporteTestigosPage from './pages/maestros/ReporteTestigosPage';
+import RemitosTestigosPage from './pages/maestros/RemitosTestigosPage';
+import RemitoTestigoDetallePage from './pages/maestros/RemitoTestigoDetallePage';
+import NuevoRemitoTestigoPage from './pages/maestros/NuevoRemitoTestigoPage';
 import MuestrasPage from './pages/muestras/MuestrasPage';
 import MuestraNuevaPage from './pages/muestras/MuestraNuevaPage';
 import MuestraDetallePage from './pages/muestras/MuestraDetallePage';
@@ -38,13 +44,20 @@ export default function App() {
             }
           />
 
+          <Route path="/usuarios" element={<RequireAuth><UsuariosPage /></RequireAuth>} />
+
           <Route path="/maestros/especificaciones" element={<RequireAuth><EspecificacionesPage /></RequireAuth>} />
           <Route path="/maestros/especificaciones/nueva" element={<RequireAuth><EspecificacionFormPage modo="crear" /></RequireAuth>} />
           <Route path="/maestros/especificaciones/:id" element={<RequireAuth><EspecificacionDetallePage /></RequireAuth>} />
           <Route path="/maestros/especificaciones/:id/revisar" element={<RequireAuth><EspecificacionFormPage modo="revisar" /></RequireAuth>} />
+          <Route path="/maestros/ensayos" element={<RequireAuth><CatalogoEnsayosPage /></RequireAuth>} />
 
           <Route path="/maestros/testigos" element={<RequireAuth><TestigosPage /></RequireAuth>} />
           <Route path="/maestros/testigos/nuevo" element={<RequireAuth><TestigoFormPage modo="crear" /></RequireAuth>} />
+          <Route path="/maestros/testigos/reporte" element={<RequireAuth><ReporteTestigosPage /></RequireAuth>} />
+          <Route path="/maestros/testigos/remitos" element={<RequireAuth><RemitosTestigosPage /></RequireAuth>} />
+          <Route path="/maestros/testigos/remitos/nuevo" element={<RequireAuth><NuevoRemitoTestigoPage /></RequireAuth>} />
+          <Route path="/maestros/testigos/remitos/:id" element={<RequireAuth><RemitoTestigoDetallePage /></RequireAuth>} />
           <Route path="/maestros/testigos/:id" element={<RequireAuth><TestigoDetallePage /></RequireAuth>} />
           <Route path="/maestros/testigos/:id/editar" element={<RequireAuth><TestigoFormPage modo="editar" /></RequireAuth>} />
 

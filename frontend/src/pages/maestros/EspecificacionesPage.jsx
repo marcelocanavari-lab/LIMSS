@@ -8,7 +8,7 @@ import { ApiError } from '../../api/client';
 export default function EspecificacionesPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const puedeGestionar = ['admin', 'qa'].includes(user?.rol);
+  const puedeGestionar = ['analista_qc', 'qa', 'admin'].includes(user?.rol);
 
   const [especificaciones, setEspecificaciones] = useState([]);
   const [buscar, setBuscar] = useState('');
@@ -49,6 +49,11 @@ export default function EspecificacionesPage() {
             {soloVigentes ? 'Solo vigentes' : 'Todas las versiones'}
           </button>
           {puedeGestionar && (
+            <button className="btn btn-secondary" onClick={() => navigate('/maestros/ensayos')}>
+              Catálogo de ensayos
+            </button>
+          )}
+          {puedeGestionar && (
             <button className="btn btn-primary" onClick={() => navigate('/maestros/especificaciones/nueva')}>
               + Nueva especificación
             </button>
@@ -65,6 +70,7 @@ export default function EspecificacionesPage() {
             <span>No hay fichas cargadas con estos filtros</span>
           </div>
         ) : (
+          <div className="table-scroll">
           <table className="data-table">
             <thead>
               <tr>
@@ -97,6 +103,7 @@ export default function EspecificacionesPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

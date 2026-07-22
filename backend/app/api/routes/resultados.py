@@ -32,20 +32,43 @@ router = APIRouter(prefix="/api/resultados", tags=["Resultados Analíticos"])
 
 # ── Helpers internos ─────────────────────────────────────────────
 
+def _obtener_id_envio(cursor, id_muestra: int) -> int:
+    """Ensayos a cargar salen del envío (lims_envio_ensayos), no de toda la
+    especificación -- una muestra puede tener envíos históricos, se toma el
+    más reciente (mismo criterio que el resto del módulo de envíos)."""
+    cursor.execute(
+        "SELECT TOP 1 id_envio FROM lims_envios WHERE id_muestra = ? ORDER BY id_envio DESC",
+        id_muestra,
+    )
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(
+            status_code=400,
+            detail="Esta muestra no tiene un envío registrado. Registrá el envío antes de cargar resultados.",
+        )
+    return row.id_envio
+
+
 def _obtener_muestra_para_carga(cursor, muestra) -> MuestraParaCarga:
+    id_envio = _obtener_id_envio(cursor, muestra.id_muestra)
+
     cursor.execute(
         """
-        SELECT e.*, r.valor_numerico, r.valor_cualitativo, r.dentro_especificacion
-        FROM lims_ensayos e
-        LEFT JOIN lims_resultados r ON r.id_ensayo = e.id_ensayo AND r.id_muestra = ?
-        WHERE e.id_especificacion = ?
-        ORDER BY e.orden
+        SELECT se.id_espec_ensayo, se.orden, m.nombre_ensayo, se.metodologia, se.tipo_dato,
+               se.limite_inferior, se.limite_superior, se.unidad_medida, se.valor_requerido, se.obligatorio,
+               r.valor_numerico, r.valor_cualitativo, r.dentro_especificacion
+        FROM lims_envio_ensayos ee
+        INNER JOIN lims_especificacion_ensayos se ON se.id_espec_ensayo = ee.id_espec_ensayo
+        INNER JOIN lims_ensayos_maestro m ON m.id_ensayo_maestro = se.id_ensayo_maestro
+        LEFT JOIN lims_resultados r ON r.id_espec_ensayo = se.id_espec_ensayo AND r.id_muestra = ?
+        WHERE ee.id_envio = ?
+        ORDER BY se.orden
         """,
-        muestra.id_muestra, muestra.id_especificacion,
+        muestra.id_muestra, id_envio,
     )
     ensayos = [
         EnsayoParaCarga(
-            id_ensayo=e.id_ensayo,
+            id_espec_ensayo=e.id_espec_ensayo,
             orden=e.orden,
             nombre_ensayo=e.nombre_ensayo,
             metodologia=e.metodologia,
@@ -91,15 +114,15 @@ def _calcular_dentro_especificacion(ensayo_row, valor_numerico, valor_cualitativ
     if ensayo_row.tipo_dato == "numerico":
         if valor_numerico is None:
             return None
-        if ensayo_row.limite_inferior is not None and valor_numerico < float(ensayo_row.limite_inferior):
-            return False
-        if ensayo_row.limite_superior is not None and valor_numerico > float(ensayo_row.limite_superior):
-            return False
-        return True
+        if ensayo_row.limite_inferior is None or ensayo_row.limite_superior is None:
+            return None
+        return float(ensayo_row.limite_inferior) <= valor_numerico <= float(ensayo_row.limite_superior)
 
-    if not valor_cualitativo:
+    if not valor_cualitativo or not valor_cualitativo.strip():
         return None
-    return valor_cualitativo.strip() == (ensayo_row.valor_requerido or "").strip()
+    if not ensayo_row.valor_requerido or not ensayo_row.valor_requerido.strip():
+        return None
+    return valor_cualitativo.strip().lower() == ensayo_row.valor_requerido.strip().lower()
 
 
 def _tiene_valor(r: ResultadoInput) -> bool:
@@ -188,16 +211,26 @@ def guardar_resultados(
         resultados_parsed = [ResultadoInput(**r) for r in json.loads(resultados)]
     except (json.JSONDecodeError, ValidationError, TypeError) as e:
         raise HTTPException(status_code=400, detail=f"Resultados inválidos: {e}")
-    resultados_por_ensayo = {r.id_ensayo: r for r in resultados_parsed}
+    resultados_por_ensayo = {r.id_espec_ensayo: r for r in resultados_parsed}
 
-    cursor.execute("SELECT * FROM lims_ensayos WHERE id_especificacion = ?", muestra.id_especificacion)
-    ensayos = {e.id_ensayo: e for e in cursor.fetchall()}
+    id_envio = _obtener_id_envio(cursor, id_muestra)
+    cursor.execute(
+        """
+        SELECT se.*, m.nombre_ensayo
+        FROM lims_envio_ensayos ee
+        INNER JOIN lims_especificacion_ensayos se ON se.id_espec_ensayo = ee.id_espec_ensayo
+        INNER JOIN lims_ensayos_maestro m ON m.id_ensayo_maestro = se.id_ensayo_maestro
+        WHERE ee.id_envio = ?
+        """,
+        id_envio,
+    )
+    ensayos = {e.id_espec_ensayo: e for e in cursor.fetchall()}
 
     # REQ-MAS-002: los ensayos marcados obligatorios deben tener valor.
     faltantes = [
         e.nombre_ensayo
         for e in ensayos.values()
-        if e.obligatorio and not _tiene_valor(resultados_por_ensayo.get(e.id_ensayo, ResultadoInput(id_ensayo=e.id_ensayo)))
+        if e.obligatorio and not _tiene_valor(resultados_por_ensayo.get(e.id_espec_ensayo, ResultadoInput(id_espec_ensayo=e.id_espec_ensayo)))
     ]
     if faltantes:
         raise HTTPException(status_code=400, detail=f"Faltan resultados obligatorios: {', '.join(faltantes)}")
@@ -206,8 +239,8 @@ def guardar_resultados(
     ruta_pdf = storage.guardar_pdf_protocolo(protocolo_pdf, muestra.codigo_muestra)
 
     hay_oos = False
-    for id_ensayo, r in resultados_por_ensayo.items():
-        ensayo = ensayos.get(id_ensayo)
+    for id_espec_ensayo, r in resultados_por_ensayo.items():
+        ensayo = ensayos.get(id_espec_ensayo)
         if not ensayo or not _tiene_valor(r):
             continue
 
@@ -215,25 +248,25 @@ def guardar_resultados(
         if dentro is False:
             hay_oos = True
 
-        cursor.execute("SELECT 1 FROM lims_resultados WHERE id_muestra = ? AND id_ensayo = ?", id_muestra, id_ensayo)
+        cursor.execute("SELECT 1 FROM lims_resultados WHERE id_muestra = ? AND id_espec_ensayo = ?", id_muestra, id_espec_ensayo)
         if cursor.fetchone():
             cursor.execute(
                 """
                 UPDATE lims_resultados
                 SET valor_numerico = ?, valor_cualitativo = ?, dentro_especificacion = ?,
                     id_usuario_carga = ?, fecha_carga = GETDATE()
-                WHERE id_muestra = ? AND id_ensayo = ?
+                WHERE id_muestra = ? AND id_espec_ensayo = ?
                 """,
-                r.valor_numerico, r.valor_cualitativo, dentro, user["id_usuario"], id_muestra, id_ensayo,
+                r.valor_numerico, r.valor_cualitativo, dentro, user["id_usuario"], id_muestra, id_espec_ensayo,
             )
         else:
             cursor.execute(
                 """
                 INSERT INTO lims_resultados
-                    (id_muestra, id_ensayo, valor_numerico, valor_cualitativo, dentro_especificacion, id_usuario_carga)
+                    (id_muestra, id_espec_ensayo, valor_numerico, valor_cualitativo, dentro_especificacion, id_usuario_carga)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                id_muestra, id_ensayo, r.valor_numerico, r.valor_cualitativo, dentro, user["id_usuario"],
+                id_muestra, id_espec_ensayo, r.valor_numerico, r.valor_cualitativo, dentro, user["id_usuario"],
             )
 
     cursor.execute("SELECT 1 FROM lims_protocolos WHERE id_muestra = ?", id_muestra)
@@ -245,7 +278,7 @@ def guardar_resultados(
                 id_usuario_carga = ?, fecha_carga = GETDATE()
             WHERE id_muestra = ?
             """,
-            nro_protocolo_ext, fecha_emision, ruta_pdf, protocolo_pdf.filename, user["id_usuario"], id_muestra,
+            nro_protocolo_ext, str(fecha_emision), ruta_pdf, protocolo_pdf.filename, user["id_usuario"], id_muestra,
         )
     else:
         cursor.execute(
@@ -254,7 +287,7 @@ def guardar_resultados(
                 (id_muestra, nro_protocolo_ext, fecha_emision, pdf_path, pdf_nombre_original, id_usuario_carga)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
-            id_muestra, nro_protocolo_ext, fecha_emision, ruta_pdf, protocolo_pdf.filename, user["id_usuario"],
+            id_muestra, nro_protocolo_ext, str(fecha_emision), ruta_pdf, protocolo_pdf.filename, user["id_usuario"],
         )
 
     cursor.execute("UPDATE lims_muestras SET estado = 'pendiente_dictamen' WHERE id_muestra = ?", id_muestra)

@@ -17,7 +17,7 @@ router = APIRouter(prefix="/api/materiales", tags=["Materiales ERP"])
 def listar_materiales(
     tipo: str = Query(..., pattern=r"^(materia_prima|granel|semi_elaborado|producto_terminado)$"),
     buscar: str = Query(""),
-    user: dict = Depends(require_rol("admin", "qa")),
+    user: dict = Depends(require_rol("analista_qc", "admin", "qa")),
     erp: pyodbc.Connection = Depends(erp_db),
 ):
     codsar = CODSAR_POR_TIPO[tipo]

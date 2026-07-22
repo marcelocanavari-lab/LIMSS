@@ -7,13 +7,13 @@ import { ApiError } from '../../api/client';
 function calcularOOS(ensayo, valorNumerico, valorCualitativo) {
   if (ensayo.tipo_dato === 'numerico') {
     if (valorNumerico === '' || valorNumerico === null || valorNumerico === undefined) return null;
+    if (ensayo.limite_inferior === null || ensayo.limite_superior === null) return null;
     const v = Number(valorNumerico);
-    if (ensayo.limite_inferior !== null && v < ensayo.limite_inferior) return true;
-    if (ensayo.limite_superior !== null && v > ensayo.limite_superior) return true;
-    return false;
+    return v < ensayo.limite_inferior || v > ensayo.limite_superior;
   }
   if (!valorCualitativo || !valorCualitativo.trim()) return null;
-  return valorCualitativo.trim() !== (ensayo.valor_requerido || '').trim();
+  if (!ensayo.valor_requerido || !ensayo.valor_requerido.trim()) return null;
+  return valorCualitativo.trim().toLowerCase() !== ensayo.valor_requerido.trim().toLowerCase();
 }
 
 export default function CargaResultadosPage() {
@@ -37,7 +37,7 @@ export default function CargaResultadosPage() {
         setMuestra(data);
         const iniciales = {};
         data.ensayos.forEach((e) => {
-          iniciales[e.id_ensayo] = {
+          iniciales[e.id_espec_ensayo] = {
             valor_numerico: e.valor_numerico ?? '',
             valor_cualitativo: e.valor_cualitativo ?? '',
           };
@@ -56,7 +56,7 @@ export default function CargaResultadosPage() {
     if (!muestra) return true;
     return muestra.ensayos.some((e) => {
       if (!e.obligatorio) return false;
-      const v = valores[e.id_ensayo];
+      const v = valores[e.id_espec_ensayo];
       if (e.tipo_dato === 'numerico') return !v || v.valor_numerico === '';
       return !v || !v.valor_cualitativo?.trim();
     });
@@ -84,9 +84,9 @@ export default function CargaResultadosPage() {
     }
 
     const resultados = muestra.ensayos.map((en) => {
-      const v = valores[en.id_ensayo] || {};
+      const v = valores[en.id_espec_ensayo] || {};
       return {
-        id_ensayo: en.id_ensayo,
+        id_espec_ensayo: en.id_espec_ensayo,
         valor_numerico: en.tipo_dato === 'numerico' && v.valor_numerico !== '' ? Number(v.valor_numerico) : null,
         valor_cualitativo: en.tipo_dato === 'cualitativo' ? (v.valor_cualitativo || null) : null,
       };
@@ -136,65 +136,69 @@ export default function CargaResultadosPage() {
       <div className="screen-content">
         <form onSubmit={handleSubmit}>
           <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
-            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Resultados de ensayos</h2>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Ensayo</th>
-                  <th>Metodología</th>
-                  <th>Especificación</th>
-                  <th>Resultado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {muestra.ensayos.map((en) => {
-                  const v = valores[en.id_ensayo] || {};
-                  const oos = calcularOOS(en, v.valor_numerico, v.valor_cualitativo);
-                  return (
-                    <tr key={en.id_ensayo}>
-                      <td>{en.nombre_ensayo}{en.obligatorio && ' *'}</td>
-                      <td>{en.metodologia || '—'}</td>
-                      <td>
-                        {en.tipo_dato === 'numerico'
-                          ? `${en.limite_inferior ?? '—'} a ${en.limite_superior ?? '—'} ${en.unidad_medida || ''}`
-                          : en.valor_requerido}
-                      </td>
-                      <td>
-                        {en.tipo_dato === 'numerico' ? (
-                          <input
-                            className="field-input"
-                            type="number"
-                            step="any"
-                            style={oos ? { background: 'var(--danger-soft)', borderColor: 'var(--danger)' } : undefined}
-                            value={v.valor_numerico}
-                            onChange={(e) => actualizarValor(en.id_ensayo, 'valor_numerico', e.target.value)}
-                            disabled={guardando}
-                          />
-                        ) : (
-                          <input
-                            className="field-input"
-                            type="text"
-                            style={oos ? { background: 'var(--danger-soft)', borderColor: 'var(--danger)' } : undefined}
-                            value={v.valor_cualitativo}
-                            onChange={(e) => actualizarValor(en.id_ensayo, 'valor_cualitativo', e.target.value)}
-                            disabled={guardando}
-                          />
-                        )}
-                        {oos && (
-                          <div style={{ color: 'var(--danger)', fontSize: 'var(--fs-xs)', fontWeight: 700, marginTop: 4 }}>
-                            OOS - Fuera de Especificación
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Resultados de análisis solicitados</h2>
+            {muestra.ensayos.length === 0 ? (
+              <div className="alert alert-info">No hay ensayos solicitados para el envío de esta muestra.</div>
+            ) : (
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Ensayo</th>
+                    <th>Metodología</th>
+                    <th>Especificación</th>
+                    <th>Resultado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {muestra.ensayos.map((en) => {
+                    const v = valores[en.id_espec_ensayo] || {};
+                    const oos = calcularOOS(en, v.valor_numerico, v.valor_cualitativo);
+                    return (
+                      <tr key={en.id_espec_ensayo}>
+                        <td>{en.nombre_ensayo}{en.obligatorio && ' *'}</td>
+                        <td>{en.metodologia || '—'}</td>
+                        <td>
+                          {en.tipo_dato === 'numerico'
+                            ? `${en.limite_inferior ?? '—'} a ${en.limite_superior ?? '—'} ${en.unidad_medida || ''}`
+                            : en.valor_requerido}
+                        </td>
+                        <td>
+                          {en.tipo_dato === 'numerico' ? (
+                            <input
+                              className="field-input"
+                              type="number"
+                              step="any"
+                              style={oos ? { background: 'var(--danger-soft)', borderColor: 'var(--danger)' } : undefined}
+                              value={v.valor_numerico}
+                              onChange={(e) => actualizarValor(en.id_espec_ensayo, 'valor_numerico', e.target.value)}
+                              disabled={guardando}
+                            />
+                          ) : (
+                            <input
+                              className="field-input"
+                              type="text"
+                              style={oos ? { background: 'var(--danger-soft)', borderColor: 'var(--danger)' } : undefined}
+                              value={v.valor_cualitativo}
+                              onChange={(e) => actualizarValor(en.id_espec_ensayo, 'valor_cualitativo', e.target.value)}
+                              disabled={guardando}
+                            />
+                          )}
+                          {oos && (
+                            <div style={{ color: 'var(--danger)', fontSize: 'var(--fs-xs)', fontWeight: 700, marginTop: 4 }}>
+                              OOS - Fuera de Especificación
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
 
           <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
-            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Protocolo del laboratorio externo</h2>
+            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Protocolo del laboratorio</h2>
             <div className="field">
               <label className="field-label" htmlFor="nroProtocolo">Número de protocolo externo</label>
               <input

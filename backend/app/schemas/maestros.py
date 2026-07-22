@@ -12,24 +12,56 @@ class ArticuloERP(BaseModel):
     unidad: Optional[str] = None
 
 
-# ── Ensayos ────────────────────────────────────────────────────
+# ── Ensayos: catálogo maestro ────────────────────────────────────
 
-class EnsayoCreate(BaseModel):
-    orden: int
+class EnsayoMaestroCreate(BaseModel):
     nombre_ensayo: str = Field(..., min_length=1, max_length=100)
+    bibliografia: Optional[str] = Field(None, max_length=200)
+    observaciones: Optional[str] = Field(None, max_length=500)
+
+
+class EnsayoMaestroResponse(BaseModel):
+    id_ensayo_maestro: int
+    nombre_ensayo: str
+    bibliografia: Optional[str] = None
+    observaciones: Optional[str] = None
+    cantidad_especificaciones: int = 0
+
+
+# ── Ensayos: aplicación a una especificación ──────────────────────
+
+class EspecificacionEnsayoCreate(BaseModel):
+    id_ensayo_maestro: int
+    orden: int
     metodologia: Optional[str] = Field(None, max_length=100)
     tipo_dato: str = Field(..., pattern=r"^(numerico|cualitativo)$")
     limite_inferior: Optional[float] = None
     limite_superior: Optional[float] = None
     unidad_medida: Optional[str] = Field(None, max_length=20)
     valor_requerido: Optional[str] = Field(None, max_length=200)
+    especificacion_texto: Optional[str] = Field(None, max_length=500)
     obligatorio: bool = True
-    observaciones: Optional[str] = Field(None, max_length=500)
+    requerido_por_defecto: bool = True
+    id_laboratorio: Optional[int] = None
 
 
-class EnsayoResponse(EnsayoCreate):
-    id_ensayo: int
+class EspecificacionEnsayoResponse(BaseModel):
+    id_espec_ensayo: int
     id_especificacion: int
+    id_ensayo_maestro: int
+    nombre_ensayo: str
+    orden: int
+    metodologia: Optional[str] = None
+    tipo_dato: str
+    limite_inferior: Optional[float] = None
+    limite_superior: Optional[float] = None
+    unidad_medida: Optional[str] = None
+    valor_requerido: Optional[str] = None
+    especificacion_texto: Optional[str] = None
+    obligatorio: bool
+    requerido_por_defecto: bool
+    id_laboratorio: Optional[int] = None
+    laboratorio_nombre: Optional[str] = None
 
 
 # ── Especificaciones ───────────────────────────────────────────
@@ -39,7 +71,18 @@ class EspecificacionCreate(BaseModel):
     erp_CODART: str = Field(..., min_length=1, max_length=20)
     erp_DESART: str = Field(..., min_length=1, max_length=100)
     tipo_material: str = Field(..., pattern=r"^(materia_prima|granel|semi_elaborado|producto_terminado)$")
-    ensayos: list[EnsayoCreate] = Field(..., min_length=1)
+    cantidad_muestra: Optional[float] = None
+    unidad_muestra: Optional[str] = Field(None, max_length=20)
+
+
+class EspecificacionCopiar(BaseModel):
+    """Body para crear una especificación nueva e independiente a partir de
+    otra existente (distinto artículo/tipo posible) -- ver 'copiar'."""
+    erp_IdM21: int
+    erp_CODART: str = Field(..., min_length=1, max_length=20)
+    erp_DESART: str = Field(..., min_length=1, max_length=100)
+    tipo_material: str = Field(..., pattern=r"^(materia_prima|granel|semi_elaborado|producto_terminado)$")
+    version: str = Field("1.0", max_length=10)
 
 
 class EspecificacionResponse(BaseModel):
@@ -48,6 +91,8 @@ class EspecificacionResponse(BaseModel):
     erp_CODART: str
     erp_DESART: str
     tipo_material: str
+    cantidad_muestra: Optional[float] = None
+    unidad_muestra: Optional[str] = None
     version: str
     vigente: bool
     id_usuario_carga: int
@@ -55,12 +100,21 @@ class EspecificacionResponse(BaseModel):
 
 
 class EspecificacionDetalle(EspecificacionResponse):
-    ensayos: list[EnsayoResponse]
+    ensayos: list[EspecificacionEnsayoResponse]
 
 
-class EspecificacionRevision(BaseModel):
-    """Body para crear una nueva versión de una especificación vigente."""
-    ensayos: list[EnsayoCreate] = Field(..., min_length=1)
+# ── Testigos asociados a una especificación ───────────────────────
+
+class EspecificacionTestigoCreate(BaseModel):
+    id_testigo: int
+
+
+class EspecificacionTestigoResponse(BaseModel):
+    id: int
+    id_especificacion: int
+    id_testigo: int
+    codigo: str
+    nombre: str
 
 
 # ── Testigos ───────────────────────────────────────────────────
@@ -70,7 +124,8 @@ class TestigoResponse(BaseModel):
     codigo: str
     nombre: str
     nro_lote: str
-    fecha_vencimiento: date
+    nro_ir: Optional[str] = None
+    fecha_vencimiento: Optional[date] = None
     stock_actual: float
     stock_minimo: float
     unidad_medida: Optional[str] = None
@@ -82,15 +137,6 @@ class TestigoResponse(BaseModel):
     vencido: bool
     por_vencer: bool
     stock_bajo: bool
-
-
-class TestigoUpdate(BaseModel):
-    nombre: str = Field(..., min_length=1, max_length=150)
-    nro_lote: str = Field(..., min_length=1, max_length=50)
-    fecha_vencimiento: date
-    stock_minimo: float = Field(..., ge=0)
-    unidad_medida: Optional[str] = Field(None, max_length=20)
-    observaciones: Optional[str] = Field(None, max_length=500)
 
 
 class TestigoMovimientoResponse(BaseModel):

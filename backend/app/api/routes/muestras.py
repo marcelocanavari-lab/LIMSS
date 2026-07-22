@@ -7,15 +7,16 @@ primera ruta cuyo patrón calza sintácticamente, y "/{id_muestra}" (un solo
 segmento, tipo genérico a nivel de ruteo) calzaría con "/laboratorios" si se
 declarara antes -- por eso los literales van primero.
 """
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 import pyodbc
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.security import get_current_user, require_rol
-from app.db.connections import ebr_db, erp_db, limss_db
+from app.db.connections import erp_db, limss_db
 from app.schemas.muestras import (
+    EnsayoSolicitado,
     EnvioCreate,
     EnvioResponse,
     EtiquetaResponse,
@@ -27,15 +28,31 @@ from app.schemas.muestras import (
     MuestraCreate,
     MuestraResponse,
     RemitoResponse,
+    TestigoEnviado,
+    TestigoRemito,
 )
 from app.services import audit
-from app.services.ebr_lotes import buscar_lote
 from app.services.erp_ir import buscar_lineas_ir, formatear_nro_ir
+from app.services.erp_lotes import buscar_lote
+from app.services.erp_materiales import CODSAR_POR_TIPO
 
 router = APIRouter(prefix="/api/muestras", tags=["Muestras y Envíos"])
 
 
 # ── Helpers internos ─────────────────────────────────────────────
+
+def _a_fecha(valor) -> Optional[date]:
+    """El driver ODBC no devuelve un tipo consistente para columnas DATE en
+    este entorno (a veces date/datetime, a veces str); se normaliza siempre
+    a date antes de operar."""
+    if valor is None:
+        return None
+    if isinstance(valor, datetime):
+        return valor.date()
+    if isinstance(valor, date):
+        return valor
+    return date.fromisoformat(str(valor))
+
 
 def _fila_a_laboratorio(row) -> LaboratorioResponse:
     return LaboratorioResponse(
@@ -60,6 +77,8 @@ def _fila_a_muestra(row) -> MuestraResponse:
         erp_DESART=row.erp_DESART,
         erp_cantidad_lote=float(row.erp_cantidad_lote) if row.erp_cantidad_lote is not None else None,
         erp_proveedor=row.erp_proveedor,
+        cantidad_enviada=float(row.cantidad_enviada) if row.cantidad_enviada is not None else None,
+        unidad_enviada=row.unidad_enviada,
         id_especificacion=row.id_especificacion,
         estado=row.estado,
         id_usuario_muestreo=row.id_usuario_muestreo,
@@ -80,10 +99,9 @@ def _fila_a_etiqueta(fila, muestra) -> EtiquetaResponse:
         nro_referencia=muestra.nro_referencia,
         fecha_muestreo=muestra.fecha_muestreo,
         usuario_muestreo_nombre=muestra.usuario_muestreo_nombre,
-        numero_impresion=fila.numero_impresion,
-        es_reimpresion=fila.numero_impresion > 1,
+        es_reimpresion=bool(fila.reimpresion),
         id_usuario_impresion=fila.id_usuario,
-        fecha_hora=fila.fecha_hora,
+        fecha_hora=fila.fecha_impresion,
     )
 
 
@@ -99,7 +117,7 @@ _SELECT_MUESTRA = """
 @router.post("/laboratorios", response_model=LaboratorioResponse, status_code=201)
 def crear_laboratorio(
     body: LaboratorioCreate,
-    user: dict = Depends(require_rol("admin", "qa")),
+    user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
     conn: pyodbc.Connection = Depends(limss_db),
 ):
     cursor = conn.cursor()
@@ -141,7 +159,7 @@ def listar_laboratorios(
 def editar_laboratorio(
     id_laboratorio: int,
     body: LaboratorioUpdate,
-    user: dict = Depends(require_rol("admin", "qa")),
+    user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
     conn: pyodbc.Connection = Depends(limss_db),
 ):
     cursor = conn.cursor()
@@ -185,7 +203,7 @@ def editar_laboratorio(
 def cambiar_estado_laboratorio(
     id_laboratorio: int,
     activo: bool,
-    user: dict = Depends(require_rol("admin", "qa")),
+    user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
     conn: pyodbc.Connection = Depends(limss_db),
 ):
     cursor = conn.cursor()
@@ -214,7 +232,7 @@ def cambiar_estado_laboratorio(
 @router.get("/erp/ir/{nro_ir}", response_model=list[LineaIR])
 def buscar_ir(
     nro_ir: str,
-    user: dict = Depends(require_rol("muestreador", "qa", "admin")),
+    user: dict = Depends(require_rol("muestreador", "analista_qc", "qa", "admin")),
     erp: pyodbc.Connection = Depends(erp_db),
 ):
     rows = buscar_lineas_ir(erp, nro_ir)
@@ -225,6 +243,11 @@ def buscar_ir(
             N01Id=r.N01Id, NUMCOMO=formatear_nro_ir(r.NUMCOMO, r.FECCOM), IdM21=r.IdM21,
             CODART=r.CODART, DESART=r.DESART, CANTID=float(r.CANTID),
             unidad=r.unidad, proveedor=r.proveedor,
+            advertencia=(
+                f"Este IR corresponde a un artículo de tipo {r.DESSAR.strip()} (no es Materia Prima). "
+                "Verificá que el número de IR sea correcto."
+                if r.CODSAR is not None and r.CODSAR != "0001" else None
+            ),
         )
         for r in rows
     ]
@@ -234,14 +257,13 @@ def buscar_ir(
 def buscar_material(
     tipo: str = Query(..., pattern=r"^(materia_prima|granel|semi_elaborado|producto_terminado)$"),
     referencia: str = Query(..., min_length=1),
-    user: dict = Depends(require_rol("muestreador", "qa", "admin")),
+    user: dict = Depends(require_rol("muestreador", "analista_qc", "qa", "admin")),
     erp: pyodbc.Connection = Depends(erp_db),
-    ebr: pyodbc.Connection = Depends(ebr_db),
 ):
     """Búsqueda unificada por tipo: Materia Prima se busca por IR en el ERP
     (GIN01CPB); el resto (Granel/Semi-Elaborado/Producto Terminado) se busca
-    por número de lote de producción interna en la base del eBR (ebr_lotes) --
-    esos materiales no pasan por recepción de proveedor."""
+    por número de lote, también en el ERP pero como atributo del artículo
+    (GIM25ALT/GIT52DSC -- ver erp_lotes.py), no por un documento de recepción."""
     if tipo == "materia_prima":
         rows = buscar_lineas_ir(erp, referencia)
         if not rows:
@@ -250,19 +272,23 @@ def buscar_material(
             MaterialEncontrado(
                 referencia=formatear_nro_ir(r.NUMCOMO, r.FECCOM), IdM21=r.IdM21, CODART=r.CODART, DESART=r.DESART,
                 cantidad=float(r.CANTID), unidad=r.unidad, proveedor=r.proveedor,
+                advertencia=(
+                    f"Este IR corresponde a un artículo de tipo {r.DESSAR.strip()} (no es Materia Prima). "
+                    "Verificá que el número de IR sea correcto."
+                    if r.CODSAR is not None and r.CODSAR != "0001" else None
+                ),
             )
             for r in rows
         ]
 
-    lote = buscar_lote(ebr, referencia)
-    if not lote:
-        raise HTTPException(status_code=404, detail=f"No se encontró el lote '{referencia}' en el eBR")
+    rows = buscar_lote(erp, CODSAR_POR_TIPO[tipo], referencia)
+    if not rows:
+        raise HTTPException(status_code=404, detail=f"No se encontró el lote '{referencia}' en el ERP para este tipo de material")
     return [
         MaterialEncontrado(
-            referencia=lote.nro_lote.strip(), IdM21=lote.erp_IdM21, CODART=lote.erp_CODART,
-            DESART=lote.erp_DESART, cantidad=float(lote.tamanio_lote) if lote.tamanio_lote is not None else None,
-            unidad=lote.erp_unidad, proveedor=None,
+            referencia=referencia.strip(), IdM21=r.IdM21, CODART=r.CODART, DESART=r.DESART, unidad=r.unidad,
         )
+        for r in rows
     ]
 
 
@@ -271,7 +297,7 @@ def buscar_material(
 @router.post("/", response_model=MuestraResponse, status_code=201)
 def crear_muestra(
     body: MuestraCreate,
-    user: dict = Depends(require_rol("muestreador", "qa", "admin")),
+    user: dict = Depends(require_rol("muestreador", "analista_qc", "qa", "admin")),
     conn: pyodbc.Connection = Depends(limss_db),
 ):
     cursor = conn.cursor()
@@ -286,22 +312,28 @@ def crear_muestra(
     codigo_muestra = f"SAMP-{anio}-{correlativo:04d}"
 
     cursor.execute(
-        "SELECT id_especificacion FROM lims_especificaciones WHERE erp_IdM21 = ? AND vigente = 1",
+        "SELECT id_especificacion, cantidad_muestra, unidad_muestra FROM lims_especificaciones WHERE erp_IdM21 = ? AND vigente = 1",
         body.erp_IdM21,
     )
     espec = cursor.fetchone()
     id_especificacion = espec.id_especificacion if espec else None
 
+    cantidad_enviada = body.cantidad_enviada
+    unidad_enviada = body.unidad_enviada
+    if cantidad_enviada is None and espec is not None:
+        cantidad_enviada = float(espec.cantidad_muestra) if espec.cantidad_muestra is not None else None
+        unidad_enviada = espec.unidad_muestra
+
     cursor.execute(
         """
         INSERT INTO lims_muestras
             (codigo_muestra, tipo_referencia, nro_referencia, erp_IdM21, erp_CODART, erp_DESART,
-             erp_cantidad_lote, erp_proveedor, id_especificacion, estado,
+             erp_cantidad_lote, erp_proveedor, cantidad_enviada, unidad_enviada, id_especificacion, estado,
              id_usuario_muestreo, observaciones)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente_envio', ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente_envio', ?, ?)
         """,
         codigo_muestra, body.tipo_referencia, body.nro_referencia, body.erp_IdM21, body.erp_CODART, body.erp_DESART,
-        body.erp_cantidad_lote, body.erp_proveedor, id_especificacion,
+        body.erp_cantidad_lote, body.erp_proveedor, cantidad_enviada, unidad_enviada, id_especificacion,
         user["id_usuario"], body.observaciones,
     )
     cursor.execute("SELECT @@IDENTITY AS id")
@@ -362,11 +394,50 @@ def detalle_muestra(
 
 # ── Envío a laboratorio externo (REQ-ENV-004/005) ─────────────────
 
+@router.get("/{id_muestra}/ensayos-para-envio", response_model=list[EnsayoSolicitado])
+def ensayos_para_envio(
+    id_muestra: int,
+    id_laboratorio: int = Query(...),
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Ensayos de la especificación de la muestra que tienen asignado
+    justamente el laboratorio elegido para este envío -- el formulario de
+    envío recalcula esta lista cada vez que cambia el laboratorio."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT id_especificacion FROM lims_muestras WHERE id_muestra = ?", id_muestra)
+    muestra = cursor.fetchone()
+    if not muestra:
+        raise HTTPException(status_code=404, detail="Muestra no encontrada")
+    if not muestra.id_especificacion:
+        return []
+
+    cursor.execute(
+        """
+        SELECT se.id_espec_ensayo, m.nombre_ensayo, se.requerido_por_defecto, se.id_laboratorio, lab.nombre AS laboratorio_nombre
+        FROM lims_especificacion_ensayos se
+        INNER JOIN lims_ensayos_maestro m ON m.id_ensayo_maestro = se.id_ensayo_maestro
+        INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = se.id_laboratorio
+        WHERE se.id_especificacion = ? AND se.id_laboratorio = ?
+        ORDER BY se.orden
+        """,
+        muestra.id_especificacion, id_laboratorio,
+    )
+    return [
+        EnsayoSolicitado(
+            id_espec_ensayo=e.id_espec_ensayo, nombre_ensayo=e.nombre_ensayo,
+            requerido_por_defecto=bool(e.requerido_por_defecto),
+            id_laboratorio=e.id_laboratorio, laboratorio_nombre=e.laboratorio_nombre,
+        )
+        for e in cursor.fetchall()
+    ]
+
+
 @router.post("/{id_muestra}/envio", response_model=EnvioResponse, status_code=201)
 def confirmar_envio(
     id_muestra: int,
     body: EnvioCreate,
-    user: dict = Depends(require_rol("muestreador", "qa", "admin")),
+    user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
     conn: pyodbc.Connection = Depends(limss_db),
 ):
     cursor = conn.cursor()
@@ -387,70 +458,114 @@ def confirmar_envio(
     if not cursor.fetchone():
         raise HTTPException(status_code=404, detail="Laboratorio no encontrado o inactivo")
 
+    ids_espec_ensayo = body.id_espec_ensayo or []
+    if ids_espec_ensayo:
+        placeholders = ",".join("?" * len(ids_espec_ensayo))
+        cursor.execute(
+            f"""
+            SELECT se.id_espec_ensayo, m.nombre_ensayo, se.requerido_por_defecto, se.id_laboratorio, lab.nombre AS laboratorio_nombre
+            FROM lims_especificacion_ensayos se
+            INNER JOIN lims_ensayos_maestro m ON m.id_ensayo_maestro = se.id_ensayo_maestro
+            LEFT JOIN lims_laboratorios lab ON lab.id_laboratorio = se.id_laboratorio
+            WHERE se.id_especificacion = ? AND se.id_espec_ensayo IN ({placeholders})
+            """,
+            muestra.id_especificacion, *ids_espec_ensayo,
+        )
+        ensayos_elegidos = cursor.fetchall()
+        if len(ensayos_elegidos) != len(set(ids_espec_ensayo)):
+            raise HTTPException(
+                status_code=400,
+                detail="Alguno de los ensayos indicados no pertenece a la especificación de la muestra",
+            )
+    else:
+        # Sin lista explícita: se solicitan los ensayos que tienen laboratorio
+        # asignado (son los que efectivamente se pueden derivar a un lab externo).
+        cursor.execute(
+            """
+            SELECT se.id_espec_ensayo, m.nombre_ensayo, se.requerido_por_defecto, se.id_laboratorio, lab.nombre AS laboratorio_nombre
+            FROM lims_especificacion_ensayos se
+            INNER JOIN lims_ensayos_maestro m ON m.id_ensayo_maestro = se.id_ensayo_maestro
+            LEFT JOIN lims_laboratorios lab ON lab.id_laboratorio = se.id_laboratorio
+            WHERE se.id_especificacion = ? AND se.id_laboratorio IS NOT NULL
+            """,
+            muestra.id_especificacion,
+        )
+        ensayos_elegidos = cursor.fetchall()
+
+    ids_testigo_permitidos = set()
+    if muestra.id_especificacion:
+        cursor.execute(
+            "SELECT id_testigo FROM lims_especificacion_testigos WHERE id_especificacion = ?",
+            muestra.id_especificacion,
+        )
+        ids_testigo_permitidos = {r.id_testigo for r in cursor.fetchall()}
+
+    hoy = date.today()
     alerta_testigo_por_vencer = False
-    alerta_reorden = False
-    testigo = None
+    testigos_confirmados = []  # testigo_row
 
-    if body.id_testigo:
-        if not body.cantidad_testigo:
-            raise HTTPException(status_code=400, detail="Indicá la cantidad de testigo a enviar")
+    for item in body.testigos:
+        if item.id_testigo not in ids_testigo_permitidos:
+            raise HTTPException(
+                status_code=400,
+                detail=f"El testigo {item.id_testigo} no está asociado a la especificación de la muestra",
+            )
 
-        cursor.execute("SELECT * FROM lims_testigos WHERE id_testigo = ?", body.id_testigo)
+        cursor.execute("SELECT * FROM lims_testigos WHERE id_testigo = ?", item.id_testigo)
         testigo = cursor.fetchone()
         if not testigo:
             raise HTTPException(status_code=404, detail="Testigo no encontrado")
         if not testigo.activo:
-            raise HTTPException(status_code=400, detail="El testigo está inactivo")
+            raise HTTPException(status_code=400, detail=f"El testigo '{testigo.codigo}' está inactivo")
 
-        hoy = date.today()
-        if testigo.fecha_vencimiento < hoy:
-            # REQ-ENV-004-A: bloqueo absoluto, testigo vencido no puede enviarse.
-            raise HTTPException(
-                status_code=400,
-                detail=f"El testigo '{testigo.codigo}' está VENCIDO ({testigo.fecha_vencimiento}). No se puede confirmar el envío.",
-            )
-        if (testigo.fecha_vencimiento - hoy).days < 30:
-            alerta_testigo_por_vencer = True
+        # Sin fecha de vencimiento cargada, no se puede considerar vencido ni
+        # próximo a vencer.
+        fecha_vencimiento = _a_fecha(testigo.fecha_vencimiento)
+        if fecha_vencimiento is not None:
+            if fecha_vencimiento < hoy:
+                # REQ-ENV-004-A: bloqueo absoluto, testigo vencido no puede enviarse.
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"El testigo '{testigo.codigo}' está VENCIDO ({fecha_vencimiento}). No se puede confirmar el envío.",
+                )
+            if (fecha_vencimiento - hoy).days < 30:
+                alerta_testigo_por_vencer = True
 
-        if body.cantidad_testigo > float(testigo.stock_actual):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Stock insuficiente de testigo (disponible: {testigo.stock_actual})",
-            )
+        testigos_confirmados.append(testigo)
 
     cursor.execute(
         """
         INSERT INTO lims_envios
-            (id_muestra, id_laboratorio, id_testigo, cantidad_testigo,
+            (id_muestra, id_laboratorio,
              temperatura_transporte, nro_remito, transportista,
              analisis_solicitados, protocolo_utilizar, id_usuario_envio)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        id_muestra, body.id_laboratorio, body.id_testigo, body.cantidad_testigo,
+        id_muestra, body.id_laboratorio,
         body.temperatura_transporte, body.nro_remito, body.transportista,
         body.analisis_solicitados, body.protocolo_utilizar, user["id_usuario"],
     )
     cursor.execute("SELECT @@IDENTITY AS id")
     id_envio = int(cursor.fetchone().id)
 
-    if body.id_testigo:
-        # REQ-ENV-004-B: descuenta stock y avisa si queda por debajo del mínimo.
-        stock_nuevo = float(testigo.stock_actual) - body.cantidad_testigo
+    for e in ensayos_elegidos:
         cursor.execute(
-            "UPDATE lims_testigos SET stock_actual = ? WHERE id_testigo = ?",
-            stock_nuevo, body.id_testigo,
+            "INSERT INTO lims_envio_ensayos (id_envio, id_espec_ensayo) VALUES (?, ?)",
+            id_envio, e.id_espec_ensayo,
         )
+
+    testigos_enviados = []
+    for testigo in testigos_confirmados:
+        # Solo confirmación de que se incluye en el envío -- el stock se
+        # descuenta en el flujo aparte de remitos de testigos, no acá.
         cursor.execute(
-            """
-            INSERT INTO lims_testigo_movimientos
-                (id_testigo, id_envio, tipo, cantidad, stock_resultante, id_usuario, observaciones)
-            VALUES (?, ?, 'egreso', ?, ?, ?, ?)
-            """,
-            body.id_testigo, id_envio, -body.cantidad_testigo, stock_nuevo,
-            user["id_usuario"], f"Envío #{id_envio}",
+            "INSERT INTO lims_envio_testigos (id_envio, id_testigo, cantidad) VALUES (?, ?, 0)",
+            id_envio, testigo.id_testigo,
         )
-        if stock_nuevo < float(testigo.stock_minimo):
-            alerta_reorden = True
+
+        testigos_enviados.append(TestigoEnviado(
+            id_testigo=testigo.id_testigo, codigo=testigo.codigo, nombre=testigo.nombre, nro_ir=testigo.nro_ir,
+        ))
 
     cursor.execute("UPDATE lims_muestras SET estado = 'en_transito' WHERE id_muestra = ?", id_muestra)
 
@@ -466,8 +581,7 @@ def confirmar_envio(
         id_envio=row.id_envio,
         id_muestra=row.id_muestra,
         id_laboratorio=row.id_laboratorio,
-        id_testigo=row.id_testigo,
-        cantidad_testigo=float(row.cantidad_testigo) if row.cantidad_testigo is not None else None,
+        testigos=testigos_enviados,
         fecha_despacho=row.fecha_despacho,
         temperatura_transporte=row.temperatura_transporte,
         nro_remito=row.nro_remito,
@@ -476,7 +590,88 @@ def confirmar_envio(
         protocolo_utilizar=row.protocolo_utilizar,
         id_usuario_envio=row.id_usuario_envio,
         alerta_testigo_por_vencer=alerta_testigo_por_vencer,
-        alerta_reorden=alerta_reorden,
+        alerta_reorden=False,
+        ensayos_solicitados=[
+            EnsayoSolicitado(
+                id_espec_ensayo=e.id_espec_ensayo, nombre_ensayo=e.nombre_ensayo,
+                requerido_por_defecto=bool(e.requerido_por_defecto),
+                id_laboratorio=e.id_laboratorio, laboratorio_nombre=e.laboratorio_nombre,
+            )
+            for e in ensayos_elegidos
+        ],
+    )
+
+
+def _obtener_ensayos_solicitados(cursor, id_envio: int) -> list[EnsayoSolicitado]:
+    cursor.execute(
+        """
+        SELECT se.id_espec_ensayo, m.nombre_ensayo, se.requerido_por_defecto, se.id_laboratorio, lab.nombre AS laboratorio_nombre
+        FROM lims_envio_ensayos ee
+        INNER JOIN lims_especificacion_ensayos se ON se.id_espec_ensayo = ee.id_espec_ensayo
+        INNER JOIN lims_ensayos_maestro m ON m.id_ensayo_maestro = se.id_ensayo_maestro
+        LEFT JOIN lims_laboratorios lab ON lab.id_laboratorio = se.id_laboratorio
+        WHERE ee.id_envio = ?
+        ORDER BY se.orden
+        """,
+        id_envio,
+    )
+    return [
+        EnsayoSolicitado(
+            id_espec_ensayo=e.id_espec_ensayo, nombre_ensayo=e.nombre_ensayo,
+            requerido_por_defecto=bool(e.requerido_por_defecto),
+            id_laboratorio=e.id_laboratorio, laboratorio_nombre=e.laboratorio_nombre,
+        )
+        for e in cursor.fetchall()
+    ]
+
+
+def _obtener_testigos_enviados(cursor, id_envio: int) -> list[TestigoEnviado]:
+    cursor.execute(
+        """
+        SELECT t.id_testigo, t.codigo, t.nombre, et.cantidad
+        FROM lims_envio_testigos et
+        INNER JOIN lims_testigos t ON t.id_testigo = et.id_testigo
+        WHERE et.id_envio = ?
+        ORDER BY t.codigo
+        """,
+        id_envio,
+    )
+    return [
+        TestigoEnviado(
+            id_testigo=t.id_testigo, codigo=t.codigo, nombre=t.nombre, cantidad=float(t.cantidad),
+        )
+        for t in cursor.fetchall()
+    ]
+
+
+@router.get("/{id_muestra}/envio", response_model=EnvioResponse)
+def obtener_envio(
+    id_muestra: int,
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT TOP 1 * FROM lims_envios WHERE id_muestra = ? ORDER BY id_envio DESC",
+        id_muestra,
+    )
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="La muestra no tiene un envío confirmado todavía")
+
+    return EnvioResponse(
+        id_envio=row.id_envio,
+        id_muestra=row.id_muestra,
+        id_laboratorio=row.id_laboratorio,
+        testigos=_obtener_testigos_enviados(cursor, row.id_envio),
+        fecha_despacho=row.fecha_despacho,
+        temperatura_transporte=row.temperatura_transporte,
+        nro_remito=row.nro_remito,
+        transportista=row.transportista,
+        analisis_solicitados=row.analisis_solicitados,
+        protocolo_utilizar=row.protocolo_utilizar,
+        id_usuario_envio=row.id_usuario_envio,
+        ensayos_solicitados=_obtener_ensayos_solicitados(cursor, row.id_envio),
     )
 
 
@@ -491,18 +686,16 @@ def obtener_remito(
         """
         SELECT e.id_envio,
                m.codigo_muestra, m.tipo_referencia, m.nro_referencia, m.erp_CODART, m.erp_DESART, m.fecha_muestreo,
+               m.cantidad_enviada, m.unidad_enviada,
                u.nombre + ' ' + u.apellido AS usuario_muestreo_nombre,
                e.fecha_despacho, e.temperatura_transporte, e.nro_remito, e.transportista,
-               e.analisis_solicitados, e.protocolo_utilizar, e.cantidad_testigo,
+               e.analisis_solicitados, e.protocolo_utilizar,
                lab.nombre AS laboratorio_nombre, lab.direccion AS laboratorio_direccion,
-               lab.contacto AS laboratorio_contacto,
-               t.codigo AS testigo_codigo, t.nombre AS testigo_nombre,
-               t.nro_lote AS testigo_nro_lote, t.fecha_vencimiento AS testigo_fecha_vencimiento
+               lab.contacto AS laboratorio_contacto
         FROM lims_muestras m
         INNER JOIN lims_envios e ON e.id_muestra = m.id_muestra
         INNER JOIN lims_usuarios u ON u.id_usuario = m.id_usuario_muestreo
         INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = e.id_laboratorio
-        LEFT JOIN lims_testigos t ON t.id_testigo = e.id_testigo
         WHERE m.id_muestra = ?
         """,
         id_muestra,
@@ -510,6 +703,24 @@ def obtener_remito(
     row = cursor.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="La muestra no tiene un envío confirmado todavía")
+
+    cursor.execute(
+        """
+        SELECT t.id_testigo, t.codigo, t.nombre, t.nro_ir, t.nro_lote, t.fecha_vencimiento
+        FROM lims_envio_testigos et
+        INNER JOIN lims_testigos t ON t.id_testigo = et.id_testigo
+        WHERE et.id_envio = ?
+        ORDER BY t.codigo
+        """,
+        row.id_envio,
+    )
+    testigos = [
+        TestigoRemito(
+            id_testigo=t.id_testigo, codigo=t.codigo, nombre=t.nombre, nro_ir=t.nro_ir,
+            nro_lote=t.nro_lote, fecha_vencimiento=t.fecha_vencimiento,
+        )
+        for t in cursor.fetchall()
+    ]
 
     return RemitoResponse(
         id_envio=row.id_envio,
@@ -520,6 +731,8 @@ def obtener_remito(
         erp_DESART=row.erp_DESART,
         fecha_muestreo=row.fecha_muestreo,
         usuario_muestreo_nombre=row.usuario_muestreo_nombre,
+        cantidad_enviada=float(row.cantidad_enviada) if row.cantidad_enviada is not None else None,
+        unidad_enviada=row.unidad_enviada,
         laboratorio_nombre=row.laboratorio_nombre,
         laboratorio_direccion=row.laboratorio_direccion,
         laboratorio_contacto=row.laboratorio_contacto,
@@ -529,11 +742,8 @@ def obtener_remito(
         transportista=row.transportista,
         analisis_solicitados=row.analisis_solicitados,
         protocolo_utilizar=row.protocolo_utilizar,
-        testigo_codigo=row.testigo_codigo,
-        testigo_nombre=row.testigo_nombre,
-        testigo_nro_lote=row.testigo_nro_lote,
-        testigo_fecha_vencimiento=row.testigo_fecha_vencimiento,
-        cantidad_testigo=float(row.cantidad_testigo) if row.cantidad_testigo is not None else None,
+        ensayos_solicitados=_obtener_ensayos_solicitados(cursor, row.id_envio),
+        testigos=testigos,
     )
 
 
@@ -542,7 +752,7 @@ def obtener_remito(
 @router.post("/{id_muestra}/etiqueta", response_model=EtiquetaResponse, status_code=201)
 def generar_etiqueta(
     id_muestra: int,
-    user: dict = Depends(require_rol("muestreador", "qa", "admin")),
+    user: dict = Depends(require_rol("muestreador", "analista_qc", "qa", "admin")),
     conn: pyodbc.Connection = Depends(limss_db),
 ):
     """Genera (e imprime) una etiqueta para la muestra. Cada llamada registra
@@ -555,19 +765,19 @@ def generar_etiqueta(
         raise HTTPException(status_code=404, detail="Muestra no encontrada")
 
     cursor.execute("SELECT COUNT(*) AS n FROM lims_etiquetas WHERE id_muestra = ?", id_muestra)
-    numero_impresion = cursor.fetchone().n + 1
+    es_reimpresion = cursor.fetchone().n > 0
 
     cursor.execute(
-        "INSERT INTO lims_etiquetas (id_muestra, numero_impresion, id_usuario) VALUES (?, ?, ?)",
-        id_muestra, numero_impresion, user["id_usuario"],
+        "INSERT INTO lims_etiquetas (id_muestra, id_usuario, reimpresion) VALUES (?, ?, ?)",
+        id_muestra, user["id_usuario"], es_reimpresion,
     )
     cursor.execute("SELECT @@IDENTITY AS id")
     id_etiqueta = int(cursor.fetchone().id)
 
     audit.registrar(
-        conn, entidad="etiqueta", accion="imprimir" if numero_impresion == 1 else "reimprimir",
+        conn, entidad="etiqueta", accion="reimprimir" if es_reimpresion else "imprimir",
         id_usuario=user["id_usuario"], id_entidad=id_etiqueta,
-        valor_nuevo={"id_muestra": id_muestra, "numero_impresion": numero_impresion},
+        valor_nuevo={"id_muestra": id_muestra, "reimpresion": es_reimpresion},
     )
 
     cursor.execute("SELECT * FROM lims_etiquetas WHERE id_etiqueta = ?", id_etiqueta)
@@ -587,7 +797,7 @@ def obtener_ultima_etiqueta(
         raise HTTPException(status_code=404, detail="Muestra no encontrada")
 
     cursor.execute(
-        "SELECT TOP 1 * FROM lims_etiquetas WHERE id_muestra = ? ORDER BY numero_impresion DESC",
+        "SELECT TOP 1 * FROM lims_etiquetas WHERE id_muestra = ? ORDER BY id_etiqueta DESC",
         id_muestra,
     )
     fila = cursor.fetchone()

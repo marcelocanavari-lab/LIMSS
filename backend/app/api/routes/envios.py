@@ -20,9 +20,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
 from app.core.security import get_current_user, require_rol
-from app.db.connections import limss_db
+from app.db.connections import erp_db, limss_db
 from app.schemas.envios import RemitoPdfResponse
 from app.services import audit, storage
+from app.services.erp_composicion import obtener_principios_activos
+from app.services.erp_ir import obtener_vencimiento_lote as obtener_vencimiento_ir
+from app.services.erp_lotes import obtener_vencimiento_lote_produccion
 from app.services.pdf_remito import generar_pdf_remito
 
 router = APIRouter(prefix="/api/envios", tags=["Envíos"])
@@ -31,20 +34,47 @@ router = APIRouter(prefix="/api/envios", tags=["Envíos"])
 _SELECT_DATOS_REMITO = """
     SELECT e.id_envio, e.fecha_despacho, e.temperatura_transporte, e.nro_remito,
            e.transportista, e.analisis_solicitados, e.protocolo_utilizar,
-           e.cantidad_testigo,
            m.codigo_muestra, m.tipo_referencia, m.nro_referencia,
            m.erp_CODART, m.erp_DESART, m.fecha_muestreo,
+           m.cantidad_enviada, m.unidad_enviada,
            u.nombre + ' ' + u.apellido AS usuario_muestreo_nombre,
            lab.nombre AS laboratorio_nombre, lab.direccion AS laboratorio_direccion,
-           lab.contacto AS laboratorio_contacto,
-           t.codigo AS testigo_codigo, t.nombre AS testigo_nombre,
-           t.nro_lote AS testigo_nro_lote, t.fecha_vencimiento AS testigo_fecha_vencimiento
+           lab.contacto AS laboratorio_contacto
     FROM lims_envios e
     INNER JOIN lims_muestras m ON m.id_muestra = e.id_muestra
     INNER JOIN lims_usuarios u ON u.id_usuario = m.id_usuario_muestreo
     INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = e.id_laboratorio
-    LEFT JOIN lims_testigos t ON t.id_testigo = e.id_testigo
 """
+
+
+def _obtener_testigos_remito(cursor, id_envio: int):
+    cursor.execute(
+        """
+        SELECT t.codigo, t.nombre, t.nro_ir, t.nro_lote, t.fecha_vencimiento, t.unidad_medida, et.cantidad
+        FROM lims_envio_testigos et
+        INNER JOIN lims_testigos t ON t.id_testigo = et.id_testigo
+        WHERE et.id_envio = ?
+        ORDER BY t.codigo
+        """,
+        id_envio,
+    )
+    return cursor.fetchall()
+
+
+def _obtener_ensayos_remito(cursor, id_envio: int):
+    cursor.execute(
+        """
+        SELECT m.nombre_ensayo, se.metodologia, se.tipo_dato, se.limite_inferior, se.limite_superior,
+               se.unidad_medida, se.valor_requerido, se.especificacion_texto
+        FROM lims_envio_ensayos ee
+        INNER JOIN lims_especificacion_ensayos se ON se.id_espec_ensayo = ee.id_espec_ensayo
+        INNER JOIN lims_ensayos_maestro m ON m.id_ensayo_maestro = se.id_ensayo_maestro
+        WHERE ee.id_envio = ?
+        ORDER BY se.orden
+        """,
+        id_envio,
+    )
+    return cursor.fetchall()
 
 
 def _fila_a_remito_pdf(fila) -> RemitoPdfResponse:
@@ -53,7 +83,7 @@ def _fila_a_remito_pdf(fila) -> RemitoPdfResponse:
         id_envio=fila.id_envio,
         nro_remito_interno=fila.nro_remito_interno,
         url_descarga=f"/api/envios/{fila.id_envio}/remito",
-        id_usuario_genera=fila.id_usuario_genera,
+        id_usuario_genera=fila.id_usuario,
         fecha_generacion=fila.fecha_generacion,
     )
 
@@ -61,14 +91,34 @@ def _fila_a_remito_pdf(fila) -> RemitoPdfResponse:
 @router.post("/{id_envio}/remito", response_model=RemitoPdfResponse, status_code=201)
 def generar_remito(
     id_envio: int,
-    user: dict = Depends(require_rol("muestreador", "qa", "admin")),
+    user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
     conn: pyodbc.Connection = Depends(limss_db),
+    erp: pyodbc.Connection = Depends(erp_db),
 ):
     cursor = conn.cursor()
     cursor.execute(_SELECT_DATOS_REMITO + " WHERE e.id_envio = ?", id_envio)
     datos = cursor.fetchone()
     if not datos:
         raise HTTPException(status_code=404, detail="Envío no encontrado")
+
+    ensayos = _obtener_ensayos_remito(cursor, id_envio)
+    testigos = _obtener_testigos_remito(cursor, id_envio)
+
+    try:
+        principios_activos = obtener_principios_activos(erp, datos.erp_CODART)
+    except Exception:
+        # Dato complementario -- si el ERP no responde o el formato de OBSERV
+        # no calza, no debe impedir generar el remito.
+        principios_activos = []
+
+    vencimiento_lote = None
+    try:
+        if datos.tipo_referencia == "ir":
+            vencimiento_lote = obtener_vencimiento_ir(erp, datos.nro_referencia)
+        else:
+            vencimiento_lote = obtener_vencimiento_lote_produccion(erp, datos.nro_referencia)
+    except Exception:
+        vencimiento_lote = None
 
     anio = date.today().year
     cursor.execute(
@@ -79,12 +129,12 @@ def generar_remito(
     correlativo = int(ultimo.split("-")[-1]) + 1 if ultimo else 1
     nro_remito_interno = f"REM-{anio}-{correlativo:04d}"
 
-    pdf_bytes = generar_pdf_remito(datos, nro_remito_interno)
+    pdf_bytes = generar_pdf_remito(datos, nro_remito_interno, ensayos, testigos, principios_activos, vencimiento_lote)
     ruta_pdf = storage.guardar_pdf_remito(pdf_bytes, nro_remito_interno)
 
     cursor.execute(
         """
-        INSERT INTO lims_remitos (id_envio, nro_remito_interno, pdf_path, id_usuario_genera)
+        INSERT INTO lims_remitos (id_envio, nro_remito_interno, pdf_path, id_usuario)
         VALUES (?, ?, ?, ?)
         """,
         id_envio, nro_remito_interno, ruta_pdf, user["id_usuario"],

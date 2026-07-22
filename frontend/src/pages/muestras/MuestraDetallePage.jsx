@@ -10,7 +10,7 @@ export default function MuestraDetallePage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const puedeGestionar = ['muestreador', 'qa', 'admin'].includes(user?.rol);
+  const puedeGestionar = ['analista_qc', 'qa', 'admin'].includes(user?.rol);
 
   const [muestra, setMuestra] = useState(null);
   const [error, setError] = useState('');
@@ -66,6 +66,7 @@ export default function MuestraDetallePage() {
               <tr><td>Código</td><td style={{ textAlign: 'left', fontFamily: 'var(--font-mono)' }}>{muestra.erp_CODART}</td></tr>
               <tr><td>Cantidad de lote</td><td className="num" style={{ textAlign: 'left' }}>{muestra.erp_cantidad_lote ?? '—'}</td></tr>
               <tr><td>Proveedor</td><td style={{ textAlign: 'left' }}>{muestra.erp_proveedor || '—'}</td></tr>
+              <tr><td>Cantidad enviada</td><td className="num" style={{ textAlign: 'left' }}>{muestra.cantidad_enviada != null ? `${muestra.cantidad_enviada} ${muestra.unidad_enviada || ''}` : '—'}</td></tr>
               <tr><td>Especificación</td><td style={{ textAlign: 'left' }}>{muestra.id_especificacion ? `#${muestra.id_especificacion}` : 'Sin especificación vigente asignada'}</td></tr>
               <tr><td>Fecha de muestreo</td><td style={{ textAlign: 'left' }}>{new Date(muestra.fecha_muestreo).toLocaleString()}</td></tr>
               <tr><td>Observaciones</td><td style={{ textAlign: 'left' }}>{muestra.observaciones || '—'}</td></tr>

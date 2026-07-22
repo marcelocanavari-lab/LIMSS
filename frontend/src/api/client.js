@@ -166,6 +166,7 @@ export const api = {
   del: (path) => request(path, { method: 'DELETE' }),
   postPublic: (path, body) => request(path, { method: 'POST', body, auth: false }),
   postForm: (path, formData) => requestForm(path, formData),
+  putForm: (path, formData) => requestForm(path, formData, { method: 'PUT' }),
   getBlob: (path) => requestBlob(path),
   getBlobConMeta: (path) => requestBlobConMeta(path),
 };

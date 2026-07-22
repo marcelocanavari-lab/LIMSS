@@ -3,16 +3,18 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import TopBar from '../../components/TopBar';
 import { maestrosApi } from '../../api/maestros';
+import { testigosRemitosApi } from '../../api/testigosRemitos';
 import { ApiError } from '../../api/client';
 
 export default function TestigoDetallePage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const puedeGestionar = ['admin', 'qa'].includes(user?.rol);
+  const puedeGestionar = ['analista_qc', 'qa', 'admin'].includes(user?.rol);
 
   const [testigo, setTestigo] = useState(null);
   const [movimientos, setMovimientos] = useState([]);
+  const [historialEnvios, setHistorialEnvios] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -23,10 +25,11 @@ export default function TestigoDetallePage() {
 
   function cargar() {
     setLoading(true);
-    Promise.all([maestrosApi.obtenerTestigo(id), maestrosApi.historialMovimientos(id)])
-      .then(([t, m]) => {
+    Promise.all([maestrosApi.obtenerTestigo(id), maestrosApi.historialMovimientos(id), testigosRemitosApi.historialEnvios(id)])
+      .then(([t, m, envios]) => {
         setTestigo(t);
         setMovimientos(m);
+        setHistorialEnvios(envios);
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo cargar el testigo'))
       .finally(() => setLoading(false));
@@ -112,6 +115,7 @@ export default function TestigoDetallePage() {
           <table className="data-table">
             <tbody>
               <tr><td>Lote</td><td className="num" style={{ textAlign: 'left' }}>{testigo.nro_lote}</td></tr>
+              <tr><td>N° de IR</td><td className="num" style={{ textAlign: 'left' }}>{testigo.nro_ir || '—'}</td></tr>
               <tr><td>Vencimiento</td><td className="num" style={{ textAlign: 'left' }}>{testigo.fecha_vencimiento}</td></tr>
               <tr><td>Stock actual</td><td className="num" style={{ textAlign: 'left' }}>{testigo.stock_actual} {testigo.unidad_medida || ''}</td></tr>
               <tr><td>Stock mínimo</td><td className="num" style={{ textAlign: 'left' }}>{testigo.stock_minimo} {testigo.unidad_medida || ''}</td></tr>
@@ -190,6 +194,32 @@ export default function TestigoDetallePage() {
                   <td className="num">{m.cantidad}</td>
                   <td className="num">{m.stock_resultante}</td>
                   <td>{m.observaciones || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        <h2 style={{ fontSize: 'var(--fs-lg)', margin: 'var(--sp-5) 0 var(--sp-3)' }}>Historial de envíos</h2>
+        {historialEnvios.length === 0 ? (
+          <div className="state-block"><span>Este testigo todavía no se envió a ningún laboratorio</span></div>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Laboratorio</th>
+                <th>Cantidad enviada</th>
+                <th>N° Remito</th>
+              </tr>
+            </thead>
+            <tbody>
+              {historialEnvios.map((h) => (
+                <tr key={h.id_remito}>
+                  <td>{new Date(h.fecha_envio).toLocaleDateString()}</td>
+                  <td>{h.laboratorio_nombre}</td>
+                  <td className="num">{h.cantidad_enviada} {h.unidad}</td>
+                  <td style={{ fontFamily: 'var(--font-mono)' }}>{h.nro_remito}</td>
                 </tr>
               ))}
             </tbody>

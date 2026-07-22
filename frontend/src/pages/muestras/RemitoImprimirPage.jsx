@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import TopBar from '../../components/TopBar';
 import { muestrasApi } from '../../api/muestras';
 import { enviosApi } from '../../api/envios';
@@ -8,6 +9,8 @@ import { ApiError } from '../../api/client';
 export default function RemitoImprimirPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const puedeGenerarRemito = ['analista_qc', 'qa', 'admin'].includes(user?.rol);
 
   const [remito, setRemito] = useState(null);
   const [error, setError] = useState('');
@@ -96,9 +99,11 @@ export default function RemitoImprimirPage() {
                 <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
                   <button className="btn btn-secondary" onClick={verPdf}>Ver PDF</button>
                   <button className="btn btn-secondary" onClick={descargarPdf}>Descargar PDF</button>
-                  <button className="btn btn-ghost" onClick={handleGenerar} disabled={generando}>
-                    {generando ? <span className="spinner" /> : 'Generar uno nuevo →'}
-                  </button>
+                  {puedeGenerarRemito && (
+                    <button className="btn btn-ghost" onClick={handleGenerar} disabled={generando}>
+                      {generando ? <span className="spinner" /> : 'Generar uno nuevo →'}
+                    </button>
+                  )}
                 </div>
               </>
             ) : (
@@ -106,9 +111,11 @@ export default function RemitoImprimirPage() {
                 <p style={{ color: 'var(--ink-2)', marginBottom: 'var(--sp-3)' }}>
                   Todavía no se generó el remito en PDF para este envío.
                 </p>
-                <button className="btn btn-primary" onClick={handleGenerar} disabled={generando}>
-                  {generando ? <span className="spinner" /> : 'Generar Remito →'}
-                </button>
+                {puedeGenerarRemito && (
+                  <button className="btn btn-primary" onClick={handleGenerar} disabled={generando}>
+                    {generando ? <span className="spinner" /> : 'Generar Remito →'}
+                  </button>
+                )}
               </>
             )}
 
@@ -128,6 +135,9 @@ export default function RemitoImprimirPage() {
                 <span><b>Material:</b> {remito.erp_CODART} — {remito.erp_DESART}</span>
                 <span><b>Fecha de muestreo:</b> {new Date(remito.fecha_muestreo).toLocaleString()}</span>
                 <span><b>Muestreador:</b> {remito.usuario_muestreo_nombre}</span>
+                {remito.cantidad_enviada != null && (
+                  <span><b>Cantidad enviada:</b> {remito.cantidad_enviada} {remito.unidad_enviada || ''}</span>
+                )}
               </div>
             </div>
 
@@ -151,6 +161,19 @@ export default function RemitoImprimirPage() {
                 </tbody>
               </table>
             </div>
+
+            {remito.ensayos_solicitados.length > 0 && (
+              <div className="card" style={{ marginBottom: 'var(--sp-4)' }}>
+                <h2>Ensayos solicitados</h2>
+                <ul style={{ margin: 0, paddingLeft: '1.2em' }}>
+                  {remito.ensayos_solicitados.map((e) => (
+                    <li key={e.id_espec_ensayo}>
+                      {e.nombre_ensayo} {!e.requerido_por_defecto && <span className="badge badge-neutral">Opcional</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {remito.testigo_codigo && (
               <div className="card" style={{ marginBottom: 'var(--sp-4)' }}>

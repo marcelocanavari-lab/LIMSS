@@ -4,17 +4,30 @@
 
 /* --- Shell de pantalla --- */
 .screen {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
 .screen-content {
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   padding: var(--sp-5);
-  max-width: 720px;
   width: 100%;
-  margin: 0 auto;
+}
+
+/* Envuelve una .data-table larga para que solo las filas hagan scroll,
+   con los encabezados siempre visibles -- se adapta a lo que haya arriba
+   (buscador, filtros, formularios) sin alturas fijas por pantalla.
+   max-height es un tope de seguridad; el alto real lo da flex:1. */
+.table-scroll {
+  flex: 1;
+  min-height: 0;
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
 }
 
 /* --- Barra superior --- */
@@ -304,14 +317,33 @@
   letter-spacing: 0.03em;
   padding: var(--sp-2) var(--sp-3);
   border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surf-0);
 }
 
 .data-table td {
   padding: var(--sp-3);
   border-bottom: 1px solid var(--border-soft);
+  vertical-align: middle;
 }
 
 .data-table tr:last-child td { border-bottom: none; }
+
+/* Variante compacta -- combinar con .data-table (ej. tabla de ensayos en el
+   detalle de especificación, donde conviene ver más filas sin scrollear). */
+.data-table-compact th {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  letter-spacing: 0.05em;
+}
+
+.data-table-compact td {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  font-size: var(--fs-sm);
+}
 
 .num { font-variant-numeric: tabular-nums; text-align: right; }
 
@@ -346,6 +378,8 @@
 @media print {
   .no-print, .topbar { display: none !important; }
   body, .screen, .screen-content { background: #fff !important; }
+  .screen { height: auto; }
+  .screen-content { overflow: visible; height: auto; }
   .printable { padding: 0; max-width: 100%; }
   .printable .card { break-inside: avoid; }
 }

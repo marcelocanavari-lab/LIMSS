@@ -81,14 +81,39 @@ def buscar_lineas_ir(erp: pyodbc.Connection, nro_ir: str):
         SELECT cab.N01Id, cab.NUMCOMO, cab.FECCOM, cab.VENCOM,
                its.IdM21, its.CANTID,
                art.CODART, art.DESART, umd.ABREV AS unidad,
-               ana.DESANA AS proveedor
+               ana.DESANA AS proveedor,
+               sar.CODSAR, sar.DESSAR
         FROM GIN01CPB cab
         INNER JOIN GIN02ITS its ON its.IdN01O = cab.N01Id
         INNER JOIN GIM21ART art ON art.M21Id = its.IdM21
         LEFT JOIN GIT21UMD umd ON umd.T21Id = art.IdT21M
         LEFT JOIN GIM02ANA ana ON ana.M02Id = cab.IdM02O AND ana.IdT04 = 2
+        LEFT JOIN GIT59SAR sar ON sar.T59Id = art.IdT59
         WHERE cab.N01Id = ?
         """,
         cabecera.N01Id,
     )
     return cursor.fetchall()
+
+
+def obtener_vencimiento_lote(erp: pyodbc.Connection, nro_ir: str):
+    """VENCOM del comprobante IR. 1899-12-30 es el sentinel del ERP para
+    "sin vencimiento" (igual que en el eBR) -- se normaliza a None."""
+    numcomo, anio = _parsear_nro_ir(nro_ir)
+    id_tipo_ir = _tipo_comprobante_ir(erp)
+
+    cursor = erp.cursor()
+    cursor.execute(
+        """
+        SELECT TOP 1 VENCOM
+        FROM GIN01CPB
+        WHERE IdT05O = ? AND LETCOMO = 'X' AND NUMCOMO = ? AND YEAR(FECCOM) = ?
+        ORDER BY FECCOM DESC
+        """,
+        id_tipo_ir, numcomo, anio,
+    )
+    row = cursor.fetchone()
+    if not row or not row.VENCOM:
+        return None
+    vencom = row.VENCOM.date() if hasattr(row.VENCOM, "date") else row.VENCOM
+    return vencom if vencom.year > 1900 else None

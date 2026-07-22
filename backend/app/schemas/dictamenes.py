@@ -18,7 +18,7 @@ class DictamenPendienteResponse(BaseModel):
 # ── Detalle para revisión (REQ-DEC-002) ───────────────────────────
 
 class EnsayoResultado(BaseModel):
-    id_ensayo: int
+    id_espec_ensayo: int
     orden: int
     nombre_ensayo: str
     metodologia: Optional[str] = None

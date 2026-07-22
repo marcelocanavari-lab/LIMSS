@@ -14,6 +14,7 @@ class LineaIR(BaseModel):
     CANTID: float
     unidad: Optional[str] = None
     proveedor: Optional[str] = None
+    advertencia: Optional[str] = None
 
 
 # ── Materiales (búsqueda unificada por tipo: IR o lote) ──────────
@@ -26,6 +27,7 @@ class MaterialEncontrado(BaseModel):
     cantidad: Optional[float] = None
     unidad: Optional[str] = None
     proveedor: Optional[str] = None
+    advertencia: Optional[str] = None
 
 
 # ── Muestras ───────────────────────────────────────────────────
@@ -38,6 +40,8 @@ class MuestraCreate(BaseModel):
     erp_DESART: str = Field(..., min_length=1, max_length=100)
     erp_cantidad_lote: Optional[float] = None
     erp_proveedor: Optional[str] = Field(None, max_length=100)
+    cantidad_enviada: Optional[float] = None
+    unidad_enviada: Optional[str] = Field(None, max_length=20)
     observaciones: Optional[str] = Field(None, max_length=500)
 
 
@@ -51,6 +55,8 @@ class MuestraResponse(BaseModel):
     erp_DESART: str
     erp_cantidad_lote: Optional[float] = None
     erp_proveedor: Optional[str] = None
+    cantidad_enviada: Optional[float] = None
+    unidad_enviada: Optional[str] = None
     id_especificacion: Optional[int] = None
     estado: str
     id_usuario_muestreo: int
@@ -85,23 +91,50 @@ class LaboratorioUpdate(BaseModel):
 
 # ── Envíos ─────────────────────────────────────────────────────
 
+class TestigoEnvioItem(BaseModel):
+    id_testigo: int
+
+
 class EnvioCreate(BaseModel):
     id_laboratorio: int
-    id_testigo: Optional[int] = None
-    cantidad_testigo: Optional[float] = Field(None, gt=0)
+    testigos: list[TestigoEnvioItem] = []
     temperatura_transporte: Optional[str] = Field(None, max_length=50)
     nro_remito: Optional[str] = Field(None, max_length=50)
     transportista: Optional[str] = Field(None, max_length=100)
     analisis_solicitados: Optional[str] = Field(None, max_length=500)
     protocolo_utilizar: Optional[str] = Field(None, max_length=100)
+    id_espec_ensayo: Optional[list[int]] = None
+
+
+class EnsayoSolicitado(BaseModel):
+    id_espec_ensayo: int
+    nombre_ensayo: str
+    requerido_por_defecto: bool
+    id_laboratorio: Optional[int] = None
+    laboratorio_nombre: Optional[str] = None
+
+
+class TestigoEnviado(BaseModel):
+    id_testigo: int
+    codigo: str
+    nombre: str
+    nro_ir: Optional[str] = None
+
+
+class TestigoRemito(BaseModel):
+    id_testigo: int
+    codigo: str
+    nombre: str
+    nro_ir: Optional[str] = None
+    nro_lote: Optional[str] = None
+    fecha_vencimiento: Optional[date] = None
 
 
 class EnvioResponse(BaseModel):
     id_envio: int
     id_muestra: int
     id_laboratorio: int
-    id_testigo: Optional[int] = None
-    cantidad_testigo: Optional[float] = None
+    testigos: list[TestigoEnviado] = []
     fecha_despacho: datetime
     temperatura_transporte: Optional[str] = None
     nro_remito: Optional[str] = None
@@ -111,6 +144,7 @@ class EnvioResponse(BaseModel):
     id_usuario_envio: int
     alerta_testigo_por_vencer: bool = False
     alerta_reorden: bool = False
+    ensayos_solicitados: list[EnsayoSolicitado] = []
 
 
 class RemitoResponse(BaseModel):
@@ -122,6 +156,8 @@ class RemitoResponse(BaseModel):
     erp_DESART: str
     fecha_muestreo: datetime
     usuario_muestreo_nombre: str
+    cantidad_enviada: Optional[float] = None
+    unidad_enviada: Optional[str] = None
     laboratorio_nombre: str
     laboratorio_direccion: Optional[str] = None
     laboratorio_contacto: Optional[str] = None
@@ -131,11 +167,8 @@ class RemitoResponse(BaseModel):
     transportista: Optional[str] = None
     analisis_solicitados: Optional[str] = None
     protocolo_utilizar: Optional[str] = None
-    testigo_codigo: Optional[str] = None
-    testigo_nombre: Optional[str] = None
-    testigo_nro_lote: Optional[str] = None
-    testigo_fecha_vencimiento: Optional[date] = None
-    cantidad_testigo: Optional[float] = None
+    ensayos_solicitados: list[EnsayoSolicitado] = []
+    testigos: list[TestigoRemito] = []
 
 
 # ── Etiquetas (REQ-ENV-003) ───────────────────────────────────────
@@ -150,7 +183,6 @@ class EtiquetaResponse(BaseModel):
     nro_referencia: str
     fecha_muestreo: datetime
     usuario_muestreo_nombre: str
-    numero_impresion: int
     es_reimpresion: bool
     id_usuario_impresion: int
     fecha_hora: datetime
