@@ -345,6 +345,12 @@
   font-size: var(--fs-sm);
 }
 
+/* Catálogo de ensayos maestro: filas compactas (8px verticales). */
+.data-table-catalogo td {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
 .num { font-variant-numeric: tabular-nums; text-align: right; }
 
 /* --- Alertas inline --- */

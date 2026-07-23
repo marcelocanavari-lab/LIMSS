@@ -102,7 +102,7 @@ export default function CatalogoEnsayosPage() {
 
   return (
     <div className="screen">
-      <TopBar titulo="Catálogo de Ensayos" subtitulo="Datos Maestros" onBack={() => navigate('/maestros/especificaciones')} />
+      <TopBar titulo="Catálogo de Ensayos" subtitulo="Datos Maestros" onBack={() => navigate('/menu')} />
       <div className="screen-content">
         <div style={{ display: 'flex', gap: 'var(--sp-3)', marginBottom: 'var(--sp-4)', flexWrap: 'wrap' }}>
           <input
@@ -175,7 +175,7 @@ export default function CatalogoEnsayosPage() {
           <div className="state-block"><span className="state-block-title">Sin ensayos en el catálogo</span></div>
         ) : (
           <div className="table-scroll">
-            <table className="data-table">
+            <table className="data-table data-table-catalogo">
               <thead>
                 <tr>
                   <th>Nombre</th>
