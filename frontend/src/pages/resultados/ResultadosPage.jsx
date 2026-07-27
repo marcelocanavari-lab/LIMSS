@@ -17,17 +17,9 @@ export default function ResultadosPage() {
     let activo = true;
     setLoading(true);
     setError('');
-    Promise.all([
-      muestrasApi.listarMuestras({ estado: 'en_transito', buscar }),
-      muestrasApi.listarMuestras({ estado: 'en_carga_resultados', buscar }),
-    ])
-      .then(([enTransito, enCarga]) => {
-        if (!activo) return;
-        const todas = [...enCarga, ...enTransito].sort(
-          (a, b) => new Date(b.fecha_muestreo) - new Date(a.fecha_muestreo)
-        );
-        setMuestras(todas);
-      })
+    muestrasApi
+      .pendientesEnvio({ buscar })
+      .then((data) => activo && setMuestras(data))
       .catch((err) => activo && setError(err instanceof ApiError ? err.message : 'No se pudo cargar el listado'))
       .finally(() => activo && setLoading(false));
     return () => {
@@ -37,7 +29,7 @@ export default function ResultadosPage() {
 
   return (
     <div className="screen">
-      <TopBar titulo="Resultados" subtitulo="Carga de resultados analíticos" onBack={() => navigate('/menu')} />
+      <TopBar titulo="Envío de Muestras" subtitulo="Envíos a laboratorio y carga de resultados" onBack={() => navigate('/menu')} />
       <div className="screen-content">
         <input
           className="field-input"
@@ -55,7 +47,7 @@ export default function ResultadosPage() {
         ) : muestras.length === 0 ? (
           <div className="state-block">
             <span className="state-block-title">Sin muestras pendientes</span>
-            <span>No hay muestras en tránsito o en carga de resultados</span>
+            <span>No hay muestras pendientes de envío o en análisis</span>
           </div>
         ) : (
           <table className="data-table">
@@ -69,7 +61,7 @@ export default function ResultadosPage() {
             </thead>
             <tbody>
               {muestras.map((m) => (
-                <tr key={m.id_muestra} style={{ cursor: 'pointer' }} onClick={() => navigate(`/resultados/muestras/${m.id_muestra}`)}>
+                <tr key={m.id_muestra} style={{ cursor: 'pointer' }} onClick={() => navigate(`/envios/muestras/${m.id_muestra}`)}>
                   <td style={{ fontFamily: 'var(--font-mono)' }}>{m.codigo_muestra}</td>
                   <td style={{ fontFamily: 'var(--font-mono)' }}>{m.tipo_referencia === 'ir' ? 'IR' : 'Lote'} {m.nro_referencia}</td>
                   <td>{m.erp_DESART}</td>

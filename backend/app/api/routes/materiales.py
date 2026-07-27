@@ -6,9 +6,9 @@ import pyodbc
 from fastapi import APIRouter, Depends, Query
 
 from app.core.security import require_rol
-from app.db.connections import erp_db
+from app.db.connections import erp_db, limss_db
 from app.schemas.maestros import ArticuloERP
-from app.services.erp_materiales import CODSAR_POR_TIPO, buscar_materiales
+from app.services.erp_materiales import buscar_materiales, obtener_codsar_por_tipo
 
 router = APIRouter(prefix="/api/materiales", tags=["Materiales ERP"])
 
@@ -19,7 +19,8 @@ def listar_materiales(
     buscar: str = Query(""),
     user: dict = Depends(require_rol("analista_qc", "admin", "qa")),
     erp: pyodbc.Connection = Depends(erp_db),
+    conn: pyodbc.Connection = Depends(limss_db),
 ):
-    codsar = CODSAR_POR_TIPO[tipo]
+    codsar = obtener_codsar_por_tipo(conn)[tipo]
     rows = buscar_materiales(erp, codsar, buscar)
     return [ArticuloERP(IdM21=r.IdM21, CODART=r.CODART, DESART=r.DESART) for r in rows]

@@ -4,23 +4,11 @@ import TopBar from '../../components/TopBar';
 import { resultadosApi } from '../../api/resultados';
 import { ApiError } from '../../api/client';
 
-function calcularOOS(ensayo, valorNumerico, valorCualitativo) {
-  if (ensayo.tipo_dato === 'numerico') {
-    if (valorNumerico === '' || valorNumerico === null || valorNumerico === undefined) return null;
-    if (ensayo.limite_inferior === null || ensayo.limite_superior === null) return null;
-    const v = Number(valorNumerico);
-    return v < ensayo.limite_inferior || v > ensayo.limite_superior;
-  }
-  if (!valorCualitativo || !valorCualitativo.trim()) return null;
-  if (!ensayo.valor_requerido || !ensayo.valor_requerido.trim()) return null;
-  return valorCualitativo.trim().toLowerCase() !== ensayo.valor_requerido.trim().toLowerCase();
-}
-
 export default function CargaResultadosPage() {
-  const { id } = useParams();
+  const { idEnvio } = useParams();
   const navigate = useNavigate();
 
-  const [muestra, setMuestra] = useState(null);
+  const [envio, setEnvio] = useState(null);
   const [valores, setValores] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -32,9 +20,9 @@ export default function CargaResultadosPage() {
 
   useEffect(() => {
     resultadosApi
-      .iniciarCarga(id)
+      .obtenerParaCarga(idEnvio)
       .then((data) => {
-        setMuestra(data);
+        setEnvio(data);
         const iniciales = {};
         data.ensayos.forEach((e) => {
           iniciales[e.id_espec_ensayo] = {
@@ -43,18 +31,22 @@ export default function CargaResultadosPage() {
           };
         });
         setValores(iniciales);
+        if (data.protocolo) {
+          setNroProtocolo(data.protocolo.nro_protocolo_ext);
+          setFechaEmision(data.protocolo.fecha_emision);
+        }
       })
-      .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo cargar la muestra'))
+      .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo cargar el envío'))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [idEnvio]);
 
   function actualizarValor(idEnsayo, campo, valor) {
     setValores((prev) => ({ ...prev, [idEnsayo]: { ...prev[idEnsayo], [campo]: valor } }));
   }
 
   function faltanObligatorios() {
-    if (!muestra) return true;
-    return muestra.ensayos.some((e) => {
+    if (!envio) return true;
+    return envio.ensayos.some((e) => {
       if (!e.obligatorio) return false;
       const v = valores[e.id_espec_ensayo];
       if (e.tipo_dato === 'numerico') return !v || v.valor_numerico === '';
@@ -83,7 +75,7 @@ export default function CargaResultadosPage() {
       return;
     }
 
-    const resultados = muestra.ensayos.map((en) => {
+    const resultados = envio.ensayos.map((en) => {
       const v = valores[en.id_espec_ensayo] || {};
       return {
         id_espec_ensayo: en.id_espec_ensayo,
@@ -94,16 +86,13 @@ export default function CargaResultadosPage() {
 
     setGuardando(true);
     try {
-      const resultado = await resultadosApi.guardarResultados(id, {
+      await resultadosApi.guardarResultados(idEnvio, {
         resultados,
         nroProtocoloExt: nroProtocolo.trim(),
         fechaEmision,
         protocoloPdf: archivo,
       });
-      if (resultado.hay_oos) {
-        window.alert('Atención: hay uno o más resultados FUERA DE ESPECIFICACIÓN (OOS). La muestra queda pendiente de dictamen de QA.');
-      }
-      navigate('/resultados', { replace: true });
+      navigate('/carga-resultados', { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo guardar los resultados');
     } finally {
@@ -119,10 +108,10 @@ export default function CargaResultadosPage() {
     );
   }
 
-  if (error && !muestra) {
+  if (error && !envio) {
     return (
       <div className="screen">
-        <TopBar titulo="Cargar resultados" subtitulo="Resultados" onBack={() => navigate('/resultados')} />
+        <TopBar titulo="Cargar resultados" subtitulo="Carga de Resultados" onBack={() => navigate('/carga-resultados')} />
         <div className="screen-content">
           <div className="alert alert-danger">{error}</div>
         </div>
@@ -132,12 +121,16 @@ export default function CargaResultadosPage() {
 
   return (
     <div className="screen">
-      <TopBar titulo={muestra.codigo_muestra} subtitulo={muestra.erp_DESART} onBack={() => navigate('/resultados')} />
+      <TopBar
+        titulo={envio.codigo_muestra}
+        subtitulo={`${envio.erp_DESART} — ${envio.laboratorio_nombre}`}
+        onBack={() => navigate('/carga-resultados')}
+      />
       <div className="screen-content">
         <form onSubmit={handleSubmit}>
           <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
             <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Resultados de análisis solicitados</h2>
-            {muestra.ensayos.length === 0 ? (
+            {envio.ensayos.length === 0 ? (
               <div className="alert alert-info">No hay ensayos solicitados para el envío de esta muestra.</div>
             ) : (
               <table className="data-table">
@@ -150,9 +143,8 @@ export default function CargaResultadosPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {muestra.ensayos.map((en) => {
+                  {envio.ensayos.map((en) => {
                     const v = valores[en.id_espec_ensayo] || {};
-                    const oos = calcularOOS(en, v.valor_numerico, v.valor_cualitativo);
                     return (
                       <tr key={en.id_espec_ensayo}>
                         <td>{en.nombre_ensayo}{en.obligatorio && ' *'}</td>
@@ -168,25 +160,21 @@ export default function CargaResultadosPage() {
                               className="field-input"
                               type="number"
                               step="any"
-                              style={oos ? { background: 'var(--danger-soft)', borderColor: 'var(--danger)' } : undefined}
                               value={v.valor_numerico}
                               onChange={(e) => actualizarValor(en.id_espec_ensayo, 'valor_numerico', e.target.value)}
                               disabled={guardando}
                             />
                           ) : (
-                            <input
+                            <select
                               className="field-input"
-                              type="text"
-                              style={oos ? { background: 'var(--danger-soft)', borderColor: 'var(--danger)' } : undefined}
                               value={v.valor_cualitativo}
                               onChange={(e) => actualizarValor(en.id_espec_ensayo, 'valor_cualitativo', e.target.value)}
                               disabled={guardando}
-                            />
-                          )}
-                          {oos && (
-                            <div style={{ color: 'var(--danger)', fontSize: 'var(--fs-xs)', fontWeight: 700, marginTop: 4 }}>
-                              OOS - Fuera de Especificación
-                            </div>
+                            >
+                              <option value="">Seleccioná...</option>
+                              <option value="Cumple">Cumple</option>
+                              <option value="No cumple">No cumple</option>
+                            </select>
                           )}
                         </td>
                       </tr>

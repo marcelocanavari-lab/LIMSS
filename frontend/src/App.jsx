@@ -1,10 +1,12 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
-import RequireAuth from './components/RequireAuth';
+import PrivateRoute from './components/PrivateRoute';
 
 import LoginPage from './pages/LoginPage';
 import MenuPage from './pages/MenuPage';
 import UsuariosPage from './pages/UsuariosPage';
+import ErpConfigPage from './pages/ErpConfigPage';
+import AuditoriaPage from './pages/AuditoriaPage';
 import EspecificacionesPage from './pages/maestros/EspecificacionesPage';
 import EspecificacionFormPage from './pages/maestros/EspecificacionFormPage';
 import EspecificacionDetallePage from './pages/maestros/EspecificacionDetallePage';
@@ -23,10 +25,22 @@ import MuestraEtiquetaPage from './pages/muestras/MuestraEtiquetaPage';
 import EnvioFormPage from './pages/muestras/EnvioFormPage';
 import RemitoImprimirPage from './pages/muestras/RemitoImprimirPage';
 import LaboratoriosPage from './pages/muestras/LaboratoriosPage';
+import ConsultaMuestrasPage from './pages/muestras/ConsultaMuestrasPage';
+import ConsultaMuestraDetallePage from './pages/muestras/ConsultaMuestraDetallePage';
 import ResultadosPage from './pages/resultados/ResultadosPage';
+import MuestraEnviosDetallePage from './pages/resultados/MuestraEnviosDetallePage';
+import CargaResultadosBandejaPage from './pages/resultados/CargaResultadosBandejaPage';
 import CargaResultadosPage from './pages/resultados/CargaResultadosPage';
 import DictamenesPage from './pages/dictamenes/DictamenesPage';
 import DictamenDetallePage from './pages/dictamenes/DictamenDetallePage';
+
+// Roles reutilizados en varias rutas -- mismo criterio que usa el backend
+// (require_rol) y el menú v2.0, para que "lo que se ve" y "lo que se puede
+// abrir por URL" coincidan siempre.
+const TODOS = ['muestreador', 'analista_qc', 'qa', 'admin'];
+const GESTION = ['analista_qc', 'qa', 'admin']; // todo salvo muestreador
+const QA_ADMIN = ['qa', 'admin'];
+const ADMIN = ['admin'];
 
 export default function App() {
   return (
@@ -35,45 +49,54 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
 
-          <Route
-            path="/menu"
-            element={
-              <RequireAuth>
-                <MenuPage />
-              </RequireAuth>
-            }
-          />
+          <Route path="/menu" element={<PrivateRoute roles={TODOS}><MenuPage /></PrivateRoute>} />
 
-          <Route path="/usuarios" element={<RequireAuth><UsuariosPage /></RequireAuth>} />
+          {/* ── Administración (solo admin) ─────────────────────── */}
+          <Route path="/usuarios" element={<PrivateRoute roles={ADMIN}><UsuariosPage /></PrivateRoute>} />
+          <Route path="/erp-config" element={<PrivateRoute roles={ADMIN}><ErpConfigPage /></PrivateRoute>} />
+          <Route path="/auditoria" element={<PrivateRoute roles={ADMIN}><AuditoriaPage /></PrivateRoute>} />
 
-          <Route path="/maestros/especificaciones" element={<RequireAuth><EspecificacionesPage /></RequireAuth>} />
-          <Route path="/maestros/especificaciones/nueva" element={<RequireAuth><EspecificacionFormPage modo="crear" /></RequireAuth>} />
-          <Route path="/maestros/especificaciones/:id" element={<RequireAuth><EspecificacionDetallePage /></RequireAuth>} />
-          <Route path="/maestros/especificaciones/:id/revisar" element={<RequireAuth><EspecificacionFormPage modo="revisar" /></RequireAuth>} />
-          <Route path="/maestros/ensayos" element={<RequireAuth><CatalogoEnsayosPage /></RequireAuth>} />
+          {/* ── Datos Maestros (analista_qc, qa, admin) ─────────── */}
+          <Route path="/maestros/especificaciones" element={<PrivateRoute roles={GESTION}><EspecificacionesPage /></PrivateRoute>} />
+          <Route path="/maestros/especificaciones/nueva" element={<PrivateRoute roles={GESTION}><EspecificacionFormPage modo="crear" /></PrivateRoute>} />
+          <Route path="/maestros/especificaciones/:id" element={<PrivateRoute roles={GESTION}><EspecificacionDetallePage /></PrivateRoute>} />
+          <Route path="/maestros/especificaciones/:id/revisar" element={<PrivateRoute roles={GESTION}><EspecificacionFormPage modo="revisar" /></PrivateRoute>} />
+          <Route path="/maestros/ensayos" element={<PrivateRoute roles={GESTION}><CatalogoEnsayosPage /></PrivateRoute>} />
 
-          <Route path="/maestros/testigos" element={<RequireAuth><TestigosPage /></RequireAuth>} />
-          <Route path="/maestros/testigos/nuevo" element={<RequireAuth><TestigoFormPage modo="crear" /></RequireAuth>} />
-          <Route path="/maestros/testigos/reporte" element={<RequireAuth><ReporteTestigosPage /></RequireAuth>} />
-          <Route path="/maestros/testigos/remitos" element={<RequireAuth><RemitosTestigosPage /></RequireAuth>} />
-          <Route path="/maestros/testigos/remitos/nuevo" element={<RequireAuth><NuevoRemitoTestigoPage /></RequireAuth>} />
-          <Route path="/maestros/testigos/remitos/:id" element={<RequireAuth><RemitoTestigoDetallePage /></RequireAuth>} />
-          <Route path="/maestros/testigos/:id" element={<RequireAuth><TestigoDetallePage /></RequireAuth>} />
-          <Route path="/maestros/testigos/:id/editar" element={<RequireAuth><TestigoFormPage modo="editar" /></RequireAuth>} />
+          <Route path="/maestros/testigos" element={<PrivateRoute roles={GESTION}><TestigosPage /></PrivateRoute>} />
+          <Route path="/maestros/testigos/nuevo" element={<PrivateRoute roles={GESTION}><TestigoFormPage modo="crear" /></PrivateRoute>} />
+          <Route path="/maestros/testigos/reporte" element={<PrivateRoute roles={GESTION}><ReporteTestigosPage /></PrivateRoute>} />
+          <Route path="/maestros/testigos/remitos" element={<PrivateRoute roles={GESTION}><RemitosTestigosPage /></PrivateRoute>} />
+          <Route path="/maestros/testigos/remitos/nuevo" element={<PrivateRoute roles={GESTION}><NuevoRemitoTestigoPage /></PrivateRoute>} />
+          <Route path="/maestros/testigos/remitos/:id" element={<PrivateRoute roles={GESTION}><RemitoTestigoDetallePage /></PrivateRoute>} />
+          <Route path="/maestros/testigos/:id" element={<PrivateRoute roles={GESTION}><TestigoDetallePage /></PrivateRoute>} />
+          <Route path="/maestros/testigos/:id/editar" element={<PrivateRoute roles={GESTION}><TestigoFormPage modo="editar" /></PrivateRoute>} />
 
-          <Route path="/muestras/laboratorios" element={<RequireAuth><LaboratoriosPage /></RequireAuth>} />
-          <Route path="/muestras/nueva" element={<RequireAuth><MuestraNuevaPage /></RequireAuth>} />
-          <Route path="/muestras" element={<RequireAuth><MuestrasPage /></RequireAuth>} />
-          <Route path="/muestras/:id" element={<RequireAuth><MuestraDetallePage /></RequireAuth>} />
-          <Route path="/muestras/:id/etiqueta" element={<RequireAuth><MuestraEtiquetaPage /></RequireAuth>} />
-          <Route path="/muestras/:id/envio" element={<RequireAuth><EnvioFormPage /></RequireAuth>} />
-          <Route path="/muestras/:id/remito" element={<RequireAuth><RemitoImprimirPage /></RequireAuth>} />
+          <Route path="/muestras/laboratorios" element={<PrivateRoute roles={GESTION}><LaboratoriosPage /></PrivateRoute>} />
 
-          <Route path="/resultados" element={<RequireAuth><ResultadosPage /></RequireAuth>} />
-          <Route path="/resultados/muestras/:id" element={<RequireAuth><CargaResultadosPage /></RequireAuth>} />
+          {/* ── Muestras: alta y detalle, accesibles a los 4 roles ── */}
+          <Route path="/muestras/nueva" element={<PrivateRoute roles={TODOS}><MuestraNuevaPage /></PrivateRoute>} />
+          <Route path="/muestras" element={<PrivateRoute roles={TODOS}><MuestrasPage /></PrivateRoute>} />
+          <Route path="/muestras/:id" element={<PrivateRoute roles={TODOS}><MuestraDetallePage /></PrivateRoute>} />
+          <Route path="/muestras/:id/etiqueta" element={<PrivateRoute roles={TODOS}><MuestraEtiquetaPage /></PrivateRoute>} />
 
-          <Route path="/dictamenes" element={<RequireAuth><DictamenesPage /></RequireAuth>} />
-          <Route path="/dictamenes/muestras/:id" element={<RequireAuth><DictamenDetallePage /></RequireAuth>} />
+          {/* ── Envío de Muestras (analista_qc, qa, admin) ──────── */}
+          <Route path="/muestras/:id/envio" element={<PrivateRoute roles={GESTION}><EnvioFormPage /></PrivateRoute>} />
+          <Route path="/muestras/:id/envios/:idEnvio/remito" element={<PrivateRoute roles={GESTION}><RemitoImprimirPage /></PrivateRoute>} />
+          <Route path="/envios" element={<PrivateRoute roles={GESTION}><ResultadosPage /></PrivateRoute>} />
+          <Route path="/envios/muestras/:id" element={<PrivateRoute roles={GESTION}><MuestraEnviosDetallePage /></PrivateRoute>} />
+
+          {/* ── Carga de Resultados (analista_qc, qa, admin) ────── */}
+          <Route path="/carga-resultados" element={<PrivateRoute roles={GESTION}><CargaResultadosBandejaPage /></PrivateRoute>} />
+          <Route path="/envios/:idEnvio/resultados" element={<PrivateRoute roles={GESTION}><CargaResultadosPage /></PrivateRoute>} />
+
+          {/* ── Consulta de Muestras (analista_qc, qa, admin) ───── */}
+          <Route path="/consulta-muestras" element={<PrivateRoute roles={GESTION}><ConsultaMuestrasPage /></PrivateRoute>} />
+          <Route path="/consulta-muestras/:id" element={<PrivateRoute roles={GESTION}><ConsultaMuestraDetallePage /></PrivateRoute>} />
+
+          {/* ── Control de Calidad (solo qa, admin) ─────────────── */}
+          <Route path="/dictamenes" element={<PrivateRoute roles={QA_ADMIN}><DictamenesPage /></PrivateRoute>} />
+          <Route path="/dictamenes/muestras/:id" element={<PrivateRoute roles={QA_ADMIN}><DictamenDetallePage /></PrivateRoute>} />
 
           <Route path="/" element={<Navigate to="/menu" replace />} />
           <Route path="*" element={<Navigate to="/menu" replace />} />

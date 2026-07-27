@@ -53,7 +53,7 @@ export default function DictamenesPage() {
               <tr>
                 <th>Código</th>
                 <th>Material</th>
-                <th>Laboratorio</th>
+                <th>Envíos</th>
                 <th>Fecha muestreo</th>
                 <th>Resultados</th>
               </tr>
@@ -63,7 +63,7 @@ export default function DictamenesPage() {
                 <tr key={p.id_muestra} style={{ cursor: 'pointer' }} onClick={() => navigate(`/dictamenes/muestras/${p.id_muestra}`)}>
                   <td style={{ fontFamily: 'var(--font-mono)' }}>{p.codigo_muestra}</td>
                   <td>{p.erp_CODART} — {p.erp_DESART}</td>
-                  <td>{p.laboratorio_nombre}</td>
+                  <td>{p.cantidad_envios} laboratorio{p.cantidad_envios === 1 ? '' : 's'}</td>
                   <td>{new Date(p.fecha_muestreo).toLocaleDateString()}</td>
                   <td>
                     {p.cantidad_oos > 0 ? (

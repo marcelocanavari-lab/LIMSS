@@ -40,9 +40,9 @@ export default function DictamenDetallePage() {
 
   useEffect(cargar, [id]);
 
-  async function verProtocolo() {
+  async function verProtocolo(idEnvio) {
     try {
-      const blob = await resultadosApi.descargarProtocolo(id);
+      const blob = await resultadosApi.descargarProtocolo(idEnvio);
       window.open(URL.createObjectURL(blob), '_blank');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo descargar el protocolo');
@@ -111,74 +111,64 @@ export default function DictamenDetallePage() {
           </table>
         </div>
 
-        {detalle.envio && (
-          <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
-            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Envío</h2>
-            <table className="data-table">
+        {detalle.envios.map((en) => (
+          <div key={en.id_envio} className="card" style={{ marginBottom: 'var(--sp-5)' }}>
+            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>{en.laboratorio_nombre}</h2>
+            <table className="data-table" style={{ marginBottom: 'var(--sp-3)' }}>
               <tbody>
-                <tr><td>Laboratorio</td><td style={{ textAlign: 'left' }}>{detalle.envio.laboratorio_nombre}</td></tr>
-                <tr><td>Fecha de despacho</td><td style={{ textAlign: 'left' }}>{new Date(detalle.envio.fecha_despacho).toLocaleString()}</td></tr>
-                {detalle.envio.testigo_codigo && (
-                  <tr><td>Testigo</td><td style={{ textAlign: 'left' }}>{detalle.envio.testigo_codigo} — {detalle.envio.testigo_nombre}</td></tr>
+                <tr><td>Fecha de despacho</td><td style={{ textAlign: 'left' }}>{new Date(en.fecha_despacho).toLocaleString()}</td></tr>
+                <tr><td>N° remito</td><td style={{ textAlign: 'left' }}>{en.nro_remito || '—'}</td></tr>
+                {en.testigos.length > 0 && (
+                  <tr><td>Testigo(s)</td><td style={{ textAlign: 'left' }}>{en.testigos.map((t) => `${t.codigo} — ${t.nombre}`).join(', ')}</td></tr>
+                )}
+                {en.protocolo && (
+                  <tr><td>Protocolo externo</td><td style={{ textAlign: 'left' }}>{en.protocolo.nro_protocolo_ext} ({en.protocolo.fecha_emision})</td></tr>
                 )}
               </tbody>
             </table>
-          </div>
-        )}
+            {en.protocolo && (
+              <button className="btn btn-secondary" style={{ marginBottom: 'var(--sp-3)' }} onClick={() => verProtocolo(en.id_envio)}>
+                Ver protocolo (PDF)
+              </button>
+            )}
 
-        {detalle.protocolo && (
-          <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
-            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Protocolo</h2>
             <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Ensayo</th>
+                  <th>Especificación</th>
+                  <th>Resultado</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
               <tbody>
-                <tr><td>N° protocolo externo</td><td style={{ textAlign: 'left' }}>{detalle.protocolo.nro_protocolo_ext}</td></tr>
-                <tr><td>Fecha de emisión</td><td style={{ textAlign: 'left' }}>{detalle.protocolo.fecha_emision}</td></tr>
+                {en.ensayos.map((ens) => {
+                  const oos = ens.dentro_especificacion === false;
+                  return (
+                    <tr key={ens.id_espec_ensayo} style={oos ? { background: 'var(--danger-soft)' } : undefined}>
+                      <td>{ens.nombre_ensayo}</td>
+                      <td>
+                        {ens.tipo_dato === 'numerico'
+                          ? `${ens.limite_inferior ?? '—'} a ${ens.limite_superior ?? '—'} ${ens.unidad_medida || ''}`
+                          : ens.valor_requerido}
+                      </td>
+                      <td>{ens.tipo_dato === 'numerico' ? ens.valor_numerico ?? '—' : ens.valor_cualitativo ?? '—'}</td>
+                      <td>
+                        {ens.dentro_especificacion === null ? (
+                          <span className="badge badge-neutral">Sin resultado</span>
+                        ) : oos ? (
+                          <span className="badge badge-danger">● OOS</span>
+                        ) : (
+                          <span className="badge badge-ok">● OK</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
-            <button className="btn btn-secondary" style={{ marginTop: 'var(--sp-3)' }} onClick={verProtocolo}>
-              Ver protocolo (PDF)
-            </button>
           </div>
-        )}
-
-        <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
-          <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Resultados</h2>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Ensayo</th>
-                <th>Especificación</th>
-                <th>Resultado</th>
-                <th>Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {detalle.ensayos.map((en) => {
-                const oos = en.dentro_especificacion === false;
-                return (
-                  <tr key={en.id_espec_ensayo} style={oos ? { background: 'var(--danger-soft)' } : undefined}>
-                    <td>{en.nombre_ensayo}</td>
-                    <td>
-                      {en.tipo_dato === 'numerico'
-                        ? `${en.limite_inferior ?? '—'} a ${en.limite_superior ?? '—'} ${en.unidad_medida || ''}`
-                        : en.valor_requerido}
-                    </td>
-                    <td>{en.tipo_dato === 'numerico' ? en.valor_numerico ?? '—' : en.valor_cualitativo ?? '—'}</td>
-                    <td>
-                      {en.dentro_especificacion === null ? (
-                        <span className="badge badge-neutral">Sin resultado</span>
-                      ) : oos ? (
-                        <span className="badge badge-danger">● OOS</span>
-                      ) : (
-                        <span className="badge badge-ok">● OK</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        ))}
 
         <form onSubmit={handleSubmit}>
           <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>

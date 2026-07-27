@@ -34,6 +34,7 @@ class MaterialEncontrado(BaseModel):
 
 class MuestraCreate(BaseModel):
     tipo_referencia: str = Field(..., pattern=r"^(ir|lote)$")
+    tipo_material: str = Field(..., pattern=r"^(materia_prima|granel|semi_elaborado|producto_terminado)$")
     nro_referencia: str = Field(..., min_length=1, max_length=50)
     erp_IdM21: int
     erp_CODART: str = Field(..., min_length=1, max_length=20)
@@ -45,10 +46,19 @@ class MuestraCreate(BaseModel):
     observaciones: Optional[str] = Field(None, max_length=500)
 
 
+class MuestraUpdate(BaseModel):
+    """Edición post-ingreso: solo estos dos campos son editables -- todo lo
+    que viene del ERP (erp_IdM21/erp_CODART/erp_DESART) y el estado del
+    flujo quedan fuera a propósito, no hay endpoint para tocarlos."""
+    tipo_material: Optional[str] = Field(None, pattern=r"^(materia_prima|granel|semi_elaborado|producto_terminado)$")
+    observaciones: Optional[str] = Field(None, max_length=500)
+
+
 class MuestraResponse(BaseModel):
     id_muestra: int
     codigo_muestra: str
     tipo_referencia: str
+    tipo_material: Optional[str] = None
     nro_referencia: str
     erp_IdM21: int
     erp_CODART: str
@@ -112,6 +122,11 @@ class EnsayoSolicitado(BaseModel):
     requerido_por_defecto: bool
     id_laboratorio: Optional[int] = None
     laboratorio_nombre: Optional[str] = None
+    obligatorio: bool = False
+    # Resultado ya cargado para este envío, si lo hay (None = todavía no se cargó).
+    valor_numerico: Optional[float] = None
+    valor_cualitativo: Optional[str] = None
+    dentro_especificacion: Optional[bool] = None
 
 
 class TestigoEnviado(BaseModel):
@@ -130,10 +145,19 @@ class TestigoRemito(BaseModel):
     fecha_vencimiento: Optional[date] = None
 
 
+class ProtocoloEnvio(BaseModel):
+    id_protocolo: int
+    nro_protocolo_ext: str
+    fecha_emision: date
+    pdf_nombre_original: str
+    fecha_carga: datetime
+
+
 class EnvioResponse(BaseModel):
     id_envio: int
     id_muestra: int
     id_laboratorio: int
+    laboratorio_nombre: Optional[str] = None
     testigos: list[TestigoEnviado] = []
     fecha_despacho: datetime
     temperatura_transporte: Optional[str] = None
@@ -145,9 +169,12 @@ class EnvioResponse(BaseModel):
     alerta_testigo_por_vencer: bool = False
     alerta_reorden: bool = False
     ensayos_solicitados: list[EnsayoSolicitado] = []
+    protocolo: Optional[ProtocoloEnvio] = None
+    completo: bool = False
 
 
 class RemitoResponse(BaseModel):
+    id_remito: Optional[int] = None
     id_envio: int
     codigo_muestra: str
     tipo_referencia: str
@@ -169,6 +196,11 @@ class RemitoResponse(BaseModel):
     protocolo_utilizar: Optional[str] = None
     ensayos_solicitados: list[EnsayoSolicitado] = []
     testigos: list[TestigoRemito] = []
+    # Constancia de recepción (copia firmada por el laboratorio), ver
+    # POST/GET /api/envios/{id_envio}/remito/copia-firmada en envios.py.
+    tiene_copia_firmada: bool = False
+    fecha_recepcion: Optional[date] = None
+    recibido_por: Optional[str] = None
 
 
 # ── Etiquetas (REQ-ENV-003) ───────────────────────────────────────

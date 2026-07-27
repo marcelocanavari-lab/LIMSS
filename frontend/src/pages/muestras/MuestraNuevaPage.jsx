@@ -107,6 +107,7 @@ export default function MuestraNuevaPage() {
     try {
       const muestra = await muestrasApi.crearMuestra({
         tipo_referencia: esMateriaPrima ? 'ir' : 'lote',
+        tipo_material: tipo,
         nro_referencia: linea.referencia,
         erp_IdM21: linea.IdM21,
         erp_CODART: linea.CODART,

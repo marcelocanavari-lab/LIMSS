@@ -1,10 +1,11 @@
 /* ============================================================
    Cliente API central
    ------------------------------------------------------------
-   La URL del backend se resuelve dinámicamente: en producción
-   (equipo apuntando al servidor por IP) usamos el mismo host
-   donde se sirve la app, puerto 8002. En desarrollo local se
-   puede sobreescribir con VITE_API_URL en un .env del frontend.
+   La URL del backend se toma de VITE_API_URL (definida en
+   frontend/.env.production para el build servido en red vía
+   npm run preview -- ver VITE_API_URL=http://192.168.10.99:8002).
+   Si no está definida (ej. npm run dev local), se arma con el
+   mismo host donde se sirve la app y el puerto real del backend.
    ============================================================ */
 
 const API_BASE =
@@ -163,6 +164,7 @@ export const api = {
   get: (path) => request(path),
   post: (path, body) => request(path, { method: 'POST', body }),
   put: (path, body) => request(path, { method: 'PUT', body }),
+  patch: (path, body) => request(path, { method: 'PATCH', body }),
   del: (path) => request(path, { method: 'DELETE' }),
   postPublic: (path, body) => request(path, { method: 'POST', body, auth: false }),
   postForm: (path, formData) => requestForm(path, formData),

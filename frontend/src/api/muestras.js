@@ -15,17 +15,30 @@ export const muestrasApi = {
 
   // Muestras
   crearMuestra: (data) => api.post('/api/muestras/', data),
-  listarMuestras: ({ estado, buscar = '' } = {}) => {
+  listarMuestras: ({ estado, buscar = '', mio, tipoMaterial, fechaDesde, fechaHasta, idLaboratorio } = {}) => {
     const params = new URLSearchParams();
     if (estado) params.set('estado', estado);
     if (buscar) params.set('buscar', buscar);
+    if (mio) params.set('mio', 'true');
+    if (tipoMaterial) params.set('tipo_material', tipoMaterial);
+    if (fechaDesde) params.set('fecha_desde', fechaDesde);
+    if (fechaHasta) params.set('fecha_hasta', fechaHasta);
+    if (idLaboratorio) params.set('id_laboratorio', idLaboratorio);
     return api.get(`/api/muestras/?${params.toString()}`);
   },
+  pendientesEnvio: ({ buscar = '' } = {}) => {
+    const params = new URLSearchParams();
+    if (buscar) params.set('buscar', buscar);
+    return api.get(`/api/muestras/pendientes-envio?${params.toString()}`);
+  },
   obtenerMuestra: (id) => api.get(`/api/muestras/${id}`),
+  editarMuestra: (id, data) => api.patch(`/api/muestras/${id}`, data),
+  obtenerRecorrido: (id) => api.get(`/api/muestras/${id}/recorrido`),
 
-  // Envío
-  confirmarEnvio: (id, data) => api.post(`/api/muestras/${id}/envio`, data),
-  obtenerRemito: (id) => api.get(`/api/muestras/${id}/remito`),
+  // Envíos (una muestra puede tener varios, a distintos laboratorios)
+  confirmarEnvio: (id, data) => api.post(`/api/muestras/${id}/envios`, data),
+  listarEnvios: (id) => api.get(`/api/muestras/${id}/envios`),
+  obtenerRemito: (id, idEnvio) => api.get(`/api/muestras/${id}/envios/${idEnvio}/remito`),
   ensayosParaEnvio: (id, idLaboratorio) => api.get(`/api/muestras/${id}/ensayos-para-envio?id_laboratorio=${idLaboratorio}`),
 
   // Etiqueta (REQ-ENV-003)

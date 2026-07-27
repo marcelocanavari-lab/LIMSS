@@ -192,7 +192,7 @@ export default function CatalogoEnsayosPage() {
                     <td>{en.bibliografia || '—'}</td>
                     <td>{en.observaciones || '—'}</td>
                     <td className="num">{en.cantidad_especificaciones}</td>
-                    <td style={{ display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap' }}>
+                    <td className="catalogo-acciones">
                       <button className="btn btn-ghost" onClick={() => abrirEdicion(en)}>Editar</button>
                       {puedeEliminar && (
                         <button

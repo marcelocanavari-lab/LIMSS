@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import TopBar from '../../components/TopBar';
 import { muestrasApi } from '../../api/muestras';
 import { maestrosApi } from '../../api/maestros';
+import { testigosRemitosApi } from '../../api/testigosRemitos';
 import { ApiError } from '../../api/client';
 
 export default function EnvioFormPage() {
@@ -20,6 +21,7 @@ export default function EnvioFormPage() {
   const [idsTestigoElegidos, setIdsTestigoElegidos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [cargandoEnsayos, setCargandoEnsayos] = useState(false);
+  const [sinTestigosEnviados, setSinTestigosEnviados] = useState(false);
   const [error, setError] = useState('');
 
   const [idLaboratorio, setIdLaboratorio] = useState('');
@@ -57,6 +59,17 @@ export default function EnvioFormPage() {
       .finally(() => setCargandoEnsayos(false));
   }, [id, idLaboratorio]);
 
+  useEffect(() => {
+    if (!idLaboratorio) {
+      setSinTestigosEnviados(false);
+      return;
+    }
+    testigosRemitosApi
+      .listarRemitos({ idLaboratorio })
+      .then((remitos) => setSinTestigosEnviados(remitos.length === 0))
+      .catch(() => setSinTestigosEnviados(false));
+  }, [idLaboratorio]);
+
   function toggleEnsayo(idEnsayo) {
     setIdsEnsayoElegidos((prev) =>
       prev.includes(idEnsayo) ? prev.filter((i) => i !== idEnsayo) : [...prev, idEnsayo]
@@ -77,12 +90,18 @@ export default function EnvioFormPage() {
     .map(detalleTestigo)
     .filter((t) => t?.vencido);
 
+  const sinEnsayosLab = !!idLaboratorio && !cargandoEnsayos && ensayosEspec.length === 0;
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
 
     if (!idLaboratorio) {
       setError('Seleccioná un laboratorio');
+      return;
+    }
+    if (sinEnsayosLab) {
+      setError('El laboratorio seleccionado no tiene ensayos asignados para este producto. Verificá la configuración en Datos Maestros.');
       return;
     }
     if (testigosVencidosElegidos.length > 0) {
@@ -108,7 +127,7 @@ export default function EnvioFormPage() {
         window.alert('Atención: el testigo enviado vence en menos de 30 días.');
       }
 
-      navigate(`/muestras/${id}/remito`, { replace: true });
+      navigate(`/muestras/${id}/envios/${resultado.id_envio}/remito`, { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo confirmar el envío');
     } finally {
@@ -126,7 +145,7 @@ export default function EnvioFormPage() {
 
   return (
     <div className="screen">
-      <TopBar titulo="Confirmar envío" subtitulo="Muestras" onBack={() => navigate(`/muestras/${id}`)} />
+      <TopBar titulo="Nuevo envío" subtitulo="Envío de Muestras" onBack={() => navigate(`/envios/muestras/${id}`)} />
       <div className="screen-content">
         <form onSubmit={handleSubmit}>
           <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
@@ -142,6 +161,11 @@ export default function EnvioFormPage() {
                 <button type="button" className="btn btn-ghost" style={{ alignSelf: 'flex-start', padding: 0 }} onClick={() => navigate('/muestras/laboratorios')}>
                   + Agregar laboratorio
                 </button>
+              )}
+              {idLaboratorio && sinTestigosEnviados && (
+                <div className="alert alert-warn" style={{ marginTop: 'var(--sp-2)' }}>
+                  Este laboratorio no tiene testigos enviados registrados. Verificá antes de continuar.
+                </div>
               )}
             </div>
 
@@ -161,8 +185,10 @@ export default function EnvioFormPage() {
               <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Ensayos solicitados</h2>
               {cargandoEnsayos ? (
                 <span className="spinner" />
-              ) : ensayosEspec.length === 0 ? (
-                <p style={{ color: 'var(--ink-2)' }}>Este laboratorio no tiene ensayos asignados en la especificación de la muestra.</p>
+              ) : sinEnsayosLab ? (
+                <div className="alert alert-danger">
+                  El laboratorio seleccionado no tiene ensayos asignados para este producto. Verificá la configuración en Datos Maestros.
+                </div>
               ) : (
                 ensayosEspec.map((en) => (
                   <label key={en.id_espec_ensayo} style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', marginBottom: 'var(--sp-2)' }}>
@@ -222,7 +248,11 @@ export default function EnvioFormPage() {
 
           {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}
 
-          <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={guardando || testigosVencidosElegidos.length > 0}>
+          <button
+            type="submit"
+            className="btn btn-primary btn-block btn-lg"
+            disabled={guardando || !idLaboratorio || sinEnsayosLab || testigosVencidosElegidos.length > 0}
+          >
             {guardando ? <span className="spinner" /> : 'Confirmar envío'}
           </button>
         </form>

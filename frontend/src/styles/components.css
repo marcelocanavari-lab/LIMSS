@@ -202,6 +202,16 @@
   background: currentColor;
 }
 
+/* --- Grilla del menú principal (evita scroll con muchas tarjetas: en vez
+   de apilarlas todas en una columna, las acomoda en varias según el ancho
+   disponible) --- */
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--sp-4);
+  align-items: start;
+}
+
 /* --- Lista de selección (muestras, ensayos) --- */
 .select-list {
   display: flex;
@@ -345,10 +355,28 @@
   font-size: var(--fs-sm);
 }
 
-/* Catálogo de ensayos maestro: filas compactas (8px verticales). */
+/* Catálogo de ensayos maestro: filas compactas, más registros sin scroll.
+   El alto de fila real lo termina fijando el botón de acciones (.btn trae
+   min-height: var(--tap-min) = 56px para uso táctil en el resto de la app),
+   así que acá también achicamos ESE botón puntual -- si no, el padding solo
+   no alcanza para bajar de ~56px por fila. */
 .data-table-catalogo td {
-  padding-top: 8px;
-  padding-bottom: 8px;
+  padding: 4px 12px;
+}
+
+.data-table-catalogo .catalogo-acciones {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.data-table-catalogo .catalogo-acciones .btn {
+  min-height: 28px;
+  height: 28px;
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-xs);
 }
 
 .num { font-variant-numeric: tabular-nums; text-align: right; }

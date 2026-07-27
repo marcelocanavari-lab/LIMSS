@@ -6,8 +6,12 @@ import { muestrasApi } from '../../api/muestras';
 import { enviosApi } from '../../api/envios';
 import { ApiError } from '../../api/client';
 
+function hoyISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export default function RemitoImprimirPage() {
-  const { id } = useParams();
+  const { id, idEnvio } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const puedeGenerarRemito = ['analista_qc', 'qa', 'admin'].includes(user?.rol);
@@ -20,12 +24,25 @@ export default function RemitoImprimirPage() {
   const [generando, setGenerando] = useState(false);
   const [pdfError, setPdfError] = useState('');
 
-  useEffect(() => {
+  // Constancia de recepción (copia firmada por el laboratorio)
+  const [mostrarFormRecepcion, setMostrarFormRecepcion] = useState(false);
+  const [fechaRecepcion, setFechaRecepcion] = useState(hoyISO());
+  const [recibidoPor, setRecibidoPor] = useState('');
+  const [archivoFirmado, setArchivoFirmado] = useState(null);
+  const [guardandoRecepcion, setGuardandoRecepcion] = useState(false);
+  const [errorRecepcion, setErrorRecepcion] = useState('');
+
+  function cargarRemito() {
     muestrasApi
-      .obtenerRemito(id)
-      .then(setRemito)
+      .obtenerRemito(id, idEnvio)
+      .then((r) => {
+        setRemito(r);
+        setMostrarFormRecepcion(!r.tiene_copia_firmada);
+      })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo cargar el remito'));
-  }, [id]);
+  }
+
+  useEffect(cargarRemito, [id, idEnvio]);
 
   useEffect(() => {
     if (!remito?.id_envio) return;
@@ -74,9 +91,57 @@ export default function RemitoImprimirPage() {
     a.remove();
   }
 
+  async function verCopiaFirmada() {
+    try {
+      const blob = await enviosApi.descargarCopiaFirmada(remito.id_envio);
+      window.open(URL.createObjectURL(blob), '_blank');
+    } catch (err) {
+      setErrorRecepcion(err instanceof ApiError ? err.message : 'No se pudo descargar la copia firmada');
+    }
+  }
+
+  function abrirReemplazoRecepcion() {
+    setFechaRecepcion(hoyISO());
+    setRecibidoPor('');
+    setArchivoFirmado(null);
+    setErrorRecepcion('');
+    setMostrarFormRecepcion(true);
+  }
+
+  async function handleSubmitRecepcion(e) {
+    e.preventDefault();
+    if (!fechaRecepcion || !recibidoPor.trim()) {
+      setErrorRecepcion('Completá la fecha de recepción y quién la recibió');
+      return;
+    }
+    if (!archivoFirmado) {
+      setErrorRecepcion('Adjuntá el PDF escaneado de la copia firmada');
+      return;
+    }
+    if (archivoFirmado.type !== 'application/pdf') {
+      setErrorRecepcion('El archivo debe ser un PDF');
+      return;
+    }
+
+    setErrorRecepcion('');
+    setGuardandoRecepcion(true);
+    try {
+      const formData = new FormData();
+      formData.append('fecha_recepcion', fechaRecepcion);
+      formData.append('recibido_por', recibidoPor.trim());
+      formData.append('pdf_copia_firmada', archivoFirmado);
+      await enviosApi.adjuntarCopiaFirmada(remito.id_envio, formData);
+      cargarRemito();
+    } catch (err) {
+      setErrorRecepcion(err instanceof ApiError ? err.message : 'No se pudo adjuntar la copia firmada');
+    } finally {
+      setGuardandoRecepcion(false);
+    }
+  }
+
   return (
     <div className="screen">
-      <TopBar titulo="Remito de envío" subtitulo="Muestras" onBack={() => navigate(`/muestras/${id}`)} />
+      <TopBar titulo="Remito de envío" subtitulo="Envío de Muestras" onBack={() => navigate(`/envios/muestras/${id}`)} />
       <div className="screen-content">
         <button className="btn btn-primary no-print" style={{ marginBottom: 'var(--sp-4)' }} onClick={() => window.print()}>
           Imprimir →
@@ -120,6 +185,89 @@ export default function RemitoImprimirPage() {
             )}
 
             {pdfError && <div className="alert alert-danger" style={{ marginTop: 'var(--sp-3)' }}>{pdfError}</div>}
+          </div>
+        )}
+
+        {remito && remitoPdf && (
+          <div className="card no-print" style={{ marginBottom: 'var(--sp-4)' }}>
+            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Constancia de recepción</h2>
+
+            {remito.tiene_copia_firmada && !mostrarFormRecepcion ? (
+              <>
+                <table className="data-table" style={{ marginBottom: 'var(--sp-4)' }}>
+                  <tbody>
+                    <tr><td>Fecha de recepción</td><td style={{ textAlign: 'left' }}>{new Date(remito.fecha_recepcion).toLocaleDateString()}</td></tr>
+                    <tr><td>Recibido por</td><td style={{ textAlign: 'left' }}>{remito.recibido_por}</td></tr>
+                  </tbody>
+                </table>
+                <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+                  <button type="button" className="btn btn-secondary" onClick={verCopiaFirmada}>
+                    Ver copia firmada
+                  </button>
+                  {puedeGenerarRemito && (
+                    <button type="button" className="btn btn-ghost" onClick={abrirReemplazoRecepcion}>
+                      Reemplazar
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : puedeGenerarRemito ? (
+              <form onSubmit={handleSubmitRecepcion}>
+                {!remito.tiene_copia_firmada && (
+                  <p style={{ color: 'var(--ink-2)', marginBottom: 'var(--sp-3)' }}>
+                    Este remito todavía no tiene la copia firmada por el laboratorio adjunta.
+                  </p>
+                )}
+                <div className="field">
+                  <label className="field-label" htmlFor="fechaRecepcion">Fecha de recepción</label>
+                  <input
+                    id="fechaRecepcion"
+                    className="field-input"
+                    type="date"
+                    value={fechaRecepcion}
+                    onChange={(e) => setFechaRecepcion(e.target.value)}
+                    disabled={guardandoRecepcion}
+                  />
+                </div>
+                <div className="field">
+                  <label className="field-label" htmlFor="recibidoPor">Recibido por</label>
+                  <input
+                    id="recibidoPor"
+                    className="field-input"
+                    placeholder="Nombre de quien firmó la recepción"
+                    value={recibidoPor}
+                    onChange={(e) => setRecibidoPor(e.target.value)}
+                    disabled={guardandoRecepcion}
+                  />
+                </div>
+                <div className="field" style={{ marginBottom: 0 }}>
+                  <label className="field-label" htmlFor="pdfCopiaFirmada">Copia firmada (PDF escaneado)</label>
+                  <input
+                    id="pdfCopiaFirmada"
+                    className="field-input"
+                    type="file"
+                    accept="application/pdf"
+                    onChange={(e) => setArchivoFirmado(e.target.files?.[0] || null)}
+                    disabled={guardandoRecepcion}
+                  />
+                </div>
+
+                {errorRecepcion && <div className="alert alert-danger" style={{ marginTop: 'var(--sp-3)' }}>{errorRecepcion}</div>}
+
+                <div style={{ display: 'flex', gap: 'var(--sp-3)', marginTop: 'var(--sp-4)' }}>
+                  {remito.tiene_copia_firmada && (
+                    <button type="button" className="btn btn-ghost" onClick={() => setMostrarFormRecepcion(false)} disabled={guardandoRecepcion}>
+                      Cancelar
+                    </button>
+                  )}
+                  <button type="submit" className="btn btn-primary" disabled={guardandoRecepcion}>
+                    {guardandoRecepcion ? <span className="spinner" /> : 'Adjuntar copia firmada'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <p style={{ color: 'var(--ink-2)' }}>Todavía no se adjuntó la copia firmada por el laboratorio.</p>
+            )}
           </div>
         )}
 

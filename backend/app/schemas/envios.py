@@ -1,5 +1,6 @@
 from pydantic import BaseModel
-from datetime import datetime
+from typing import Optional
+from datetime import date, datetime
 
 
 class RemitoPdfResponse(BaseModel):
@@ -9,3 +10,8 @@ class RemitoPdfResponse(BaseModel):
     url_descarga: str
     id_usuario_genera: int
     fecha_generacion: datetime
+    # Constancia de recepción (copia firmada por el laboratorio) -- mismo
+    # concepto que ya existía para remitos de testigos, ver testigos_remitos.py.
+    tiene_copia_firmada: bool = False
+    fecha_recepcion: Optional[date] = None
+    recibido_por: Optional[str] = None

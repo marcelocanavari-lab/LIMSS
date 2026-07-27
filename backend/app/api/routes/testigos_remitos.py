@@ -12,9 +12,10 @@ concepto de "reimprimir con una versión nueva" para este documento.
 """
 import os
 from datetime import date
+from typing import Optional
 
 import pyodbc
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
 from app.core.security import get_current_user, require_rol
@@ -222,19 +223,33 @@ def crear_remito_testigos(
 
 @router.get("/remitos", response_model=list[RemitoTestigoResponse])
 def listar_remitos_testigos(
+    id_laboratorio: Optional[int] = Query(None, description="Filtra los remitos de testigos enviados a este laboratorio"),
     user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
     conn: pyodbc.Connection = Depends(limss_db),
 ):
     cursor = conn.cursor()
-    cursor.execute(
-        """
-        SELECT c.*, lab.nombre AS laboratorio_nombre,
-               (SELECT COUNT(*) FROM lims_remito_testigos_det d WHERE d.id_remito = c.id_remito) AS cantidad_testigos
-        FROM lims_remito_testigos_cab c
-        INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = c.id_laboratorio
-        ORDER BY c.fecha_creacion DESC
-        """
-    )
+    if id_laboratorio:
+        cursor.execute(
+            """
+            SELECT c.*, lab.nombre AS laboratorio_nombre,
+                   (SELECT COUNT(*) FROM lims_remito_testigos_det d WHERE d.id_remito = c.id_remito) AS cantidad_testigos
+            FROM lims_remito_testigos_cab c
+            INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = c.id_laboratorio
+            WHERE c.id_laboratorio = ?
+            ORDER BY c.fecha_creacion DESC
+            """,
+            id_laboratorio,
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT c.*, lab.nombre AS laboratorio_nombre,
+                   (SELECT COUNT(*) FROM lims_remito_testigos_det d WHERE d.id_remito = c.id_remito) AS cantidad_testigos
+            FROM lims_remito_testigos_cab c
+            INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = c.id_laboratorio
+            ORDER BY c.fecha_creacion DESC
+            """
+        )
     return [
         RemitoTestigoResponse(
             id_remito=r.id_remito, nro_remito=r.nro_remito, id_laboratorio=r.id_laboratorio,

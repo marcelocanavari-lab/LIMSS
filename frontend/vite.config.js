@@ -13,4 +13,13 @@ export default defineConfig({
       interval: 500,
     },
   },
+  // "npm run preview" (usado en el servidor) no hereda el puerto de "server" --
+  // sin esto usa el default de Vite (4173) y va derivando al siguiente puerto
+  // libre si está ocupado. strictPort hace que falle en vez de derivar, para
+  // notar enseguida si quedó un preview viejo corriendo en 5174.
+  preview: {
+    host: '0.0.0.0',
+    port: 5174,
+    strictPort: true,
+  },
 })

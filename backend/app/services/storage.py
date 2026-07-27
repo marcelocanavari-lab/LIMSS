@@ -76,8 +76,10 @@ def guardar_pdf_remito_testigo(contenido: bytes, nro_remito: str) -> str:
 
 
 def guardar_pdf_copia_firmada(upload_file: UploadFile, nro_remito: str) -> str:
-    """Copia del remito de testigos firmada por el laboratorio como constancia
-    de recepción, escaneada y subida por el usuario."""
+    """Copia de un remito (de muestra o de testigos, mismo nombrado -- cada
+    uno usa su propio prefijo de numeración: REM-YYYY-NNNN vs REM-TEST-YYYY-NNN,
+    así que no chocan aunque compartan carpeta) firmada por el laboratorio
+    como constancia de recepción, escaneada y subida por el usuario."""
     nombre_archivo = f"LIMSS_{_sanitizar(nro_remito)}_FIRMADO.pdf"
     return _guardar_pdf(upload_file, os.path.join("remitos", "firmados"), nombre_archivo)
 

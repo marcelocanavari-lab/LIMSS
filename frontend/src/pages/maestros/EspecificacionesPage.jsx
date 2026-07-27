@@ -49,11 +49,6 @@ export default function EspecificacionesPage() {
             {soloVigentes ? 'Solo vigentes' : 'Todas las versiones'}
           </button>
           {puedeGestionar && (
-            <button className="btn btn-secondary" onClick={() => navigate('/maestros/ensayos')}>
-              Catálogo de ensayos
-            </button>
-          )}
-          {puedeGestionar && (
             <button className="btn btn-primary" onClick={() => navigate('/maestros/especificaciones/nueva')}>
               + Nueva especificación
             </button>

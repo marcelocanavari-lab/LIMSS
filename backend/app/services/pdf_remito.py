@@ -193,7 +193,10 @@ def _dibujar_copia(
             c.drawString(col_ensayo[0], y, e.nombre_ensayo[: int(col_ensayo[1] / 0.17)])
             c.drawString(col_metodo[0], y, _texto(e.metodologia)[: int(col_metodo[1] / 0.17)])
             c.drawString(col_tipo[0], y, tipo_legible)
-            parrafo.drawOn(c, col_espec_x, y - alto_parrafo)
+            # drawOn ubica (x,y) como la esquina inferior izquierda del bloque;
+            # sin el +fontSize la primera línea del párrafo queda ~8pt más
+            # abajo que la línea base de las demás columnas de la fila.
+            parrafo.drawOn(c, col_espec_x, y - alto_parrafo + _ESTILO_ESPECIFICACION.fontSize)
 
             y -= alto_fila
 

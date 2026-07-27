@@ -28,14 +28,26 @@ class ProtocoloResponse(BaseModel):
     fecha_carga: datetime
 
 
-class MuestraParaCarga(BaseModel):
+class EnvioParaCarga(BaseModel):
+    id_envio: int
     id_muestra: int
     codigo_muestra: str
     erp_CODART: str
     erp_DESART: str
-    estado: str
+    laboratorio_nombre: str
+    estado_muestra: str
     ensayos: list[EnsayoParaCarga]
     protocolo: Optional[ProtocoloResponse] = None
+
+
+class EnvioPendienteResultados(BaseModel):
+    id_envio: int
+    nro_remito_interno: Optional[str] = None
+    codigo_muestra: str
+    erp_DESART: str
+    laboratorio_nombre: str
+    ensayos_pendientes: int
+    fecha_despacho: datetime
 
 
 class ResultadoInput(BaseModel):
@@ -45,6 +57,5 @@ class ResultadoInput(BaseModel):
 
 
 class GuardarResultadosResponse(BaseModel):
-    id_muestra: int
-    estado: str
+    id_envio: int
     hay_oos: bool

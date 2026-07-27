@@ -16,7 +16,7 @@ import os
 from datetime import date
 
 import pyodbc
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from app.core.security import get_current_user, require_rol
@@ -29,6 +29,19 @@ from app.services.erp_lotes import obtener_vencimiento_lote_produccion
 from app.services.pdf_remito import generar_pdf_remito
 
 router = APIRouter(prefix="/api/envios", tags=["Envíos"])
+
+
+def _a_fecha(valor):
+    """El driver ODBC no devuelve un tipo consistente para columnas DATE en
+    este entorno (a veces date/datetime, a veces str); se normaliza siempre
+    a date antes de operar."""
+    if valor is None:
+        return None
+    if isinstance(valor, date):
+        return valor
+    if hasattr(valor, "date"):
+        return valor.date()
+    return date.fromisoformat(str(valor))
 
 
 _SELECT_DATOS_REMITO = """
@@ -85,6 +98,9 @@ def _fila_a_remito_pdf(fila) -> RemitoPdfResponse:
         url_descarga=f"/api/envios/{fila.id_envio}/remito",
         id_usuario_genera=fila.id_usuario,
         fecha_generacion=fila.fecha_generacion,
+        tiene_copia_firmada=bool(fila.pdf_copia_firmada),
+        fecha_recepcion=_a_fecha(fila.fecha_recepcion),
+        recibido_por=fila.recibido_por,
     )
 
 
@@ -177,4 +193,79 @@ def descargar_remito(
             "X-Remito-Numero": fila.nro_remito_interno,
             "X-Remito-Fecha": fila.fecha_generacion.isoformat(),
         },
+    )
+
+
+# ── Constancia de recepción (copia firmada por el laboratorio) ──────
+#
+# Mismo concepto y mismo patrón que ya existía para remitos de testigos
+# (ver testigos_remitos.py: adjuntar_copia_firmada/descargar_copia_firmada),
+# replicado acá para el remito de muestra. Como lims_remitos es append-only
+# (puede haber varias filas por envío), la recepción se aplica siempre sobre
+# la más reciente -- mismo criterio que descargar_remito de arriba.
+
+@router.post("/{id_envio}/remito/copia-firmada", response_model=RemitoPdfResponse)
+def adjuntar_copia_firmada(
+    id_envio: int,
+    fecha_recepcion: date = Form(...),
+    recibido_por: str = Form(..., min_length=1, max_length=100),
+    pdf_copia_firmada: UploadFile = File(...),
+    user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Se puede llamar de nuevo sobre el mismo remito para reemplazar la
+    copia ya adjunta (sube un archivo nuevo, pisa los datos)."""
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT TOP 1 * FROM lims_remitos WHERE id_envio = ? ORDER BY id_remito DESC",
+        id_envio,
+    )
+    fila = cursor.fetchone()
+    if not fila:
+        raise HTTPException(status_code=404, detail="Todavía no se generó un remito para este envío")
+
+    tenia_copia = bool(fila.pdf_copia_firmada)
+    ruta_pdf = storage.guardar_pdf_copia_firmada(pdf_copia_firmada, fila.nro_remito_interno)
+
+    cursor.execute(
+        """
+        UPDATE lims_remitos
+        SET pdf_copia_firmada = ?, fecha_recepcion = ?, recibido_por = ?
+        WHERE id_remito = ?
+        """,
+        ruta_pdf, str(fecha_recepcion), recibido_por, fila.id_remito,
+    )
+
+    audit.registrar(
+        conn, entidad="remito", accion="reemplazar_copia_firmada" if tenia_copia else "adjuntar_copia_firmada",
+        id_usuario=user["id_usuario"], id_entidad=fila.id_remito,
+        valor_nuevo={"fecha_recepcion": str(fecha_recepcion), "recibido_por": recibido_por},
+    )
+
+    cursor.execute("SELECT * FROM lims_remitos WHERE id_remito = ?", fila.id_remito)
+    return _fila_a_remito_pdf(cursor.fetchone())
+
+
+@router.get("/{id_envio}/remito/copia-firmada")
+def descargar_copia_firmada(
+    id_envio: int,
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT TOP 1 nro_remito_interno, pdf_copia_firmada FROM lims_remitos WHERE id_envio = ? ORDER BY id_remito DESC",
+        id_envio,
+    )
+    fila = cursor.fetchone()
+    if not fila or not fila.pdf_copia_firmada:
+        raise HTTPException(status_code=404, detail="Este remito no tiene copia firmada adjunta")
+
+    ruta = storage.ruta_absoluta(fila.pdf_copia_firmada)
+    if not os.path.exists(ruta):
+        raise HTTPException(status_code=404, detail="El archivo no se encuentra en el servidor")
+
+    return FileResponse(
+        ruta, media_type="application/pdf",
+        filename=f"LIMSS_{fila.nro_remito_interno}_FIRMADO.pdf",
     )

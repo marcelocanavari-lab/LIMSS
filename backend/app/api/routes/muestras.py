@@ -27,14 +27,18 @@ from app.schemas.muestras import (
     MaterialEncontrado,
     MuestraCreate,
     MuestraResponse,
+    MuestraUpdate,
+    ProtocoloEnvio,
     RemitoResponse,
     TestigoEnviado,
     TestigoRemito,
 )
+from app.schemas.recorrido import RecorridoResponse
 from app.services import audit
 from app.services.erp_ir import buscar_lineas_ir, formatear_nro_ir
 from app.services.erp_lotes import buscar_lote
-from app.services.erp_materiales import CODSAR_POR_TIPO
+from app.services.erp_materiales import obtener_codsar_por_tipo
+from app.services.recorrido import construir_recorrido
 
 router = APIRouter(prefix="/api/muestras", tags=["Muestras y Envíos"])
 
@@ -71,6 +75,7 @@ def _fila_a_muestra(row) -> MuestraResponse:
         id_muestra=row.id_muestra,
         codigo_muestra=row.codigo_muestra,
         tipo_referencia=row.tipo_referencia,
+        tipo_material=row.tipo_material,
         nro_referencia=row.nro_referencia,
         erp_IdM21=row.erp_IdM21,
         erp_CODART=row.erp_CODART,
@@ -259,6 +264,7 @@ def buscar_material(
     referencia: str = Query(..., min_length=1),
     user: dict = Depends(require_rol("muestreador", "analista_qc", "qa", "admin")),
     erp: pyodbc.Connection = Depends(erp_db),
+    conn: pyodbc.Connection = Depends(limss_db),
 ):
     """Búsqueda unificada por tipo: Materia Prima se busca por IR en el ERP
     (GIN01CPB); el resto (Granel/Semi-Elaborado/Producto Terminado) se busca
@@ -281,7 +287,7 @@ def buscar_material(
             for r in rows
         ]
 
-    rows = buscar_lote(erp, CODSAR_POR_TIPO[tipo], referencia)
+    rows = buscar_lote(erp, obtener_codsar_por_tipo(conn)[tipo], referencia)
     if not rows:
         raise HTTPException(status_code=404, detail=f"No se encontró el lote '{referencia}' en el ERP para este tipo de material")
     return [
@@ -327,12 +333,12 @@ def crear_muestra(
     cursor.execute(
         """
         INSERT INTO lims_muestras
-            (codigo_muestra, tipo_referencia, nro_referencia, erp_IdM21, erp_CODART, erp_DESART,
+            (codigo_muestra, tipo_referencia, tipo_material, nro_referencia, erp_IdM21, erp_CODART, erp_DESART,
              erp_cantidad_lote, erp_proveedor, cantidad_enviada, unidad_enviada, id_especificacion, estado,
              id_usuario_muestreo, observaciones)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente_envio', ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente_envio', ?, ?)
         """,
-        codigo_muestra, body.tipo_referencia, body.nro_referencia, body.erp_IdM21, body.erp_CODART, body.erp_DESART,
+        codigo_muestra, body.tipo_referencia, body.tipo_material, body.nro_referencia, body.erp_IdM21, body.erp_CODART, body.erp_DESART,
         body.erp_cantidad_lote, body.erp_proveedor, cantidad_enviada, unidad_enviada, id_especificacion,
         user["id_usuario"], body.observaciones,
     )
@@ -353,28 +359,68 @@ def crear_muestra(
 def listar_muestras(
     estado: Optional[str] = Query(None),
     buscar: str = Query(""),
+    mio: Optional[bool] = Query(None, description="Si es true, solo las muestras creadas por el usuario logueado"),
+    tipo_material: Optional[str] = Query(None, description="Filtra por lims_muestras.tipo_material"),
+    fecha_desde: Optional[date] = Query(None),
+    fecha_hasta: Optional[date] = Query(None),
+    id_laboratorio: Optional[int] = Query(None, description="Solo muestras que tengan algún envío a este laboratorio"),
     user: dict = Depends(get_current_user),
     conn: pyodbc.Connection = Depends(limss_db),
 ):
+    """Listado general de muestras (ConsultaMuestrasPage) con filtros
+    opcionales; con mio=true queda acotado a "mis muestras" (MuestrasPage,
+    Etapa 1 del flujo)."""
     cursor = conn.cursor()
     like = f"%{buscar}%"
+    condiciones = ["(m.codigo_muestra LIKE ? OR m.nro_referencia LIKE ? OR m.erp_CODART LIKE ? OR m.erp_DESART LIKE ?)"]
+    params: list = [like, like, like, like]
+
     if estado:
-        cursor.execute(
-            _SELECT_MUESTRA + """
-            WHERE m.estado = ?
-              AND (m.codigo_muestra LIKE ? OR m.nro_referencia LIKE ? OR m.erp_CODART LIKE ? OR m.erp_DESART LIKE ?)
-            ORDER BY m.fecha_muestreo DESC
-            """,
-            estado, like, like, like, like,
+        condiciones.append("m.estado = ?")
+        params.append(estado)
+    if mio:
+        condiciones.append("m.id_usuario_muestreo = ?")
+        params.append(user["id_usuario"])
+    if tipo_material:
+        condiciones.append("m.tipo_material = ?")
+        params.append(tipo_material)
+    if fecha_desde:
+        condiciones.append("m.fecha_muestreo >= ?")
+        params.append(fecha_desde)
+    if fecha_hasta:
+        condiciones.append("m.fecha_muestreo < DATEADD(day, 1, ?)")
+        params.append(fecha_hasta)
+    if id_laboratorio:
+        condiciones.append(
+            "EXISTS (SELECT 1 FROM lims_envios e WHERE e.id_muestra = m.id_muestra AND e.id_laboratorio = ?)"
         )
-    else:
-        cursor.execute(
-            _SELECT_MUESTRA + """
-            WHERE m.codigo_muestra LIKE ? OR m.nro_referencia LIKE ? OR m.erp_CODART LIKE ? OR m.erp_DESART LIKE ?
-            ORDER BY m.fecha_muestreo DESC
-            """,
-            like, like, like, like,
-        )
+        params.append(id_laboratorio)
+
+    cursor.execute(
+        _SELECT_MUESTRA + " WHERE " + " AND ".join(condiciones) + " ORDER BY m.fecha_muestreo DESC",
+        *params,
+    )
+    return [_fila_a_muestra(r) for r in cursor.fetchall()]
+
+
+@router.get("/pendientes-envio", response_model=list[MuestraResponse])
+def listar_pendientes_envio(
+    buscar: str = Query(""),
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Bandeja de Envío de Muestras (Etapas 2/3): muestras que todavía
+    admiten crear un nuevo envío o cargar resultados de los que ya tiene."""
+    cursor = conn.cursor()
+    like = f"%{buscar}%"
+    cursor.execute(
+        _SELECT_MUESTRA + """
+        WHERE m.estado IN ('pendiente_envio', 'en_análisis')
+          AND (m.codigo_muestra LIKE ? OR m.nro_referencia LIKE ? OR m.erp_CODART LIKE ? OR m.erp_DESART LIKE ?)
+        ORDER BY m.fecha_muestreo DESC
+        """,
+        like, like, like, like,
+    )
     return [_fila_a_muestra(r) for r in cursor.fetchall()]
 
 
@@ -390,6 +436,53 @@ def detalle_muestra(
     if not row:
         raise HTTPException(status_code=404, detail="Muestra no encontrada")
     return _fila_a_muestra(row)
+
+
+@router.patch("/{id_muestra}", response_model=MuestraResponse)
+def editar_muestra(
+    id_muestra: int,
+    body: MuestraUpdate,
+    user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Edición post-ingreso, limitada a tipo_material y observaciones --
+    todo lo demás (datos del ERP, estado del flujo) es de solo lectura acá,
+    se toca únicamente a través de sus propios endpoints/flujos."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM lims_muestras WHERE id_muestra = ?", id_muestra)
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Muestra no encontrada")
+
+    sets = []
+    params = []
+    valor_anterior = {}
+    valor_nuevo = {}
+
+    if body.tipo_material is not None and body.tipo_material != row.tipo_material:
+        sets.append("tipo_material = ?")
+        params.append(body.tipo_material)
+        valor_anterior["tipo_material"] = row.tipo_material
+        valor_nuevo["tipo_material"] = body.tipo_material
+
+    if body.observaciones is not None and body.observaciones != (row.observaciones or ""):
+        sets.append("observaciones = ?")
+        params.append(body.observaciones)
+        valor_anterior["observaciones"] = row.observaciones
+        valor_nuevo["observaciones"] = body.observaciones
+
+    if sets:
+        params.append(id_muestra)
+        cursor.execute(f"UPDATE lims_muestras SET {', '.join(sets)} WHERE id_muestra = ?", *params)
+
+        audit.registrar(
+            conn, entidad="muestra", accion="edicion_muestra",
+            id_usuario=user["id_usuario"], id_entidad=id_muestra,
+            valor_anterior=valor_anterior, valor_nuevo=valor_nuevo,
+        )
+
+    cursor.execute(_SELECT_MUESTRA + " WHERE m.id_muestra = ?", id_muestra)
+    return _fila_a_muestra(cursor.fetchone())
 
 
 # ── Envío a laboratorio externo (REQ-ENV-004/005) ─────────────────
@@ -433,22 +526,25 @@ def ensayos_para_envio(
     ]
 
 
-@router.post("/{id_muestra}/envio", response_model=EnvioResponse, status_code=201)
+@router.post("/{id_muestra}/envios", response_model=EnvioResponse, status_code=201)
 def confirmar_envio(
     id_muestra: int,
     body: EnvioCreate,
     user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
     conn: pyodbc.Connection = Depends(limss_db),
 ):
+    """Una muestra puede tener múltiples envíos (a distintos laboratorios,
+    con distintos ensayos cada uno) mientras esté 'pendiente_envio' o ya
+    'en_análisis' -- solo se bloquea una vez dictaminada."""
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM lims_muestras WHERE id_muestra = ?", id_muestra)
     muestra = cursor.fetchone()
     if not muestra:
         raise HTTPException(status_code=404, detail="Muestra no encontrada")
-    if muestra.estado != "pendiente_envio":
+    if muestra.estado not in ("pendiente_envio", "en_análisis"):
         raise HTTPException(
             status_code=409,
-            detail=f"La muestra está en estado '{muestra.estado}', no se puede confirmar el envío",
+            detail=f"La muestra está en estado '{muestra.estado}', no se puede confirmar un envío",
         )
 
     cursor.execute(
@@ -463,7 +559,7 @@ def confirmar_envio(
         placeholders = ",".join("?" * len(ids_espec_ensayo))
         cursor.execute(
             f"""
-            SELECT se.id_espec_ensayo, m.nombre_ensayo, se.requerido_por_defecto, se.id_laboratorio, lab.nombre AS laboratorio_nombre
+            SELECT se.id_espec_ensayo, m.nombre_ensayo, se.requerido_por_defecto, se.obligatorio, se.id_laboratorio, lab.nombre AS laboratorio_nombre
             FROM lims_especificacion_ensayos se
             INNER JOIN lims_ensayos_maestro m ON m.id_ensayo_maestro = se.id_ensayo_maestro
             LEFT JOIN lims_laboratorios lab ON lab.id_laboratorio = se.id_laboratorio
@@ -478,17 +574,20 @@ def confirmar_envio(
                 detail="Alguno de los ensayos indicados no pertenece a la especificación de la muestra",
             )
     else:
-        # Sin lista explícita: se solicitan los ensayos que tienen laboratorio
-        # asignado (son los que efectivamente se pueden derivar a un lab externo).
+        # Sin lista explícita: se solicitan los ensayos de la especificación
+        # asignados justamente al laboratorio elegido para ESTE envío -- antes
+        # de soportar múltiples envíos esto no importaba tanto (un solo lab
+        # por muestra), pero con varios envíos a labs distintos hay que
+        # filtrar, si no un envío terminaría llevándose ensayos de otro lab.
         cursor.execute(
             """
-            SELECT se.id_espec_ensayo, m.nombre_ensayo, se.requerido_por_defecto, se.id_laboratorio, lab.nombre AS laboratorio_nombre
+            SELECT se.id_espec_ensayo, m.nombre_ensayo, se.requerido_por_defecto, se.obligatorio, se.id_laboratorio, lab.nombre AS laboratorio_nombre
             FROM lims_especificacion_ensayos se
             INNER JOIN lims_ensayos_maestro m ON m.id_ensayo_maestro = se.id_ensayo_maestro
             LEFT JOIN lims_laboratorios lab ON lab.id_laboratorio = se.id_laboratorio
-            WHERE se.id_especificacion = ? AND se.id_laboratorio IS NOT NULL
+            WHERE se.id_especificacion = ? AND se.id_laboratorio = ?
             """,
-            muestra.id_especificacion,
+            muestra.id_especificacion, body.id_laboratorio,
         )
         ensayos_elegidos = cursor.fetchall()
 
@@ -567,7 +666,8 @@ def confirmar_envio(
             id_testigo=testigo.id_testigo, codigo=testigo.codigo, nombre=testigo.nombre, nro_ir=testigo.nro_ir,
         ))
 
-    cursor.execute("UPDATE lims_muestras SET estado = 'en_transito' WHERE id_muestra = ?", id_muestra)
+    if muestra.estado == "pendiente_envio":
+        cursor.execute("UPDATE lims_muestras SET estado = 'en_análisis' WHERE id_muestra = ?", id_muestra)
 
     audit.registrar(
         conn, entidad="envio", accion="confirmar",
@@ -575,12 +675,16 @@ def confirmar_envio(
         valor_nuevo={"id_muestra": id_muestra, "id_laboratorio": body.id_laboratorio},
     )
 
+    cursor.execute("SELECT nombre FROM lims_laboratorios WHERE id_laboratorio = ?", body.id_laboratorio)
+    laboratorio_nombre = cursor.fetchone().nombre
+
     cursor.execute("SELECT * FROM lims_envios WHERE id_envio = ?", id_envio)
     row = cursor.fetchone()
     return EnvioResponse(
         id_envio=row.id_envio,
         id_muestra=row.id_muestra,
         id_laboratorio=row.id_laboratorio,
+        laboratorio_nombre=laboratorio_nombre,
         testigos=testigos_enviados,
         fecha_despacho=row.fecha_despacho,
         temperatura_transporte=row.temperatura_transporte,
@@ -595,21 +699,28 @@ def confirmar_envio(
             EnsayoSolicitado(
                 id_espec_ensayo=e.id_espec_ensayo, nombre_ensayo=e.nombre_ensayo,
                 requerido_por_defecto=bool(e.requerido_por_defecto),
+                obligatorio=bool(e.obligatorio),
                 id_laboratorio=e.id_laboratorio, laboratorio_nombre=e.laboratorio_nombre,
             )
             for e in ensayos_elegidos
         ],
+        completo=False,
     )
 
 
 def _obtener_ensayos_solicitados(cursor, id_envio: int) -> list[EnsayoSolicitado]:
+    """Ensayos pedidos para un envío, con su resultado ya cargado si lo hay
+    (join por id_envio -- cada envío tiene sus propios resultados, ver
+    migrations_flujo_envios_multiples.sql)."""
     cursor.execute(
         """
-        SELECT se.id_espec_ensayo, m.nombre_ensayo, se.requerido_por_defecto, se.id_laboratorio, lab.nombre AS laboratorio_nombre
+        SELECT se.id_espec_ensayo, m.nombre_ensayo, se.requerido_por_defecto, se.id_laboratorio, lab.nombre AS laboratorio_nombre,
+               se.obligatorio, r.valor_numerico, r.valor_cualitativo, r.dentro_especificacion
         FROM lims_envio_ensayos ee
         INNER JOIN lims_especificacion_ensayos se ON se.id_espec_ensayo = ee.id_espec_ensayo
         INNER JOIN lims_ensayos_maestro m ON m.id_ensayo_maestro = se.id_ensayo_maestro
         LEFT JOIN lims_laboratorios lab ON lab.id_laboratorio = se.id_laboratorio
+        LEFT JOIN lims_resultados r ON r.id_espec_ensayo = ee.id_espec_ensayo AND r.id_envio = ee.id_envio
         WHERE ee.id_envio = ?
         ORDER BY se.orden
         """,
@@ -620,9 +731,40 @@ def _obtener_ensayos_solicitados(cursor, id_envio: int) -> list[EnsayoSolicitado
             id_espec_ensayo=e.id_espec_ensayo, nombre_ensayo=e.nombre_ensayo,
             requerido_por_defecto=bool(e.requerido_por_defecto),
             id_laboratorio=e.id_laboratorio, laboratorio_nombre=e.laboratorio_nombre,
+            obligatorio=bool(e.obligatorio),
+            valor_numerico=float(e.valor_numerico) if e.valor_numerico is not None else None,
+            valor_cualitativo=e.valor_cualitativo,
+            dentro_especificacion=bool(e.dentro_especificacion) if e.dentro_especificacion is not None else None,
         )
         for e in cursor.fetchall()
     ]
+
+
+def _envio_completo(ensayos: list[EnsayoSolicitado]) -> bool:
+    """True si todos los ensayos obligatorios del envío ya tienen resultado
+    cargado -- mismo criterio que la validación de guardado en envios.py."""
+    return all(
+        (e.valor_numerico is not None or bool((e.valor_cualitativo or "").strip()))
+        for e in ensayos
+        if e.obligatorio
+    )
+
+
+def _obtener_protocolo_envio(cursor, id_envio: int) -> Optional[ProtocoloEnvio]:
+    cursor.execute(
+        "SELECT * FROM lims_protocolos WHERE id_envio = ? ORDER BY fecha_carga DESC",
+        id_envio,
+    )
+    p = cursor.fetchone()
+    if not p:
+        return None
+    return ProtocoloEnvio(
+        id_protocolo=p.id_protocolo,
+        nro_protocolo_ext=p.nro_protocolo_ext,
+        fecha_emision=p.fecha_emision,
+        pdf_nombre_original=p.pdf_nombre_original,
+        fecha_carga=p.fecha_carga,
+    )
 
 
 def _obtener_testigos_enviados(cursor, id_envio: int) -> list[TestigoEnviado]:
@@ -644,40 +786,55 @@ def _obtener_testigos_enviados(cursor, id_envio: int) -> list[TestigoEnviado]:
     ]
 
 
-@router.get("/{id_muestra}/envio", response_model=EnvioResponse)
-def obtener_envio(
+@router.get("/{id_muestra}/envios", response_model=list[EnvioResponse])
+def listar_envios(
     id_muestra: int,
     user: dict = Depends(get_current_user),
     conn: pyodbc.Connection = Depends(limss_db),
 ):
+    """Todos los envíos de la muestra (posiblemente a distintos laboratorios),
+    cada uno con sus propios ensayos/resultados/protocolo -- reemplaza el
+    viejo GET .../envio (singular, tomaba solo el más reciente)."""
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT TOP 1 * FROM lims_envios WHERE id_muestra = ? ORDER BY id_envio DESC",
+        """
+        SELECT e.*, lab.nombre AS laboratorio_nombre
+        FROM lims_envios e
+        INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = e.id_laboratorio
+        WHERE e.id_muestra = ?
+        ORDER BY e.id_envio
+        """,
         id_muestra,
     )
-    row = cursor.fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="La muestra no tiene un envío confirmado todavía")
+    filas = cursor.fetchall()
 
-    return EnvioResponse(
-        id_envio=row.id_envio,
-        id_muestra=row.id_muestra,
-        id_laboratorio=row.id_laboratorio,
-        testigos=_obtener_testigos_enviados(cursor, row.id_envio),
-        fecha_despacho=row.fecha_despacho,
-        temperatura_transporte=row.temperatura_transporte,
-        nro_remito=row.nro_remito,
-        transportista=row.transportista,
-        analisis_solicitados=row.analisis_solicitados,
-        protocolo_utilizar=row.protocolo_utilizar,
-        id_usuario_envio=row.id_usuario_envio,
-        ensayos_solicitados=_obtener_ensayos_solicitados(cursor, row.id_envio),
-    )
+    envios = []
+    for row in filas:
+        ensayos = _obtener_ensayos_solicitados(cursor, row.id_envio)
+        envios.append(EnvioResponse(
+            id_envio=row.id_envio,
+            id_muestra=row.id_muestra,
+            id_laboratorio=row.id_laboratorio,
+            laboratorio_nombre=row.laboratorio_nombre,
+            testigos=_obtener_testigos_enviados(cursor, row.id_envio),
+            fecha_despacho=row.fecha_despacho,
+            temperatura_transporte=row.temperatura_transporte,
+            nro_remito=row.nro_remito,
+            transportista=row.transportista,
+            analisis_solicitados=row.analisis_solicitados,
+            protocolo_utilizar=row.protocolo_utilizar,
+            id_usuario_envio=row.id_usuario_envio,
+            ensayos_solicitados=ensayos,
+            protocolo=_obtener_protocolo_envio(cursor, row.id_envio),
+            completo=_envio_completo(ensayos),
+        ))
+    return envios
 
 
-@router.get("/{id_muestra}/remito", response_model=RemitoResponse)
+@router.get("/{id_muestra}/envios/{id_envio}/remito", response_model=RemitoResponse)
 def obtener_remito(
     id_muestra: int,
+    id_envio: int,
     user: dict = Depends(get_current_user),
     conn: pyodbc.Connection = Depends(limss_db),
 ):
@@ -696,13 +853,13 @@ def obtener_remito(
         INNER JOIN lims_envios e ON e.id_muestra = m.id_muestra
         INNER JOIN lims_usuarios u ON u.id_usuario = m.id_usuario_muestreo
         INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = e.id_laboratorio
-        WHERE m.id_muestra = ?
+        WHERE m.id_muestra = ? AND e.id_envio = ?
         """,
-        id_muestra,
+        id_muestra, id_envio,
     )
     row = cursor.fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="La muestra no tiene un envío confirmado todavía")
+        raise HTTPException(status_code=404, detail="Envío no encontrado para esta muestra")
 
     cursor.execute(
         """
@@ -722,7 +879,14 @@ def obtener_remito(
         for t in cursor.fetchall()
     ]
 
+    cursor.execute(
+        "SELECT TOP 1 * FROM lims_remitos WHERE id_envio = ? ORDER BY id_remito DESC",
+        row.id_envio,
+    )
+    remito_pdf = cursor.fetchone()
+
     return RemitoResponse(
+        id_remito=remito_pdf.id_remito if remito_pdf else None,
         id_envio=row.id_envio,
         codigo_muestra=row.codigo_muestra,
         tipo_referencia=row.tipo_referencia,
@@ -744,7 +908,26 @@ def obtener_remito(
         protocolo_utilizar=row.protocolo_utilizar,
         ensayos_solicitados=_obtener_ensayos_solicitados(cursor, row.id_envio),
         testigos=testigos,
+        tiene_copia_firmada=bool(remito_pdf.pdf_copia_firmada) if remito_pdf else False,
+        fecha_recepcion=_a_fecha(remito_pdf.fecha_recepcion) if remito_pdf else None,
+        recibido_por=remito_pdf.recibido_por if remito_pdf else None,
     )
+
+
+@router.get("/{id_muestra}/recorrido", response_model=RecorridoResponse)
+def obtener_recorrido(
+    id_muestra: int,
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Reporte de recorrido completo de la muestra (ConsultaMuestrasPage,
+    punto 7): datos de la muestra + todos sus envíos con sus resultados +
+    dictamen final si ya se emitió."""
+    cursor = conn.cursor()
+    recorrido = construir_recorrido(cursor, id_muestra)
+    if not recorrido:
+        raise HTTPException(status_code=404, detail="Muestra no encontrada")
+    return recorrido
 
 
 # ── Etiquetas (REQ-ENV-003) ────────────────────────────────────────
