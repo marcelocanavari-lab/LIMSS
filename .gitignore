@@ -15,6 +15,9 @@ frontend/dist/
 # --- Claude Code local state ---
 .claude/
 
+# --- Archivos generados en runtime (remitos, protocolos, etc.) ---
+/storage/
+
 # --- OS ---
 .DS_Store
 Thumbs.db
