@@ -11,5 +11,4 @@ export const resultadosApi = {
     formData.append('protocolo_pdf', protocoloPdf);
     return api.postForm(`/api/envios/${idEnvio}/resultados`, formData);
   },
-  descargarProtocolo: (idEnvio) => api.getBlob(`/api/envios/${idEnvio}/protocolo`),
 };

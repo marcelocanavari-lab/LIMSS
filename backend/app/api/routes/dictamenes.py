@@ -38,9 +38,46 @@ router = APIRouter(prefix="/api/dictamen", tags=["Dictamen y Liberación"])
 # ── PARTE A: Bandeja de pendientes (REQ-DEC-001) ──────────────────
 #
 # Una muestra es apta para dictamen cuando TODOS los ensayos de TODOS sus
-# envíos ya tienen resultado cargado -- no hay un estado guardado para eso,
-# se calcula en el momento (NOT EXISTS: ningún envío con un ensayo sin
-# resultado) sobre las muestras 'en_análisis' que todavía no tienen dictamen.
+# envíos Y de su Orden de Trabajo (Solicitud de Muestreo, si tiene) ya
+# tienen resultado cargado -- no hay un estado guardado para eso, se calcula
+# en el momento sobre las muestras 'en_análisis' que todavía no tienen
+# dictamen. Se exige que exista AL MENOS un envío o una solicitud vinculada
+# (si no, los NOT EXISTS de completitud son ciertos por vacuidad y la
+# muestra aparecería como "pendiente" sin tener ningún análisis real
+# cargado).
+
+# Filtro de "apta para dictamen" -- reutilizado tal cual por el conteo del
+# dashboard (dashboard.py) para no duplicar esta lógica de completitud.
+WHERE_MUESTRA_PENDIENTE_DICTAMEN = """
+    m.estado = 'en_análisis'
+      AND NOT EXISTS (
+          SELECT 1 FROM lims_dictamenes d WHERE d.id_muestra = m.id_muestra
+      )
+      AND NOT EXISTS (
+          SELECT 1 FROM lims_envios e
+          INNER JOIN lims_envio_ensayos ee ON ee.id_envio = e.id_envio
+          LEFT JOIN lims_resultados r ON r.id_espec_ensayo = ee.id_espec_ensayo
+            AND r.id_envio = ee.id_envio
+          WHERE e.id_muestra = m.id_muestra
+            AND r.id_resultado IS NULL
+      )
+      AND NOT EXISTS (
+          -- Ensayos de la Orden de Trabajo (filtrados por el laboratorio
+          -- elegido al crear la solicitud, igual que ensayos-para-orden).
+          SELECT 1 FROM lims_solicitudes_muestreo s
+          INNER JOIN lims_especificacion_ensayos se ON se.id_especificacion = s.id_especificacion
+            AND se.id_laboratorio = s.id_laboratorio
+          LEFT JOIN lims_orden_trabajo_resultados otr ON otr.id_espec_ensayo = se.id_espec_ensayo
+            AND otr.id_solicitud = s.id_solicitud
+          WHERE s.id_muestra = m.id_muestra
+            AND otr.id_resultado IS NULL
+      )
+      AND (
+          EXISTS (SELECT 1 FROM lims_envios e3 WHERE e3.id_muestra = m.id_muestra)
+          OR EXISTS (SELECT 1 FROM lims_solicitudes_muestreo s3 WHERE s3.id_muestra = m.id_muestra)
+      )
+"""
+
 
 @router.get("/pendientes", response_model=list[DictamenPendienteResponse])
 def listar_pendientes(
@@ -49,24 +86,17 @@ def listar_pendientes(
 ):
     cursor = conn.cursor()
     cursor.execute(
-        """
+        f"""
         SELECT m.id_muestra, m.codigo_muestra, m.erp_CODART, m.erp_DESART, m.fecha_muestreo,
                (SELECT COUNT(*) FROM lims_envios e2 WHERE e2.id_muestra = m.id_muestra) AS cantidad_envios,
                (SELECT COUNT(*) FROM lims_resultados r
-                WHERE r.id_muestra = m.id_muestra AND r.dentro_especificacion = 0) AS cantidad_oos
+                WHERE r.id_muestra = m.id_muestra AND r.dentro_especificacion = 0)
+               +
+               (SELECT COUNT(*) FROM lims_orden_trabajo_resultados otr
+                INNER JOIN lims_solicitudes_muestreo s2 ON s2.id_solicitud = otr.id_solicitud
+                WHERE s2.id_muestra = m.id_muestra AND otr.dentro_especificacion = 0) AS cantidad_oos
         FROM lims_muestras m
-        WHERE NOT EXISTS (
-            SELECT 1 FROM lims_envios e
-            INNER JOIN lims_envio_ensayos ee ON ee.id_envio = e.id_envio
-            LEFT JOIN lims_resultados r ON r.id_espec_ensayo = ee.id_espec_ensayo
-              AND r.id_envio = ee.id_envio
-            WHERE e.id_muestra = m.id_muestra
-              AND r.id_resultado IS NULL
-        )
-        AND m.estado = 'en_análisis'
-        AND NOT EXISTS (
-            SELECT 1 FROM lims_dictamenes d WHERE d.id_muestra = m.id_muestra
-        )
+        WHERE {WHERE_MUESTRA_PENDIENTE_DICTAMEN}
         ORDER BY m.fecha_muestreo ASC
         """
     )

@@ -137,6 +137,11 @@ def _dibujar_copia(
     campo("Nombre", _texto(datos.laboratorio_nombre))
     campo("Dirección", _texto(datos.laboratorio_direccion))
     campo("Contacto", _texto(datos.laboratorio_contacto))
+    if datos.contacto_nombre:
+        valor_aa = datos.contacto_nombre
+        if datos.contacto_cargo:
+            valor_aa += f" — {datos.contacto_cargo}"
+        campo("A/A", valor_aa)
 
     subtitulo("Muestra")
     campo("ID de Muestra", _texto(datos.codigo_muestra))

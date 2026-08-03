@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import TopBar from '../../components/TopBar';
 import { testigosRemitosApi } from '../../api/testigosRemitos';
-import { ApiError } from '../../api/client';
+import { ApiError, abrirPdfConAuth } from '../../api/client';
 
 function hoyISO() {
   return new Date().toISOString().slice(0, 10);
@@ -42,9 +42,7 @@ export default function RemitoTestigoDetallePage() {
 
   async function verPdf() {
     try {
-      const blob = await testigosRemitosApi.descargarPdf(id);
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
+      await abrirPdfConAuth(`/api/testigos/remitos/${id}/pdf`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo descargar el PDF');
     }
@@ -52,9 +50,7 @@ export default function RemitoTestigoDetallePage() {
 
   async function verCopiaFirmada() {
     try {
-      const blob = await testigosRemitosApi.descargarCopiaFirmada(id);
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
+      await abrirPdfConAuth(`/api/testigos/remitos/${id}/copia-firmada`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo descargar la copia firmada');
     }
@@ -111,7 +107,7 @@ export default function RemitoTestigoDetallePage() {
   if (error || !remito) {
     return (
       <div className="screen">
-        <TopBar titulo="Remito" subtitulo="Remitos de Testigos" onBack={() => navigate('/maestros/testigos/remitos')} />
+        <TopBar titulo="Remito" subtitulo="Remitos de Testigos" onBack={() => navigate(-1)} />
         <div className="screen-content">
           <div className="alert alert-danger">{error || 'No encontrado'}</div>
         </div>
@@ -121,7 +117,7 @@ export default function RemitoTestigoDetallePage() {
 
   return (
     <div className="screen">
-      <TopBar titulo={remito.nro_remito} subtitulo="Remitos de Testigos" onBack={() => navigate('/maestros/testigos/remitos')} />
+      <TopBar titulo={remito.nro_remito} subtitulo="Remitos de Testigos" onBack={() => navigate(-1)} />
       <div className="screen-content">
         <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
           <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Datos del remito</h2>

@@ -74,7 +74,7 @@ export default function AuditoriaPage() {
 
   return (
     <div className="screen">
-      <TopBar titulo="Auditoría" subtitulo="Administración" onBack={() => navigate('/menu')} />
+      <TopBar titulo="Auditoría" subtitulo="Administración" onBack={() => navigate(-1)} />
       <div className="screen-content">
         <div style={{ display: 'flex', gap: 'var(--sp-3)', marginBottom: 'var(--sp-4)', flexWrap: 'wrap', alignItems: 'center' }}>
           <input

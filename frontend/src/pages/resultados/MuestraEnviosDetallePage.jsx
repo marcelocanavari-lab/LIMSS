@@ -41,7 +41,7 @@ export default function MuestraEnviosDetallePage() {
   if (error || !muestra) {
     return (
       <div className="screen">
-        <TopBar titulo="Envíos" subtitulo="Envío de Muestras" onBack={() => navigate('/envios')} />
+        <TopBar titulo="Envíos" subtitulo="Envío de Muestras" onBack={() => navigate(-1)} />
         <div className="screen-content">
           <div className="alert alert-danger">{error || 'No encontrada'}</div>
         </div>
@@ -51,7 +51,7 @@ export default function MuestraEnviosDetallePage() {
 
   return (
     <div className="screen">
-      <TopBar titulo={muestra.codigo_muestra} subtitulo="Envío de Muestras" onBack={() => navigate('/envios')} />
+      <TopBar titulo={muestra.codigo_muestra} subtitulo="Envío de Muestras" onBack={() => navigate(-1)} />
       <div className="screen-content">
         <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
           <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--ink-2)', fontSize: 'var(--fs-sm)' }}>

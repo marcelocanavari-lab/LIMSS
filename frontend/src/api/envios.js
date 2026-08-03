@@ -6,7 +6,6 @@ export const enviosApi = {
   obtenerRemitoPdf: (idEnvio) => api.getBlobConMeta(`/api/envios/${idEnvio}/remito`),
 
   // Constancia de recepción (copia firmada por el laboratorio) -- mismo
-  // patrón que testigosRemitosApi.adjuntarCopiaFirmada/descargarCopiaFirmada.
+  // patrón que testigosRemitosApi.adjuntarCopiaFirmada.
   adjuntarCopiaFirmada: (idEnvio, formData) => api.postForm(`/api/envios/${idEnvio}/remito/copia-firmada`, formData),
-  descargarCopiaFirmada: (idEnvio) => api.getBlob(`/api/envios/${idEnvio}/remito/copia-firmada`),
 };

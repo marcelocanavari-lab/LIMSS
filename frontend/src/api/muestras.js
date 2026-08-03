@@ -13,6 +13,10 @@ export const muestrasApi = {
     return api.get(`/api/muestras/buscar-material?${params.toString()}`);
   },
 
+  // Proveedores del ERP (GIM02ANA, IdT04=2) -- buscador para el campo
+  // "Proveedor" de la Solicitud de Muestreo, ya no se autocompleta del IR.
+  buscarProveedoresErp: (buscar) => api.get(`/api/erp/proveedores?buscar=${encodeURIComponent(buscar)}`),
+
   // Muestras
   crearMuestra: (data) => api.post('/api/muestras/', data),
   listarMuestras: ({ estado, buscar = '', mio, tipoMaterial, fechaDesde, fechaHasta, idLaboratorio } = {}) => {
@@ -54,4 +58,12 @@ export const muestrasApi = {
   crearLaboratorio: (data) => api.post('/api/muestras/laboratorios', data),
   editarLaboratorio: (id, data) => api.put(`/api/muestras/laboratorios/${id}`, data),
   cambiarEstadoLaboratorio: (id, activo) => api.put(`/api/muestras/laboratorios/${id}/estado?activo=${activo}`),
+
+  // Contactos por laboratorio
+  listarContactos: (idLaboratorio) => api.get(`/api/muestras/laboratorios/${idLaboratorio}/contactos`),
+  crearContacto: (idLaboratorio, data) => api.post(`/api/muestras/laboratorios/${idLaboratorio}/contactos`, data),
+  editarContacto: (idLaboratorio, idContacto, data) =>
+    api.put(`/api/muestras/laboratorios/${idLaboratorio}/contactos/${idContacto}`, data),
+  eliminarContacto: (idLaboratorio, idContacto) =>
+    api.del(`/api/muestras/laboratorios/${idLaboratorio}/contactos/${idContacto}`),
 };

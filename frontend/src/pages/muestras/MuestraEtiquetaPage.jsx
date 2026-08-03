@@ -21,7 +21,7 @@ export default function MuestraEtiquetaPage() {
 
   return (
     <div className="screen">
-      <TopBar titulo="Etiqueta de muestra" subtitulo="Muestras" onBack={() => navigate(`/muestras/${id}`)} />
+      <TopBar titulo="Etiqueta de muestra" subtitulo="Muestras" onBack={() => navigate(-1)} />
       <div className="screen-content">
         <button className="btn btn-primary no-print" style={{ marginBottom: 'var(--sp-4)' }} onClick={() => window.print()}>
           Imprimir →

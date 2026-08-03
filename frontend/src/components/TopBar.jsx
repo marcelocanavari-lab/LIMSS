@@ -23,11 +23,11 @@ export default function TopBar({ titulo, subtitulo, onBack }) {
             ←
           </button>
         )}
-        <div className="topbar-mark">LX</div>
+        <img src="/isologo_lamar.png" alt="Laboratorio Lamar" className="topbar-logo" />
         <div>
           <div style={{ fontWeight: 600, fontSize: 'var(--fs-sm)' }}>{titulo}</div>
           {subtitulo && (
-            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--ink-2)' }}>
+            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--color-topbar-text)', opacity: 0.8 }}>
               {subtitulo}
             </div>
           )}

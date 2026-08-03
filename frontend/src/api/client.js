@@ -173,4 +173,16 @@ export const api = {
   getBlobConMeta: (path) => requestBlobConMeta(path),
 };
 
+/* Los PDFs sirven contra endpoints que requieren Authorization: Bearer -- una
+   navegación directa (href, window.open con la URL del backend) no manda ese
+   header, así que en tablets (sin sesión de cookies) el backend devuelve 401
+   y el visor de PDF del sistema operativo no puede mostrar nada. Se resuelve
+   trayendo el PDF ya autenticado como blob y abriendo esa URL local en su lugar. */
+export async function abrirPdfConAuth(path) {
+  const blob = await api.getBlob(path);
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
 export { ApiError };

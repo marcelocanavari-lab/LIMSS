@@ -3,10 +3,13 @@ import { AuthProvider } from './context/AuthContext';
 import PrivateRoute from './components/PrivateRoute';
 
 import LoginPage from './pages/LoginPage';
-import MenuPage from './pages/MenuPage';
+import DashboardPage from './pages/DashboardPage';
+import AdminMenuPage from './pages/AdminMenuPage';
 import UsuariosPage from './pages/UsuariosPage';
 import ErpConfigPage from './pages/ErpConfigPage';
 import AuditoriaPage from './pages/AuditoriaPage';
+import SolicitudesMuestreoPage from './pages/SolicitudesMuestreoPage';
+import MisSolicitudesPage from './pages/MisSolicitudesPage';
 import EspecificacionesPage from './pages/maestros/EspecificacionesPage';
 import EspecificacionFormPage from './pages/maestros/EspecificacionFormPage';
 import EspecificacionDetallePage from './pages/maestros/EspecificacionDetallePage';
@@ -31,6 +34,7 @@ import ResultadosPage from './pages/resultados/ResultadosPage';
 import MuestraEnviosDetallePage from './pages/resultados/MuestraEnviosDetallePage';
 import CargaResultadosBandejaPage from './pages/resultados/CargaResultadosBandejaPage';
 import CargaResultadosPage from './pages/resultados/CargaResultadosPage';
+import CargaResultadosOrdenTrabajoPage from './pages/resultados/CargaResultadosOrdenTrabajoPage';
 import DictamenesPage from './pages/dictamenes/DictamenesPage';
 import DictamenDetallePage from './pages/dictamenes/DictamenDetallePage';
 
@@ -49,9 +53,10 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
 
-          <Route path="/menu" element={<PrivateRoute roles={TODOS}><MenuPage /></PrivateRoute>} />
+          <Route path="/menu" element={<PrivateRoute roles={TODOS}><DashboardPage /></PrivateRoute>} />
 
           {/* ── Administración (solo admin) ─────────────────────── */}
+          <Route path="/admin" element={<PrivateRoute roles={ADMIN}><AdminMenuPage /></PrivateRoute>} />
           <Route path="/usuarios" element={<PrivateRoute roles={ADMIN}><UsuariosPage /></PrivateRoute>} />
           <Route path="/erp-config" element={<PrivateRoute roles={ADMIN}><ErpConfigPage /></PrivateRoute>} />
           <Route path="/auditoria" element={<PrivateRoute roles={ADMIN}><AuditoriaPage /></PrivateRoute>} />
@@ -75,6 +80,10 @@ export default function App() {
           <Route path="/muestras/laboratorios" element={<PrivateRoute roles={GESTION}><LaboratoriosPage /></PrivateRoute>} />
 
           {/* ── Muestras: alta y detalle, accesibles a los 4 roles ── */}
+          {/* Solicitudes de Muestreo: gestión (QA crea y asigna) es GESTION;
+              el muestreador tiene su propia bandeja en /mis-solicitudes-muestreo */}
+          <Route path="/solicitudes-muestreo" element={<PrivateRoute roles={GESTION}><SolicitudesMuestreoPage /></PrivateRoute>} />
+          <Route path="/mis-solicitudes-muestreo" element={<PrivateRoute roles={['muestreador']}><MisSolicitudesPage /></PrivateRoute>} />
           <Route path="/muestras/nueva" element={<PrivateRoute roles={TODOS}><MuestraNuevaPage /></PrivateRoute>} />
           <Route path="/muestras" element={<PrivateRoute roles={TODOS}><MuestrasPage /></PrivateRoute>} />
           <Route path="/muestras/:id" element={<PrivateRoute roles={TODOS}><MuestraDetallePage /></PrivateRoute>} />
@@ -89,6 +98,7 @@ export default function App() {
           {/* ── Carga de Resultados (analista_qc, qa, admin) ────── */}
           <Route path="/carga-resultados" element={<PrivateRoute roles={GESTION}><CargaResultadosBandejaPage /></PrivateRoute>} />
           <Route path="/envios/:idEnvio/resultados" element={<PrivateRoute roles={GESTION}><CargaResultadosPage /></PrivateRoute>} />
+          <Route path="/solicitudes-muestreo/:idSolicitud/orden-trabajo-digital" element={<PrivateRoute roles={TODOS}><CargaResultadosOrdenTrabajoPage /></PrivateRoute>} />
 
           {/* ── Consulta de Muestras (analista_qc, qa, admin) ───── */}
           <Route path="/consulta-muestras" element={<PrivateRoute roles={GESTION}><ConsultaMuestrasPage /></PrivateRoute>} />

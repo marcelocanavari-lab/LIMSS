@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     # Sesión
     session_timeout_minutes: int = 10
 
+    # API key para que el eBR sincronice usuarios (GET /api/auth/usuarios-ebr)
+    ebr_sync_api_key: str = ""
+
     # Storage de archivos (PDFs de testigos, protocolos, etc.)
     storage_path: str = r"\\LAMARSERVER\LIMSS\storage"
 

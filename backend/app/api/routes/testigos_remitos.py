@@ -60,10 +60,11 @@ def _generar_nro_remito(cursor) -> str:
 def _fila_a_remito_response(cursor, id_remito: int) -> RemitoTestigoResponse:
     cursor.execute(
         """
-        SELECT c.*, lab.nombre AS laboratorio_nombre,
+        SELECT c.*, lab.nombre AS laboratorio_nombre, ct.nombre AS contacto_nombre,
                (SELECT COUNT(*) FROM lims_remito_testigos_det d WHERE d.id_remito = c.id_remito) AS cantidad_testigos
         FROM lims_remito_testigos_cab c
         INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = c.id_laboratorio
+        LEFT JOIN lims_laboratorio_contactos ct ON ct.id_contacto = c.id_contacto
         WHERE c.id_remito = ?
         """,
         id_remito,
@@ -74,6 +75,8 @@ def _fila_a_remito_response(cursor, id_remito: int) -> RemitoTestigoResponse:
         nro_remito=row.nro_remito,
         id_laboratorio=row.id_laboratorio,
         laboratorio_nombre=row.laboratorio_nombre,
+        id_contacto=row.id_contacto,
+        contacto_nombre=row.contacto_nombre,
         fecha_envio=_a_fecha(row.fecha_envio),
         observaciones=row.observaciones,
         cantidad_testigos=row.cantidad_testigos,
@@ -90,10 +93,12 @@ def _obtener_remito_detalle(cursor, id_remito: int) -> RemitoTestigoDetalle:
         """
         SELECT c.*, lab.nombre AS laboratorio_nombre, lab.direccion AS laboratorio_direccion,
                lab.contacto AS laboratorio_contacto,
+               ct.nombre AS contacto_nombre, ct.cargo AS contacto_cargo,
                u.nombre + ' ' + u.apellido AS usuario_nombre
         FROM lims_remito_testigos_cab c
         INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = c.id_laboratorio
         INNER JOIN lims_usuarios u ON u.id_usuario = c.id_usuario
+        LEFT JOIN lims_laboratorio_contactos ct ON ct.id_contacto = c.id_contacto
         WHERE c.id_remito = ?
         """,
         id_remito,
@@ -125,7 +130,9 @@ def _obtener_remito_detalle(cursor, id_remito: int) -> RemitoTestigoDetalle:
     return RemitoTestigoDetalle(
         id_remito=row.id_remito, nro_remito=row.nro_remito, id_laboratorio=row.id_laboratorio,
         laboratorio_nombre=row.laboratorio_nombre, laboratorio_direccion=row.laboratorio_direccion,
-        laboratorio_contacto=row.laboratorio_contacto, fecha_envio=_a_fecha(row.fecha_envio),
+        laboratorio_contacto=row.laboratorio_contacto,
+        id_contacto=row.id_contacto, contacto_nombre=row.contacto_nombre, contacto_cargo=row.contacto_cargo,
+        fecha_envio=_a_fecha(row.fecha_envio),
         observaciones=row.observaciones, id_usuario=row.id_usuario, usuario_nombre=row.usuario_nombre,
         fecha_creacion=row.fecha_creacion,
         tiene_copia_firmada=bool(row.pdf_copia_firmada),
@@ -151,6 +158,19 @@ def crear_remito_testigos(
     if not laboratorio:
         raise HTTPException(status_code=404, detail="Laboratorio no encontrado o inactivo")
 
+    contacto = None
+    if body.id_contacto is not None:
+        cursor.execute(
+            "SELECT * FROM lims_laboratorio_contactos WHERE id_contacto = ? AND id_laboratorio = ? AND activo = 1",
+            body.id_contacto, body.id_laboratorio,
+        )
+        contacto = cursor.fetchone()
+        if not contacto:
+            raise HTTPException(
+                status_code=400,
+                detail="El contacto indicado no pertenece a este laboratorio o está inactivo",
+            )
+
     ids_pedidos = [item.id_testigo for item in body.testigos]
     if len(set(ids_pedidos)) != len(ids_pedidos):
         raise HTTPException(status_code=400, detail="No se puede repetir el mismo testigo en un remito")
@@ -172,16 +192,16 @@ def crear_remito_testigos(
 
     nro_remito = _generar_nro_remito(cursor)
 
-    pdf_bytes = generar_pdf_remito_testigo(laboratorio, body, nro_remito, testigos_detalle)
+    pdf_bytes = generar_pdf_remito_testigo(laboratorio, body, nro_remito, testigos_detalle, contacto)
     ruta_pdf = storage.guardar_pdf_remito_testigo(pdf_bytes, nro_remito)
 
     cursor.execute(
         """
         INSERT INTO lims_remito_testigos_cab
-            (nro_remito, id_laboratorio, fecha_envio, observaciones, pdf_path, id_usuario, fecha_creacion)
-        VALUES (?, ?, ?, ?, ?, ?, GETDATE())
+            (nro_remito, id_laboratorio, id_contacto, fecha_envio, observaciones, pdf_path, id_usuario, fecha_creacion)
+        VALUES (?, ?, ?, ?, ?, ?, ?, GETDATE())
         """,
-        nro_remito, body.id_laboratorio, str(body.fecha_envio), body.observaciones, ruta_pdf, user["id_usuario"],
+        nro_remito, body.id_laboratorio, body.id_contacto, str(body.fecha_envio), body.observaciones, ruta_pdf, user["id_usuario"],
     )
     cursor.execute("SELECT @@IDENTITY AS id")
     id_remito = int(cursor.fetchone().id)
@@ -231,10 +251,11 @@ def listar_remitos_testigos(
     if id_laboratorio:
         cursor.execute(
             """
-            SELECT c.*, lab.nombre AS laboratorio_nombre,
+            SELECT c.*, lab.nombre AS laboratorio_nombre, ct.nombre AS contacto_nombre,
                    (SELECT COUNT(*) FROM lims_remito_testigos_det d WHERE d.id_remito = c.id_remito) AS cantidad_testigos
             FROM lims_remito_testigos_cab c
             INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = c.id_laboratorio
+            LEFT JOIN lims_laboratorio_contactos ct ON ct.id_contacto = c.id_contacto
             WHERE c.id_laboratorio = ?
             ORDER BY c.fecha_creacion DESC
             """,
@@ -243,17 +264,19 @@ def listar_remitos_testigos(
     else:
         cursor.execute(
             """
-            SELECT c.*, lab.nombre AS laboratorio_nombre,
+            SELECT c.*, lab.nombre AS laboratorio_nombre, ct.nombre AS contacto_nombre,
                    (SELECT COUNT(*) FROM lims_remito_testigos_det d WHERE d.id_remito = c.id_remito) AS cantidad_testigos
             FROM lims_remito_testigos_cab c
             INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = c.id_laboratorio
+            LEFT JOIN lims_laboratorio_contactos ct ON ct.id_contacto = c.id_contacto
             ORDER BY c.fecha_creacion DESC
             """
         )
     return [
         RemitoTestigoResponse(
             id_remito=r.id_remito, nro_remito=r.nro_remito, id_laboratorio=r.id_laboratorio,
-            laboratorio_nombre=r.laboratorio_nombre, fecha_envio=_a_fecha(r.fecha_envio),
+            laboratorio_nombre=r.laboratorio_nombre, id_contacto=r.id_contacto, contacto_nombre=r.contacto_nombre,
+            fecha_envio=_a_fecha(r.fecha_envio),
             observaciones=r.observaciones, cantidad_testigos=r.cantidad_testigos,
             id_usuario=r.id_usuario, fecha_creacion=r.fecha_creacion,
             tiene_copia_firmada=bool(r.pdf_copia_firmada),

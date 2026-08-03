@@ -35,7 +35,7 @@ def _texto(valor) -> str:
     return str(valor)
 
 
-def _dibujar_copia(c: canvas.Canvas, laboratorio, remito, nro_remito: str, testigos: list, etiqueta_copia: str):
+def _dibujar_copia(c: canvas.Canvas, laboratorio, remito, nro_remito: str, testigos: list, etiqueta_copia: str, contacto=None):
     _, height = A4
     x = 2 * cm
     y = height - 2 * cm
@@ -78,6 +78,11 @@ def _dibujar_copia(c: canvas.Canvas, laboratorio, remito, nro_remito: str, testi
     campo("Dirección", _texto(laboratorio.direccion))
     campo("Email", _texto(laboratorio.email))
     campo("Teléfono", _texto(laboratorio.telefono))
+    if contacto is not None:
+        valor_aa = contacto.nombre
+        if contacto.cargo:
+            valor_aa += f" — {contacto.cargo}"
+        campo("A/A", valor_aa)
     campo("Fecha de envío", _fmt_fecha(remito.fecha_envio))
     if remito.observaciones:
         campo("Observaciones", _texto(remito.observaciones))
@@ -129,17 +134,18 @@ def _dibujar_copia(c: canvas.Canvas, laboratorio, remito, nro_remito: str, testi
     c.showPage()
 
 
-def generar_pdf_remito_testigo(laboratorio, remito, nro_remito: str, testigos: list) -> bytes:
+def generar_pdf_remito_testigo(laboratorio, remito, nro_remito: str, testigos: list, contacto=None) -> bytes:
     """`laboratorio`: fila de lims_laboratorios. `remito`: RemitoTestigoCreate.
     `testigos`: lista de tuplas (item: TestigoEnvioRemito, testigo: fila de lims_testigos).
+    `contacto`: fila de lims_laboratorio_contactos si se eligió uno, o None.
 
     El PDF resultante trae, en orden: copia ORIGINAL, copia DUPLICADO, y
     después una página por cada certificado analítico (pdf_certificado) de
     los testigos incluidos que tengan uno cargado."""
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
-    _dibujar_copia(c, laboratorio, remito, nro_remito, testigos, "ORIGINAL - Para el laboratorio")
-    _dibujar_copia(c, laboratorio, remito, nro_remito, testigos, "DUPLICADO - Para archivo interno")
+    _dibujar_copia(c, laboratorio, remito, nro_remito, testigos, "ORIGINAL - Para el laboratorio", contacto)
+    _dibujar_copia(c, laboratorio, remito, nro_remito, testigos, "DUPLICADO - Para archivo interno", contacto)
     c.save()
 
     writer = PdfWriter()

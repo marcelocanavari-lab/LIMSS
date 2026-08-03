@@ -31,6 +31,41 @@ function formatearEspecificacion(en) {
   return en.valor_requerido || en.especificacion_texto || '—';
 }
 
+const UNIDADES_MUESTRA = ['g', 'mg', 'ml', 'unidades'];
+
+function formatFechaVencimiento(iso) {
+  if (!iso) return 'Sin vencimiento';
+  const [anio, mes, dia] = iso.split('-');
+  return `${dia}/${mes}/${anio}`;
+}
+
+function BadgeEstadoTestigo({ testigo }) {
+  if (!testigo.fecha_vencimiento) return <span className="badge badge-neutral">Sin vencimiento</span>;
+  if (testigo.vencido) return <span className="badge badge-danger">Vencido</span>;
+  if (testigo.por_vencer) return <span className="badge badge-warn">Por vencer</span>;
+  return <span className="badge badge-ok">Normal</span>;
+}
+
+const BADGE_TIPO_MUESTRA = {
+  analisis: 'badge-info',
+  contramuestra: 'badge-warn',
+  testigo: 'badge-ok',
+};
+
+const LABEL_TIPO_MUESTRA = {
+  analisis: 'Análisis',
+  contramuestra: 'Contramuestra',
+  testigo: 'Testigo',
+};
+
+const MUESTRA_FORM_VACIO = {
+  tipo_muestra: 'analisis',
+  cantidad: '',
+  unidad: 'g',
+  genera_etiqueta: true,
+  id_laboratorio: '',
+};
+
 const ENSAYO_FORM_VACIO = {
   orden: 1,
   metodologia: '',
@@ -53,6 +88,7 @@ export default function EspecificacionDetallePage() {
 
   const [especificacion, setEspecificacion] = useState(null);
   const [ensayos, setEnsayos] = useState([]);
+  const [muestrasDefinidas, setMuestrasDefinidas] = useState([]);
   const [laboratorios, setLaboratorios] = useState([]);
   const [testigosAsociados, setTestigosAsociados] = useState([]);
   const [testigosDisponibles, setTestigosDisponibles] = useState([]);
@@ -71,6 +107,13 @@ export default function EspecificacionDetallePage() {
   const [formEnsayo, setFormEnsayo] = useState(ENSAYO_FORM_VACIO);
   const [errorEnsayo, setErrorEnsayo] = useState('');
   const [guardandoEnsayo, setGuardandoEnsayo] = useState(false);
+
+  // ── Modal de agregar/editar muestra definida ────────────────────
+  const [muestraModalAbierto, setMuestraModalAbierto] = useState(false);
+  const [editandoIdMuestra, setEditandoIdMuestra] = useState(null);
+  const [formMuestra, setFormMuestra] = useState(MUESTRA_FORM_VACIO);
+  const [errorMuestra, setErrorMuestra] = useState('');
+  const [guardandoMuestra, setGuardandoMuestra] = useState(false);
 
   // ── Modal de copiar como nueva especificación ───────────────────
   const [copiarModalAbierto, setCopiarModalAbierto] = useState(false);
@@ -93,11 +136,16 @@ export default function EspecificacionDetallePage() {
     return maestrosApi.listarEnsayosEspecificacion(id).then(setEnsayos);
   }
 
+  function cargarMuestrasDefinidas() {
+    return maestrosApi.listarMuestrasEspecificacion(id).then(setMuestrasDefinidas);
+  }
+
   useEffect(() => {
     setLoading(true);
     Promise.all([
       maestrosApi.obtenerEspecificacion(id).then(setEspecificacion),
       cargarEnsayos(),
+      cargarMuestrasDefinidas(),
       cargarTestigosAsociados(),
       maestrosApi.listarTestigos({ activo: true }).then(setTestigosDisponibles),
       muestrasApi.listarLaboratorios(true).then(setLaboratorios),
@@ -257,6 +305,70 @@ export default function EspecificacionDetallePage() {
     }
   }
 
+  function abrirAgregarMuestra() {
+    setEditandoIdMuestra(null);
+    setFormMuestra(MUESTRA_FORM_VACIO);
+    setErrorMuestra('');
+    setMuestraModalAbierto(true);
+  }
+
+  function abrirEditarMuestra(m) {
+    setEditandoIdMuestra(m.id);
+    setFormMuestra({
+      tipo_muestra: m.tipo_muestra,
+      cantidad: m.cantidad,
+      unidad: m.unidad,
+      genera_etiqueta: m.genera_etiqueta,
+      id_laboratorio: m.id_laboratorio ?? '',
+    });
+    setErrorMuestra('');
+    setMuestraModalAbierto(true);
+  }
+
+  function cerrarModalMuestra() {
+    setMuestraModalAbierto(false);
+  }
+
+  async function handleGuardarMuestra(e) {
+    e.preventDefault();
+    if (formMuestra.cantidad === '' || Number(formMuestra.cantidad) <= 0) {
+      setErrorMuestra('Ingresá una cantidad válida');
+      return;
+    }
+    const body = {
+      tipo_muestra: formMuestra.tipo_muestra,
+      cantidad: Number(formMuestra.cantidad),
+      unidad: formMuestra.unidad,
+      genera_etiqueta: formMuestra.genera_etiqueta,
+      id_laboratorio: formMuestra.id_laboratorio !== '' ? Number(formMuestra.id_laboratorio) : null,
+    };
+    setGuardandoMuestra(true);
+    setErrorMuestra('');
+    try {
+      if (editandoIdMuestra) {
+        await maestrosApi.editarMuestraEspecificacion(id, editandoIdMuestra, body);
+      } else {
+        await maestrosApi.crearMuestraEspecificacion(id, body);
+      }
+      await cargarMuestrasDefinidas();
+      setMuestraModalAbierto(false);
+    } catch (err) {
+      setErrorMuestra(err instanceof ApiError ? err.message : 'No se pudo guardar la muestra');
+    } finally {
+      setGuardandoMuestra(false);
+    }
+  }
+
+  async function handleEliminarMuestra(m) {
+    if (!window.confirm(`¿Eliminar esta muestra de tipo "${m.tipo_muestra}"?`)) return;
+    try {
+      await maestrosApi.eliminarMuestraEspecificacion(id, m.id);
+      await cargarMuestrasDefinidas();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo eliminar la muestra');
+    }
+  }
+
   function abrirCopiar() {
     setCopiarTipo(especificacion.tipo_material);
     setCopiarNombre(especificacion.erp_DESART);
@@ -325,7 +437,7 @@ export default function EspecificacionDetallePage() {
   if (error || !especificacion) {
     return (
       <div className="screen">
-        <TopBar titulo="Especificación" subtitulo="Datos Maestros" onBack={() => navigate('/maestros/especificaciones')} />
+        <TopBar titulo="Especificación" subtitulo="Datos Maestros" onBack={() => navigate(-1)} />
         <div className="screen-content">
           <div className="alert alert-danger">{error || 'No encontrada'}</div>
         </div>
@@ -335,7 +447,7 @@ export default function EspecificacionDetallePage() {
 
   return (
     <div className="screen">
-      <TopBar titulo={especificacion.erp_DESART} subtitulo="Ficha de especificación" onBack={() => navigate('/maestros/especificaciones')} />
+      <TopBar titulo={especificacion.erp_DESART} subtitulo="Ficha de especificación" onBack={() => navigate(-1)} />
       <div className="screen-content">
         <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--sp-3)' }}>
@@ -373,6 +485,56 @@ export default function EspecificacionDetallePage() {
             </div>
           )}
         </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--sp-3)' }}>
+          <h2 style={{ fontSize: 'var(--fs-lg)' }}>Muestras definidas ({muestrasDefinidas.length})</h2>
+          {puedeGestionar && (
+            <button className="btn btn-secondary" onClick={abrirAgregarMuestra}>
+              + Agregar muestra
+            </button>
+          )}
+        </div>
+        {muestrasDefinidas.length === 0 ? (
+          <div className="alert alert-warn" style={{ marginBottom: 'var(--sp-5)' }}>
+            Esta especificación no tiene muestras definidas. Configurá las muestras acá para que estén disponibles al generar una Solicitud de Muestreo.
+          </div>
+        ) : (
+          <table className="data-table data-table-compact" style={{ marginBottom: 'var(--sp-5)' }}>
+            <thead>
+              <tr>
+                <th>Tipo</th>
+                <th>Cantidad</th>
+                <th>Unidad</th>
+                <th>Genera etiqueta</th>
+                <th>Laboratorio</th>
+                {puedeGestionar && <th>Acciones</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {muestrasDefinidas.map((m) => (
+                <tr key={m.id}>
+                  <td>
+                    <span className={`badge ${BADGE_TIPO_MUESTRA[m.tipo_muestra] || 'badge-neutral'}`}>
+                      {LABEL_TIPO_MUESTRA[m.tipo_muestra] || m.tipo_muestra}
+                    </span>
+                  </td>
+                  <td className="num">{m.cantidad}</td>
+                  <td>{m.unidad}</td>
+                  <td>{m.genera_etiqueta ? '✓' : '—'}</td>
+                  <td>{m.laboratorio_nombre || 'Sin asignar'}</td>
+                  {puedeGestionar && (
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <button className="btn btn-ghost" onClick={() => abrirEditarMuestra(m)}>Editar</button>
+                      <button className="btn btn-ghost" style={{ color: 'var(--danger)', marginLeft: 'var(--sp-2)' }} onClick={() => handleEliminarMuestra(m)}>
+                        Eliminar
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--sp-3)' }}>
           <h2 style={{ fontSize: 'var(--fs-lg)' }}>Ensayos ({ensayos.length})</h2>
@@ -436,6 +598,9 @@ export default function EspecificacionDetallePage() {
                 <tr>
                   <th>Código</th>
                   <th>Nombre</th>
+                  <th>Vencimiento</th>
+                  <th>Estado</th>
+                  <th>Stock</th>
                   {puedeGestionar && <th></th>}
                 </tr>
               </thead>
@@ -444,6 +609,9 @@ export default function EspecificacionDetallePage() {
                   <tr key={t.id_testigo}>
                     <td style={{ textAlign: 'left', fontFamily: 'var(--font-mono)' }}>{t.codigo}</td>
                     <td style={{ textAlign: 'left' }}>{t.nombre}</td>
+                    <td style={{ textAlign: 'left' }}>{formatFechaVencimiento(t.fecha_vencimiento)}</td>
+                    <td style={{ textAlign: 'left' }}><BadgeEstadoTestigo testigo={t} /></td>
+                    <td style={{ textAlign: 'left' }}>{t.stock_actual != null ? `${t.stock_actual} ${t.unidad_medida || ''}` : '—'}</td>
                     {puedeGestionar && (
                       <td style={{ textAlign: 'left' }}>
                         <button className="btn btn-ghost" style={{ color: 'var(--danger)' }} onClick={() => handleDesasociarTestigo(t.id_testigo)}>
@@ -666,6 +834,102 @@ export default function EspecificacionDetallePage() {
               <button type="button" className="btn btn-ghost" onClick={cerrarModal} disabled={guardandoEnsayo}>Cancelar</button>
               <button type="submit" className="btn btn-primary" disabled={guardandoEnsayo || !ensayoMaestroElegido}>
                 {guardandoEnsayo ? <span className="spinner" /> : 'Guardar'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {muestraModalAbierto && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 'var(--sp-4)',
+          }}
+          onClick={cerrarModalMuestra}
+        >
+          <form
+            onSubmit={handleGuardarMuestra}
+            className="card"
+            style={{ width: '90%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>
+              {editandoIdMuestra ? 'Editar muestra' : 'Agregar muestra'}
+            </h2>
+
+            <div className="field">
+              <label className="field-label">Tipo</label>
+              <select
+                className="field-input"
+                value={formMuestra.tipo_muestra}
+                onChange={(e) => setFormMuestra((prev) => ({ ...prev, tipo_muestra: e.target.value }))}
+              >
+                <option value="analisis">Análisis</option>
+                <option value="contramuestra">Contramuestra</option>
+                <option value="testigo">Testigo</option>
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+              <div className="field" style={{ flex: 1 }}>
+                <label className="field-label">Cantidad</label>
+                <input
+                  className="field-input"
+                  type="number"
+                  step="any"
+                  value={formMuestra.cantidad}
+                  onChange={(e) => setFormMuestra((prev) => ({ ...prev, cantidad: e.target.value }))}
+                  disabled={guardandoMuestra}
+                  autoFocus
+                />
+              </div>
+              <div className="field" style={{ flex: 1 }}>
+                <label className="field-label">Unidad</label>
+                <select
+                  className="field-input"
+                  value={formMuestra.unidad}
+                  onChange={(e) => setFormMuestra((prev) => ({ ...prev, unidad: e.target.value }))}
+                  disabled={guardandoMuestra}
+                >
+                  {UNIDADES_MUESTRA.map((u) => (
+                    <option key={u} value={u}>{u}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="field">
+              <label className="field-label">Laboratorio</label>
+              <select
+                className="field-input"
+                value={formMuestra.id_laboratorio}
+                onChange={(e) => setFormMuestra((prev) => ({ ...prev, id_laboratorio: e.target.value }))}
+                disabled={guardandoMuestra}
+              >
+                <option value="">Sin asignar</option>
+                {laboratorios.map((lab) => (
+                  <option key={lab.id_laboratorio} value={lab.id_laboratorio}>{lab.nombre}</option>
+                ))}
+              </select>
+            </div>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', marginTop: 'var(--sp-2)', marginBottom: 'var(--sp-3)' }}>
+              <input
+                type="checkbox"
+                checked={formMuestra.genera_etiqueta}
+                onChange={(e) => setFormMuestra((prev) => ({ ...prev, genera_etiqueta: e.target.checked }))}
+                disabled={guardandoMuestra}
+              />
+              Genera etiqueta
+            </label>
+
+            {errorMuestra && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-3)' }}>{errorMuestra}</div>}
+
+            <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+              <button type="button" className="btn btn-ghost" onClick={cerrarModalMuestra} disabled={guardandoMuestra}>Cancelar</button>
+              <button type="submit" className="btn btn-primary" disabled={guardandoMuestra}>
+                {guardandoMuestra ? <span className="spinner" /> : 'Guardar'}
               </button>
             </div>
           </form>

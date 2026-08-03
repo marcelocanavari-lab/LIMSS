@@ -28,7 +28,7 @@ export default function DictamenesPage() {
 
   return (
     <div className="screen">
-      <TopBar titulo="Dictamen QA" subtitulo="Bandeja de dictámenes pendientes" onBack={() => navigate('/menu')} />
+      <TopBar titulo="Dictamen QA" subtitulo="Bandeja de dictámenes pendientes" onBack={() => navigate(-1)} />
       <div className="screen-content">
         <input
           className="field-input"

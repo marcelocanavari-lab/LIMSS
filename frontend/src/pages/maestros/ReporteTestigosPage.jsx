@@ -81,7 +81,7 @@ export default function ReporteTestigosPage() {
   if (!autorizado) {
     return (
       <div className="screen">
-        <TopBar titulo="Reporte de Testigos" subtitulo="Datos Maestros" onBack={() => navigate('/maestros/testigos')} />
+        <TopBar titulo="Reporte de Testigos" subtitulo="Datos Maestros" onBack={() => navigate(-1)} />
         <div className="screen-content">
           <div className="state-block">
             <span className="state-block-title">Acceso restringido</span>
@@ -94,7 +94,7 @@ export default function ReporteTestigosPage() {
 
   return (
     <div className="screen">
-      <TopBar titulo="Reporte de Testigos" subtitulo="Datos Maestros" onBack={() => navigate('/maestros/testigos')} />
+      <TopBar titulo="Reporte de Testigos" subtitulo="Datos Maestros" onBack={() => navigate(-1)} />
       <div className="screen-content">
         <div className="card no-print" style={{ marginBottom: 'var(--sp-5)' }}>
           <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Filtros</h2>

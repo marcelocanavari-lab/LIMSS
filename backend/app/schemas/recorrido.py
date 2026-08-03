@@ -11,6 +11,8 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import date, datetime
 
+from app.schemas.solicitudes_muestreo import DatosFisicosMuestreo
+
 
 class EnsayoResultado(BaseModel):
     id_espec_ensayo: int
@@ -59,16 +61,33 @@ class DictamenInfo(BaseModel):
     observaciones: Optional[str] = None
 
 
+class SolicitudRecorridoInfo(BaseModel):
+    nro_solicitud: str
+    usuario_qa_nombre: str
+    fecha_solicitud: datetime
+    proveedor_codigo: Optional[str] = None
+    proveedor_nombre: Optional[str] = None
+    datos_fisicos: DatosFisicosMuestreo
+
+
 class RecorridoResponse(BaseModel):
     id_muestra: int
     codigo_muestra: str
     erp_CODART: str
     erp_DESART: str
+    tipo_material: Optional[str] = None
+    erp_proveedor: Optional[str] = None
     tipo_referencia: str
     nro_referencia: str
     fecha_muestreo: datetime
     usuario_muestreo_nombre: str
     estado: str
+    solicitud: Optional[SolicitudRecorridoInfo] = None
     envios: list[EnvioDetalleInfo] = []
+    # Resultados de la Orden de Trabajo (Solicitud de Muestreo) -- no tiene
+    # dictamen propio, se integra acá al dictamen general de la muestra.
+    # Lista vacía si la muestra no tiene ninguna Solicitud de Muestreo
+    # vinculada.
+    resultados_orden_trabajo: list[EnsayoResultado] = []
     dictamen: Optional[DictamenInfo] = None
     hay_oos: bool = False

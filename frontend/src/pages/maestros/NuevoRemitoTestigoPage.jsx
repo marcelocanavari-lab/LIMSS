@@ -4,7 +4,7 @@ import TopBar from '../../components/TopBar';
 import { muestrasApi } from '../../api/muestras';
 import { maestrosApi } from '../../api/maestros';
 import { testigosRemitosApi } from '../../api/testigosRemitos';
-import { ApiError } from '../../api/client';
+import { ApiError, abrirPdfConAuth } from '../../api/client';
 
 function hoyISO() {
   const hoy = new Date();
@@ -22,6 +22,8 @@ export default function NuevoRemitoTestigoPage() {
   const [error, setError] = useState('');
 
   const [idLaboratorio, setIdLaboratorio] = useState('');
+  const [contactos, setContactos] = useState([]);
+  const [idContacto, setIdContacto] = useState('');
   const [fechaEnvio, setFechaEnvio] = useState(hoyISO());
   const [observaciones, setObservaciones] = useState('');
   const [idsSeleccionados, setIdsSeleccionados] = useState([]);
@@ -37,6 +39,18 @@ export default function NuevoRemitoTestigoPage() {
       .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudieron cargar los datos'))
       .finally(() => setCargando(false));
   }, []);
+
+  useEffect(() => {
+    setIdContacto('');
+    if (!idLaboratorio) {
+      setContactos([]);
+      return;
+    }
+    muestrasApi
+      .listarContactos(idLaboratorio)
+      .then(setContactos)
+      .catch(() => setContactos([]));
+  }, [idLaboratorio]);
 
   function toggleTestigo(idTestigo) {
     setIdsSeleccionados((prev) =>
@@ -76,15 +90,14 @@ export default function NuevoRemitoTestigoPage() {
     try {
       const remito = await testigosRemitosApi.crearRemito({
         id_laboratorio: Number(idLaboratorio),
+        id_contacto: idContacto ? Number(idContacto) : null,
         fecha_envio: fechaEnvio,
         observaciones: observaciones.trim() || null,
         testigos: items,
       });
 
       try {
-        const blob = await testigosRemitosApi.descargarPdf(remito.id_remito);
-        const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
+        await abrirPdfConAuth(`/api/testigos/remitos/${remito.id_remito}/pdf`);
       } catch {
         // el remito ya se generó igual; si falla la descarga del PDF no bloqueamos la navegación
       }
@@ -107,7 +120,7 @@ export default function NuevoRemitoTestigoPage() {
 
   return (
     <div className="screen">
-      <TopBar titulo="Nuevo remito de testigos" subtitulo="Datos Maestros" onBack={() => navigate('/maestros/testigos/remitos')} />
+      <TopBar titulo="Nuevo remito de testigos" subtitulo="Datos Maestros" onBack={() => navigate(-1)} />
       <div className="screen-content">
         <form onSubmit={handleSubmit}>
           <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
@@ -120,6 +133,20 @@ export default function NuevoRemitoTestigoPage() {
                 ))}
               </select>
             </div>
+
+            {contactos.length > 0 && (
+              <div className="field">
+                <label className="field-label" htmlFor="contacto">Dirigido a (opcional)</label>
+                <select id="contacto" className="field-input" value={idContacto} onChange={(e) => setIdContacto(e.target.value)} disabled={guardando}>
+                  <option value="">Sin especificar</option>
+                  {contactos.map((c) => (
+                    <option key={c.id_contacto} value={c.id_contacto}>
+                      {c.nombre}{c.cargo ? ` — ${c.cargo}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div className="field">
               <label className="field-label" htmlFor="fechaEnvio">Fecha de envío</label>

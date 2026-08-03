@@ -62,7 +62,7 @@ export default function ErpConfigPage() {
 
   return (
     <div className="screen">
-      <TopBar titulo="Configuración ERP" subtitulo="Administración" onBack={() => navigate('/menu')} />
+      <TopBar titulo="Configuración ERP" subtitulo="Administración" onBack={() => navigate(-1)} />
       <div className="screen-content">
         <p style={{ color: 'var(--ink-2)', marginBottom: 'var(--sp-4)' }}>
           Parámetros de la relación entre LIMSS y el ERP (mapeo de tipos de material a códigos CODSAR).

@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import TopBar from '../../components/TopBar';
 import { maestrosApi } from '../../api/maestros';
 import { testigosRemitosApi } from '../../api/testigosRemitos';
-import { ApiError } from '../../api/client';
+import { ApiError, abrirPdfConAuth } from '../../api/client';
 
 export default function TestigoDetallePage() {
   const { id } = useParams();
@@ -39,9 +39,7 @@ export default function TestigoDetallePage() {
 
   async function verCertificado() {
     try {
-      const blob = await maestrosApi.descargarCertificado(id);
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
+      await abrirPdfConAuth(`/api/maestros/testigos/${id}/certificado`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo descargar el certificado');
     }
@@ -88,7 +86,7 @@ export default function TestigoDetallePage() {
   if (error && !testigo) {
     return (
       <div className="screen">
-        <TopBar titulo="Testigo" subtitulo="Datos Maestros" onBack={() => navigate('/maestros/testigos')} />
+        <TopBar titulo="Testigo" subtitulo="Datos Maestros" onBack={() => navigate(-1)} />
         <div className="screen-content">
           <div className="alert alert-danger">{error}</div>
         </div>
@@ -98,7 +96,7 @@ export default function TestigoDetallePage() {
 
   return (
     <div className="screen">
-      <TopBar titulo={testigo.nombre} subtitulo={testigo.codigo} onBack={() => navigate('/maestros/testigos')} />
+      <TopBar titulo={testigo.nombre} subtitulo={testigo.codigo} onBack={() => navigate(-1)} />
       <div className="screen-content">
         {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}
 
@@ -119,6 +117,7 @@ export default function TestigoDetallePage() {
               <tr><td>Vencimiento</td><td className="num" style={{ textAlign: 'left' }}>{testigo.fecha_vencimiento}</td></tr>
               <tr><td>Stock actual</td><td className="num" style={{ textAlign: 'left' }}>{testigo.stock_actual} {testigo.unidad_medida || ''}</td></tr>
               <tr><td>Stock mínimo</td><td className="num" style={{ textAlign: 'left' }}>{testigo.stock_minimo} {testigo.unidad_medida || ''}</td></tr>
+              <tr><td>Laboratorio asignado</td><td style={{ textAlign: 'left' }}>{testigo.laboratorio_nombre || 'Sin asignar'}</td></tr>
               <tr><td>Observaciones</td><td style={{ textAlign: 'left' }}>{testigo.observaciones || '—'}</td></tr>
             </tbody>
           </table>

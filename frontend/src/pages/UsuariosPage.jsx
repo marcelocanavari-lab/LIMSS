@@ -23,7 +23,32 @@ function labelRol(rol) {
   return ROLES.find((r) => r.value === rol)?.label || rol;
 }
 
-const FORM_VACIO = { codigo: '', nombre: '', apellido: '', pin: '', rol: 'muestreador' };
+// Rol del usuario en el eBR -- sistema separado del LIMSS, con sus propios
+// niveles de acceso. value: '' es el sentinel de "Sin acceso" en el <select>;
+// se convierte a null antes de mandarlo al backend.
+const ROLES_EBR = [
+  { value: '', label: 'Sin acceso' },
+  { value: 'operario', label: 'Operario' },
+  { value: 'supervisor', label: 'Supervisor' },
+  { value: 'qa', label: 'QA' },
+  { value: 'admin', label: 'Admin' },
+];
+
+const BADGE_ROL_EBR = {
+  operario: 'badge-neutral',
+  supervisor: 'badge-info',
+  qa: 'badge-warn',
+  admin: 'badge-ok',
+};
+
+function labelRolEbr(rolEbr) {
+  return ROLES_EBR.find((r) => r.value === rolEbr)?.label || rolEbr;
+}
+
+const FORM_VACIO = {
+  codigo: '', nombre: '', apellido: '', pin: '', rol: 'muestreador',
+  rolEbr: '', activoEbr: true,
+};
 
 export default function UsuariosPage() {
   const { user } = useAuth();
@@ -70,7 +95,10 @@ export default function UsuariosPage() {
 
   function abrirEdicion(u) {
     setEditandoId(u.id_usuario);
-    setForm({ codigo: u.codigo, nombre: u.nombre, apellido: u.apellido, pin: '', rol: u.rol });
+    setForm({
+      codigo: u.codigo, nombre: u.nombre, apellido: u.apellido, pin: '', rol: u.rol,
+      rolEbr: u.rol_ebr || '', activoEbr: u.rol_ebr ? u.activo_ebr : true,
+    });
     setFormError('');
     setMostrarForm(true);
   }
@@ -94,11 +122,15 @@ export default function UsuariosPage() {
     setFormError('');
     setGuardando(true);
     try {
+      const rolEbr = form.rolEbr || null;
+      const activoEbr = rolEbr ? form.activoEbr : false;
       if (editandoId) {
         await authApi.editarUsuario(editandoId, {
           nombre: form.nombre.trim(),
           apellido: form.apellido.trim(),
           rol: form.rol,
+          rol_ebr: rolEbr,
+          activo_ebr: activoEbr,
         });
         setSuccessMsg('Usuario actualizado correctamente');
       } else {
@@ -108,6 +140,8 @@ export default function UsuariosPage() {
           apellido: form.apellido.trim(),
           pin: form.pin,
           rol: form.rol,
+          rol_ebr: rolEbr,
+          activo_ebr: activoEbr,
         });
         setSuccessMsg('Usuario creado correctamente');
       }
@@ -166,7 +200,7 @@ export default function UsuariosPage() {
 
   return (
     <div className="screen">
-      <TopBar titulo="Usuarios" subtitulo="Administración" onBack={() => navigate('/menu')} />
+      <TopBar titulo="Usuarios" subtitulo="Administración" onBack={() => navigate(-1)} />
       <div className="screen-content">
         <button className="btn btn-primary" style={{ marginBottom: 'var(--sp-4)' }} onClick={() => (mostrarForm ? cerrarForm() : abrirNuevo())}>
           {mostrarForm ? 'Cancelar' : '+ Nuevo usuario'}
@@ -222,7 +256,7 @@ export default function UsuariosPage() {
               </div>
             )}
 
-            <div className="field" style={{ marginBottom: 0 }}>
+            <div className="field">
               <label className="field-label" htmlFor="rol">Rol</label>
               <select id="rol" className="field-input" value={form.rol} onChange={(e) => actualizarCampo('rol', e.target.value)} disabled={guardando}>
                 {ROLES.map((r) => (
@@ -230,6 +264,37 @@ export default function UsuariosPage() {
                 ))}
               </select>
             </div>
+
+            <h3 style={{ fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', margin: 'var(--sp-4) 0 var(--sp-2)' }}>
+              Acceso al sistema eBR
+            </h3>
+
+            <div className="field" style={{ marginBottom: form.rolEbr ? 'var(--sp-3)' : 0 }}>
+              <label className="field-label" htmlFor="rolEbr">Rol en eBR</label>
+              <select
+                id="rolEbr"
+                className="field-input"
+                value={form.rolEbr}
+                onChange={(e) => actualizarCampo('rolEbr', e.target.value)}
+                disabled={guardando}
+              >
+                {ROLES_EBR.map((r) => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {form.rolEbr && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', marginBottom: 0, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={form.activoEbr}
+                  onChange={(e) => actualizarCampo('activoEbr', e.target.checked)}
+                  disabled={guardando}
+                />
+                <span className="field-label" style={{ marginBottom: 0 }}>Activo en eBR</span>
+              </label>
+            )}
 
             {formError && <div className="alert alert-danger" style={{ marginTop: 'var(--sp-3)' }}>{formError}</div>}
             <button type="submit" className="btn btn-primary" style={{ marginTop: 'var(--sp-4)' }} disabled={guardando}>
@@ -253,6 +318,7 @@ export default function UsuariosPage() {
                   <th>Nombre</th>
                   <th>Apellido</th>
                   <th>Rol</th>
+                  <th>Rol eBR</th>
                   <th>Estado</th>
                   <th></th>
                 </tr>
@@ -264,6 +330,11 @@ export default function UsuariosPage() {
                     <td>{u.nombre}</td>
                     <td>{u.apellido}</td>
                     <td><span className={`badge ${BADGE_ROL[u.rol] || 'badge-neutral'}`}>{labelRol(u.rol)}</span></td>
+                    <td>
+                      {u.rol_ebr
+                        ? <span className={`badge ${BADGE_ROL_EBR[u.rol_ebr] || 'badge-neutral'}`}>{labelRolEbr(u.rol_ebr)}</span>
+                        : '—'}
+                    </td>
                     <td><span className={u.activo ? 'badge badge-ok' : 'badge badge-danger'}>{u.activo ? 'Activo' : 'Inactivo'}</span></td>
                     <td style={{ display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap' }}>
                       <button className="btn btn-ghost" onClick={() => abrirEdicion(u)}>Editar</button>

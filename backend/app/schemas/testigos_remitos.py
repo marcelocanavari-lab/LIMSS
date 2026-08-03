@@ -11,6 +11,7 @@ class TestigoEnvioRemito(BaseModel):
 
 class RemitoTestigoCreate(BaseModel):
     id_laboratorio: int
+    id_contacto: Optional[int] = None
     fecha_envio: date
     observaciones: Optional[str] = Field(None, max_length=500)
     testigos: list[TestigoEnvioRemito] = Field(..., min_length=1)
@@ -21,6 +22,8 @@ class RemitoTestigoResponse(BaseModel):
     nro_remito: str
     id_laboratorio: int
     laboratorio_nombre: str
+    id_contacto: Optional[int] = None
+    contacto_nombre: Optional[str] = None
     fecha_envio: date
     observaciones: Optional[str] = None
     cantidad_testigos: int
@@ -49,6 +52,9 @@ class RemitoTestigoDetalle(BaseModel):
     laboratorio_nombre: str
     laboratorio_direccion: Optional[str] = None
     laboratorio_contacto: Optional[str] = None
+    id_contacto: Optional[int] = None
+    contacto_nombre: Optional[str] = None
+    contacto_cargo: Optional[str] = None
     fecha_envio: date
     observaciones: Optional[str] = None
     id_usuario: int

@@ -111,7 +111,7 @@ export default function CargaResultadosPage() {
   if (error && !envio) {
     return (
       <div className="screen">
-        <TopBar titulo="Cargar resultados" subtitulo="Carga de Resultados" onBack={() => navigate('/carga-resultados')} />
+        <TopBar titulo="Cargar resultados" subtitulo="Carga de Resultados" onBack={() => navigate(-1)} />
         <div className="screen-content">
           <div className="alert alert-danger">{error}</div>
         </div>
@@ -124,7 +124,7 @@ export default function CargaResultadosPage() {
       <TopBar
         titulo={envio.codigo_muestra}
         subtitulo={`${envio.erp_DESART} — ${envio.laboratorio_nombre}`}
-        onBack={() => navigate('/carga-resultados')}
+        onBack={() => navigate(-1)}
       />
       <div className="screen-content">
         <form onSubmit={handleSubmit}>

@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { dictamenesApi } from '../../api/dictamenes';
-import { resultadosApi } from '../../api/resultados';
 import TopBar from '../../components/TopBar';
-import { ApiError } from '../../api/client';
+import { ApiError, abrirPdfConAuth } from '../../api/client';
 
 const ESTADOS = [
   { value: 'aprobado', label: 'Aprobado' },
@@ -13,6 +12,21 @@ const ESTADOS = [
 
 function labelEstado(valor) {
   return ESTADOS.find((e) => e.value === valor)?.label || valor;
+}
+
+function especificacionTexto(ens) {
+  return ens.tipo_dato === 'numerico'
+    ? `${ens.limite_inferior ?? '—'} a ${ens.limite_superior ?? '—'} ${ens.unidad_medida || ''}`
+    : ens.valor_requerido;
+}
+
+function resultadoTexto(ens) {
+  return ens.tipo_dato === 'numerico' ? ens.valor_numerico ?? '—' : ens.valor_cualitativo ?? '—';
+}
+
+function BadgeEstadoEnsayo({ dentro }) {
+  if (dentro === null) return <span className="badge badge-neutral">Sin límite</span>;
+  return dentro ? <span className="badge badge-ok">Cumple</span> : <span className="badge badge-danger">No cumple</span>;
 }
 
 export default function DictamenDetallePage() {
@@ -42,8 +56,7 @@ export default function DictamenDetallePage() {
 
   async function verProtocolo(idEnvio) {
     try {
-      const blob = await resultadosApi.descargarProtocolo(idEnvio);
-      window.open(URL.createObjectURL(blob), '_blank');
+      await abrirPdfConAuth(`/api/envios/${idEnvio}/protocolo`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo descargar el protocolo');
     }
@@ -88,7 +101,7 @@ export default function DictamenDetallePage() {
   if (error && !detalle) {
     return (
       <div className="screen">
-        <TopBar titulo="Dictamen" subtitulo="Dictamen QA" onBack={() => navigate('/dictamenes')} />
+        <TopBar titulo="Dictamen" subtitulo="Dictamen QA" onBack={() => navigate(-1)} />
         <div className="screen-content">
           <div className="alert alert-danger">{error}</div>
         </div>
@@ -98,7 +111,7 @@ export default function DictamenDetallePage() {
 
   return (
     <div className="screen">
-      <TopBar titulo={detalle.codigo_muestra} subtitulo={detalle.erp_DESART} onBack={() => navigate('/dictamenes')} />
+      <TopBar titulo={detalle.codigo_muestra} subtitulo={detalle.erp_DESART} onBack={() => navigate(-1)} />
       <div className="screen-content">
         <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
           <table className="data-table">
@@ -110,6 +123,37 @@ export default function DictamenDetallePage() {
             </tbody>
           </table>
         </div>
+
+        {detalle.resultados_orden_trabajo && detalle.resultados_orden_trabajo.length > 0 && (
+          <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
+            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Orden de Trabajo</h2>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Ensayo</th>
+                  <th>Metodología</th>
+                  <th>Especificación</th>
+                  <th>Resultado</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {detalle.resultados_orden_trabajo.map((ens) => {
+                  const oos = ens.dentro_especificacion === false;
+                  return (
+                    <tr key={ens.id_espec_ensayo} style={oos ? { background: 'var(--danger-soft)' } : undefined}>
+                      <td>{ens.nombre_ensayo}</td>
+                      <td>{ens.metodologia || '—'}</td>
+                      <td>{especificacionTexto(ens)}</td>
+                      <td>{resultadoTexto(ens)}</td>
+                      <td><BadgeEstadoEnsayo dentro={ens.dentro_especificacion} /></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {detalle.envios.map((en) => (
           <div key={en.id_envio} className="card" style={{ marginBottom: 'var(--sp-5)' }}>
@@ -136,6 +180,7 @@ export default function DictamenDetallePage() {
               <thead>
                 <tr>
                   <th>Ensayo</th>
+                  <th>Metodología</th>
                   <th>Especificación</th>
                   <th>Resultado</th>
                   <th>Estado</th>
@@ -147,21 +192,10 @@ export default function DictamenDetallePage() {
                   return (
                     <tr key={ens.id_espec_ensayo} style={oos ? { background: 'var(--danger-soft)' } : undefined}>
                       <td>{ens.nombre_ensayo}</td>
-                      <td>
-                        {ens.tipo_dato === 'numerico'
-                          ? `${ens.limite_inferior ?? '—'} a ${ens.limite_superior ?? '—'} ${ens.unidad_medida || ''}`
-                          : ens.valor_requerido}
-                      </td>
-                      <td>{ens.tipo_dato === 'numerico' ? ens.valor_numerico ?? '—' : ens.valor_cualitativo ?? '—'}</td>
-                      <td>
-                        {ens.dentro_especificacion === null ? (
-                          <span className="badge badge-neutral">Sin resultado</span>
-                        ) : oos ? (
-                          <span className="badge badge-danger">● OOS</span>
-                        ) : (
-                          <span className="badge badge-ok">● OK</span>
-                        )}
-                      </td>
+                      <td>{ens.metodologia || '—'}</td>
+                      <td>{especificacionTexto(ens)}</td>
+                      <td>{resultadoTexto(ens)}</td>
+                      <td><BadgeEstadoEnsayo dentro={ens.dentro_especificacion} /></td>
                     </tr>
                   );
                 })}

@@ -14,6 +14,10 @@ class LineaIR(BaseModel):
     CANTID: float
     unidad: Optional[str] = None
     proveedor: Optional[str] = None
+    proveedor_codigo: Optional[str] = None
+    fecha_ingreso: Optional[date] = None
+    fecha_vencimiento: Optional[date] = None
+    cantidad_ingresada: Optional[float] = None
     advertencia: Optional[str] = None
 
 
@@ -27,6 +31,10 @@ class MaterialEncontrado(BaseModel):
     cantidad: Optional[float] = None
     unidad: Optional[str] = None
     proveedor: Optional[str] = None
+    proveedor_codigo: Optional[str] = None
+    fecha_ingreso: Optional[date] = None
+    fecha_vencimiento: Optional[date] = None
+    cantidad_ingresada: Optional[float] = None
     advertencia: Optional[str] = None
 
 
@@ -99,6 +107,37 @@ class LaboratorioUpdate(BaseModel):
     activo: bool
 
 
+# ── Contactos por laboratorio ───────────────────────────────────
+#
+# Distinto del campo legacy lims_laboratorios.contacto (texto libre, un solo
+# nombre): esto es una lista de personas de contacto reales, seleccionables
+# al confirmar un envío ("Dirigido a:") y en el remito de testigos.
+
+class ContactoLaboratorioCreate(BaseModel):
+    nombre: str = Field(..., min_length=1, max_length=150)
+    cargo: Optional[str] = Field(None, max_length=100)
+    email: Optional[str] = Field(None, max_length=100)
+    telefono: Optional[str] = Field(None, max_length=30)
+
+
+class ContactoLaboratorioUpdate(BaseModel):
+    nombre: str = Field(..., min_length=1, max_length=150)
+    cargo: Optional[str] = Field(None, max_length=100)
+    email: Optional[str] = Field(None, max_length=100)
+    telefono: Optional[str] = Field(None, max_length=30)
+    activo: bool
+
+
+class ContactoLaboratorioResponse(BaseModel):
+    id_contacto: int
+    id_laboratorio: int
+    nombre: str
+    cargo: Optional[str] = None
+    email: Optional[str] = None
+    telefono: Optional[str] = None
+    activo: bool
+
+
 # ── Envíos ─────────────────────────────────────────────────────
 
 class TestigoEnvioItem(BaseModel):
@@ -107,6 +146,7 @@ class TestigoEnvioItem(BaseModel):
 
 class EnvioCreate(BaseModel):
     id_laboratorio: int
+    id_contacto: Optional[int] = None
     testigos: list[TestigoEnvioItem] = []
     temperatura_transporte: Optional[str] = Field(None, max_length=50)
     nro_remito: Optional[str] = Field(None, max_length=50)
@@ -158,6 +198,8 @@ class EnvioResponse(BaseModel):
     id_muestra: int
     id_laboratorio: int
     laboratorio_nombre: Optional[str] = None
+    id_contacto: Optional[int] = None
+    contacto_nombre: Optional[str] = None
     testigos: list[TestigoEnviado] = []
     fecha_despacho: datetime
     temperatura_transporte: Optional[str] = None
@@ -188,6 +230,9 @@ class RemitoResponse(BaseModel):
     laboratorio_nombre: str
     laboratorio_direccion: Optional[str] = None
     laboratorio_contacto: Optional[str] = None
+    id_contacto: Optional[int] = None
+    contacto_nombre: Optional[str] = None
+    contacto_cargo: Optional[str] = None
     fecha_despacho: datetime
     temperatura_transporte: Optional[str] = None
     nro_remito: Optional[str] = None

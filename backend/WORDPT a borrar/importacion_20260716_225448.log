@@ -1,0 +1,5 @@
+2026-07-16 22:54:48,308  INFO      Carpeta: \\LAMARSERVER\Empresa\Lamar\LIMSS\backend\WORDPT
+2026-07-16 22:54:48,309  INFO      Archivos encontrados: 42
+2026-07-16 22:54:48,310  INFO      Modo: INSERCION EN BD
+2026-07-16 22:54:48,311  INFO      ============================================================
+2026-07-16 22:54:48,416  ERROR     No se pudo conectar: ('28000', "[28000] [Microsoft][ODBC SQL Server Driver][SQL Server]Error de inicio de sesión del usuario 'limss_app'. (18456) (SQLDriverConnect); [28000] [Microsoft][ODBC SQL Server Driver]Atributo de cadena de conexión no válido (0); [28000] [Microsoft][ODBC SQL Server Driver][SQL Server]Error de inicio de sesión del usuario 'limss_app'. (18456); [28000] [Microsoft][ODBC SQL Server Driver]Atributo de cadena de conexión no válido (0)")

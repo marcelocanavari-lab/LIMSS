@@ -25,6 +25,8 @@ export default function EnvioFormPage() {
   const [error, setError] = useState('');
 
   const [idLaboratorio, setIdLaboratorio] = useState('');
+  const [contactos, setContactos] = useState([]);
+  const [idContacto, setIdContacto] = useState('');
   const [temperatura, setTemperatura] = useState('');
   const [transportista, setTransportista] = useState('');
   const [guardando, setGuardando] = useState(false);
@@ -68,6 +70,18 @@ export default function EnvioFormPage() {
       .listarRemitos({ idLaboratorio })
       .then((remitos) => setSinTestigosEnviados(remitos.length === 0))
       .catch(() => setSinTestigosEnviados(false));
+  }, [idLaboratorio]);
+
+  useEffect(() => {
+    setIdContacto('');
+    if (!idLaboratorio) {
+      setContactos([]);
+      return;
+    }
+    muestrasApi
+      .listarContactos(idLaboratorio)
+      .then(setContactos)
+      .catch(() => setContactos([]));
   }, [idLaboratorio]);
 
   function toggleEnsayo(idEnsayo) {
@@ -117,6 +131,7 @@ export default function EnvioFormPage() {
     try {
       const resultado = await muestrasApi.confirmarEnvio(id, {
         id_laboratorio: Number(idLaboratorio),
+        id_contacto: idContacto ? Number(idContacto) : null,
         testigos: idsTestigoElegidos.map((idT) => ({ id_testigo: idT })),
         temperatura_transporte: temperatura.trim() || null,
         transportista: transportista.trim() || null,
@@ -145,7 +160,7 @@ export default function EnvioFormPage() {
 
   return (
     <div className="screen">
-      <TopBar titulo="Nuevo envío" subtitulo="Envío de Muestras" onBack={() => navigate(`/envios/muestras/${id}`)} />
+      <TopBar titulo="Nuevo envío" subtitulo="Envío de Muestras" onBack={() => navigate(-1)} />
       <div className="screen-content">
         <form onSubmit={handleSubmit}>
           <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
@@ -168,6 +183,20 @@ export default function EnvioFormPage() {
                 </div>
               )}
             </div>
+
+            {idLaboratorio && contactos.length > 0 && (
+              <div className="field">
+                <label className="field-label" htmlFor="contacto">Dirigido a (opcional)</label>
+                <select id="contacto" className="field-input" value={idContacto} onChange={(e) => setIdContacto(e.target.value)}>
+                  <option value="">Sin especificar</option>
+                  {contactos.map((c) => (
+                    <option key={c.id_contacto} value={c.id_contacto}>
+                      {c.nombre}{c.cargo ? ` — ${c.cargo}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div className="field">
               <label className="field-label" htmlFor="transportista">Transportista</label>

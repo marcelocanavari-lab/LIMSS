@@ -128,7 +128,7 @@ export default function MuestraNuevaPage() {
 
   return (
     <div className="screen">
-      <TopBar titulo="Nueva muestra" subtitulo="Muestras" onBack={() => navigate('/muestras')} />
+      <TopBar titulo="Nueva muestra" subtitulo="Muestras" onBack={() => navigate(-1)} />
       <div className="screen-content">
         {paso === 1 && (
           <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>

@@ -12,6 +12,12 @@ class ArticuloERP(BaseModel):
     unidad: Optional[str] = None
 
 
+class ProveedorERP(BaseModel):
+    id_proveedor: int
+    codigo: str
+    nombre: str
+
+
 # ── Ensayos: catálogo maestro ────────────────────────────────────
 
 class EnsayoMaestroCreate(BaseModel):
@@ -73,6 +79,17 @@ class EspecificacionCreate(BaseModel):
     tipo_material: str = Field(..., pattern=r"^(materia_prima|granel|semi_elaborado|producto_terminado)$")
     cantidad_muestra: Optional[float] = None
     unidad_muestra: Optional[str] = Field(None, max_length=20)
+    cantidad_contramuestra: Optional[float] = None
+    unidad_contramuestra: Optional[str] = Field(None, max_length=20)
+
+
+class EspecificacionCantidades(BaseModel):
+    """Body de PUT .../cantidades -- ver ese endpoint para el porqué de que
+    estos 4 campos se editen aparte del resto de la especificación."""
+    cantidad_muestra: Optional[float] = None
+    unidad_muestra: Optional[str] = Field(None, max_length=20)
+    cantidad_contramuestra: Optional[float] = None
+    unidad_contramuestra: Optional[str] = Field(None, max_length=20)
 
 
 class EspecificacionCopiar(BaseModel):
@@ -91,16 +108,52 @@ class EspecificacionResponse(BaseModel):
     erp_CODART: str
     erp_DESART: str
     tipo_material: str
+    # Deprecados desde que existe lims_especificacion_muestras -- se
+    # mantienen por compatibilidad pero ya no se cargan/editan.
     cantidad_muestra: Optional[float] = None
     unidad_muestra: Optional[str] = None
+    cantidad_contramuestra: Optional[float] = None
+    unidad_contramuestra: Optional[str] = None
     version: str
     vigente: bool
     id_usuario_carga: int
     fecha_carga: datetime
+    # Indicadores para el listado -- solo GET /especificaciones los completa
+    # de verdad (ver listar_especificaciones); el resto de los endpoints que
+    # reusan _fila_a_especificacion los dejan en False por defecto.
+    tiene_muestras: bool = False
+    tiene_testigos: bool = False
 
 
 class EspecificacionDetalle(EspecificacionResponse):
     ensayos: list[EspecificacionEnsayoResponse]
+
+
+# ── Muestras definidas por especificación ─────────────────────────
+#
+# Reemplaza a los campos cantidad_muestra/unidad_muestra/cantidad_
+# contramuestra/unidad_contramuestra de arriba: una especificación puede
+# tener varias muestras (no solo "análisis" + "contramuestra" fijos), cada
+# una con su propio laboratorio de destino y si genera etiqueta o no.
+
+class EspecificacionMuestraCreate(BaseModel):
+    tipo_muestra: str = Field(..., pattern=r"^(analisis|contramuestra|testigo)$")
+    cantidad: float = Field(..., gt=0)
+    unidad: str = Field(..., min_length=1, max_length=20)
+    genera_etiqueta: bool = True
+    id_laboratorio: Optional[int] = None
+
+
+class EspecificacionMuestraResponse(BaseModel):
+    id: int
+    id_especificacion: int
+    tipo_muestra: str
+    cantidad: float
+    unidad: str
+    genera_etiqueta: bool
+    id_laboratorio: Optional[int] = None
+    laboratorio_nombre: Optional[str] = None
+    orden: int
 
 
 # ── Testigos asociados a una especificación ───────────────────────
@@ -115,6 +168,11 @@ class EspecificacionTestigoResponse(BaseModel):
     id_testigo: int
     codigo: str
     nombre: str
+    fecha_vencimiento: Optional[date] = None
+    stock_actual: Optional[float] = None
+    unidad_medida: Optional[str] = None
+    vencido: bool = False
+    por_vencer: bool = False
 
 
 # ── Testigos ───────────────────────────────────────────────────
@@ -137,6 +195,8 @@ class TestigoResponse(BaseModel):
     vencido: bool
     por_vencer: bool
     stock_bajo: bool
+    id_laboratorio: Optional[int] = None
+    laboratorio_nombre: Optional[str] = None
 
 
 class TestigoMovimientoResponse(BaseModel):

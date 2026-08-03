@@ -48,7 +48,7 @@ export default function MuestrasPage() {
 
   return (
     <div className="screen">
-      <TopBar titulo="Muestras" subtitulo="Muestreo y generación de etiquetas" onBack={() => navigate('/menu')} />
+      <TopBar titulo="Muestras" subtitulo="Muestreo y generación de etiquetas" onBack={() => navigate(-1)} />
       <div className="screen-content">
         <div style={{ display: 'flex', gap: 'var(--sp-3)', marginBottom: 'var(--sp-4)', flexWrap: 'wrap' }}>
           <input

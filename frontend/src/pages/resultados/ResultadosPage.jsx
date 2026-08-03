@@ -29,7 +29,7 @@ export default function ResultadosPage() {
 
   return (
     <div className="screen">
-      <TopBar titulo="Envío de Muestras" subtitulo="Envíos a laboratorio y carga de resultados" onBack={() => navigate('/menu')} />
+      <TopBar titulo="Envío de Muestras" subtitulo="Envíos a laboratorio y carga de resultados" onBack={() => navigate(-1)} />
       <div className="screen-content">
         <input
           className="field-input"

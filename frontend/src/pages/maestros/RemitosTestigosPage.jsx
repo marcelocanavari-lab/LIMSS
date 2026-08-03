@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import TopBar from '../../components/TopBar';
 import { testigosRemitosApi } from '../../api/testigosRemitos';
-import { ApiError } from '../../api/client';
+import { ApiError, abrirPdfConAuth } from '../../api/client';
 
 export default function RemitosTestigosPage() {
   const { user } = useAuth();
@@ -25,9 +25,7 @@ export default function RemitosTestigosPage() {
 
   async function verPdf(id) {
     try {
-      const blob = await testigosRemitosApi.descargarPdf(id);
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
+      await abrirPdfConAuth(`/api/testigos/remitos/${id}/pdf`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo descargar el PDF');
     }
@@ -36,7 +34,7 @@ export default function RemitosTestigosPage() {
   if (!autorizado) {
     return (
       <div className="screen">
-        <TopBar titulo="Remitos de Testigos" subtitulo="Datos Maestros" onBack={() => navigate('/maestros/testigos')} />
+        <TopBar titulo="Remitos de Testigos" subtitulo="Datos Maestros" onBack={() => navigate(-1)} />
         <div className="screen-content">
           <div className="state-block">
             <span className="state-block-title">Acceso restringido</span>
@@ -48,7 +46,7 @@ export default function RemitosTestigosPage() {
 
   return (
     <div className="screen">
-      <TopBar titulo="Remitos de Testigos" subtitulo="Datos Maestros" onBack={() => navigate('/maestros/testigos')} />
+      <TopBar titulo="Remitos de Testigos" subtitulo="Datos Maestros" onBack={() => navigate(-1)} />
       <div className="screen-content">
         <button className="btn btn-primary" style={{ marginBottom: 'var(--sp-4)' }} onClick={() => navigate('/maestros/testigos/remitos/nuevo')}>
           + Nuevo remito

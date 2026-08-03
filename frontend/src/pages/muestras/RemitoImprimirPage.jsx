@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import TopBar from '../../components/TopBar';
 import { muestrasApi } from '../../api/muestras';
 import { enviosApi } from '../../api/envios';
-import { ApiError } from '../../api/client';
+import { ApiError, abrirPdfConAuth } from '../../api/client';
 
 function hoyISO() {
   return new Date().toISOString().slice(0, 10);
@@ -93,8 +93,7 @@ export default function RemitoImprimirPage() {
 
   async function verCopiaFirmada() {
     try {
-      const blob = await enviosApi.descargarCopiaFirmada(remito.id_envio);
-      window.open(URL.createObjectURL(blob), '_blank');
+      await abrirPdfConAuth(`/api/envios/${remito.id_envio}/remito/copia-firmada`);
     } catch (err) {
       setErrorRecepcion(err instanceof ApiError ? err.message : 'No se pudo descargar la copia firmada');
     }
@@ -141,7 +140,7 @@ export default function RemitoImprimirPage() {
 
   return (
     <div className="screen">
-      <TopBar titulo="Remito de envío" subtitulo="Envío de Muestras" onBack={() => navigate(`/envios/muestras/${id}`)} />
+      <TopBar titulo="Remito de envío" subtitulo="Envío de Muestras" onBack={() => navigate(-1)} />
       <div className="screen-content">
         <button className="btn btn-primary no-print" style={{ marginBottom: 'var(--sp-4)' }} onClick={() => window.print()}>
           Imprimir →

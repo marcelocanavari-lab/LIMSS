@@ -19,11 +19,14 @@ from app.schemas.maestros import (
     ArticuloERP,
     EnsayoMaestroCreate,
     EnsayoMaestroResponse,
+    EspecificacionCantidades,
     EspecificacionCopiar,
     EspecificacionCreate,
     EspecificacionDetalle,
     EspecificacionEnsayoCreate,
     EspecificacionEnsayoResponse,
+    EspecificacionMuestraCreate,
+    EspecificacionMuestraResponse,
     EspecificacionResponse,
     EspecificacionTestigoCreate,
     EspecificacionTestigoResponse,
@@ -43,6 +46,7 @@ def _insertar_especificacion(
     cursor, *, erp_IdM21: int, erp_CODART: str, erp_DESART: str, tipo_material: str,
     cantidad_muestra: Optional[float], unidad_muestra: Optional[str],
     version: str, user_id: int,
+    cantidad_contramuestra: Optional[float] = None, unidad_contramuestra: Optional[str] = None,
     accion_terapeutica: Optional[str] = None, sinonimia: Optional[str] = None,
     nro_cas: Optional[str] = None, nombre_quimico: Optional[str] = None,
     formula_molecular: Optional[str] = None, peso_molecular: Optional[str] = None,
@@ -52,11 +56,13 @@ def _insertar_especificacion(
         """
         INSERT INTO lims_especificaciones
             (erp_IdM21, erp_CODART, erp_DESART, tipo_material, cantidad_muestra, unidad_muestra,
+             cantidad_contramuestra, unidad_contramuestra,
              version, vigente, id_usuario_carga, accion_terapeutica, sinonimia, nro_cas,
              nombre_quimico, formula_molecular, peso_molecular, envasado_almacenamiento)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        erp_IdM21, erp_CODART, erp_DESART, tipo_material, cantidad_muestra, unidad_muestra, version, user_id,
+        erp_IdM21, erp_CODART, erp_DESART, tipo_material, cantidad_muestra, unidad_muestra,
+        cantidad_contramuestra, unidad_contramuestra, version, user_id,
         accion_terapeutica, sinonimia, nro_cas, nombre_quimico, formula_molecular, peso_molecular,
         envasado_almacenamiento,
     )
@@ -87,7 +93,7 @@ def _copiar_ensayos_especificacion(cursor, *, id_especificacion_origen: int, id_
         )
 
 
-def _fila_a_especificacion(row) -> EspecificacionResponse:
+def _fila_a_especificacion(row, tiene_muestras: bool = False, tiene_testigos: bool = False) -> EspecificacionResponse:
     return EspecificacionResponse(
         id_especificacion=row.id_especificacion,
         erp_IdM21=row.erp_IdM21,
@@ -96,10 +102,14 @@ def _fila_a_especificacion(row) -> EspecificacionResponse:
         tipo_material=row.tipo_material,
         cantidad_muestra=float(row.cantidad_muestra) if row.cantidad_muestra is not None else None,
         unidad_muestra=row.unidad_muestra,
+        cantidad_contramuestra=float(row.cantidad_contramuestra) if row.cantidad_contramuestra is not None else None,
+        unidad_contramuestra=row.unidad_contramuestra,
         version=row.version,
         vigente=bool(row.vigente),
         id_usuario_carga=row.id_usuario_carga,
         fecha_carga=row.fecha_carga,
+        tiene_muestras=tiene_muestras,
+        tiene_testigos=tiene_testigos,
     )
 
 
@@ -159,6 +169,26 @@ def _a_fecha(valor) -> Optional[date]:
     return date.fromisoformat(str(valor))
 
 
+def _tiene_columna_lab_testigo(cursor) -> bool:
+    """id_laboratorio en lims_testigos puede no existir todavía (ver
+    migrations_testigos_laboratorio.sql, pendiente de ejecutar en algunos
+    entornos) -- se chequea en catálogo antes de armar el JOIN para no
+    romper la consulta con un error de compilación SQL."""
+    cursor.execute("SELECT COL_LENGTH('lims_testigos', 'id_laboratorio') AS c")
+    return cursor.fetchone().c is not None
+
+
+def _select_testigos_sql(cursor) -> str:
+    """Alias 't' consistente en ambas ramas para que el WHERE/ORDER BY
+    apendeado después (con o sin el JOIN) sea siempre válido."""
+    if _tiene_columna_lab_testigo(cursor):
+        return (
+            "SELECT t.*, lab.nombre AS laboratorio_nombre FROM lims_testigos t "
+            "LEFT JOIN lims_laboratorios lab ON lab.id_laboratorio = t.id_laboratorio "
+        )
+    return "SELECT t.* FROM lims_testigos t "
+
+
 def _fila_a_testigo(row, fecha_ref: Optional[date] = None) -> TestigoResponse:
     hoy = fecha_ref or date.today()
     fecha_vencimiento = _a_fecha(row.fecha_vencimiento)
@@ -185,6 +215,8 @@ def _fila_a_testigo(row, fecha_ref: Optional[date] = None) -> TestigoResponse:
         vencido=vencido,
         por_vencer=por_vencer,
         stock_bajo=stock_bajo,
+        id_laboratorio=getattr(row, "id_laboratorio", None),
+        laboratorio_nombre=getattr(row, "laboratorio_nombre", None),
     )
 
 
@@ -227,6 +259,7 @@ def crear_especificacion(
         erp_IdM21=body.erp_IdM21, erp_CODART=body.erp_CODART, erp_DESART=body.erp_DESART,
         tipo_material=body.tipo_material,
         cantidad_muestra=body.cantidad_muestra, unidad_muestra=body.unidad_muestra,
+        cantidad_contramuestra=body.cantidad_contramuestra, unidad_contramuestra=body.unidad_contramuestra,
         version="1.0", user_id=user["id_usuario"],
     )
 
@@ -243,30 +276,40 @@ def crear_especificacion(
 def listar_especificaciones(
     vigente: Optional[bool] = Query(True, description="true=solo vigentes, false=solo obsoletas, omitir=todas"),
     buscar: str = Query(""),
+    tipo_material: Optional[str] = Query(None, pattern=r"^(materia_prima|granel|semi_elaborado|producto_terminado)$"),
     user: dict = Depends(get_current_user),
     conn: pyodbc.Connection = Depends(limss_db),
 ):
     cursor = conn.cursor()
     like = f"%{buscar}%"
-    if vigente is None:
-        cursor.execute(
-            """
-            SELECT * FROM lims_especificaciones
-            WHERE erp_CODART LIKE ? OR erp_DESART LIKE ?
-            ORDER BY erp_DESART, version DESC
-            """,
-            like, like,
-        )
-    else:
-        cursor.execute(
-            """
-            SELECT * FROM lims_especificaciones
-            WHERE vigente = ? AND (erp_CODART LIKE ? OR erp_DESART LIKE ?)
-            ORDER BY erp_DESART, version DESC
-            """,
-            1 if vigente else 0, like, like,
-        )
-    return [_fila_a_especificacion(r) for r in cursor.fetchall()]
+    condiciones = ["(e.erp_CODART LIKE ? OR e.erp_DESART LIKE ?)"]
+    params: list = [like, like]
+    if vigente is not None:
+        condiciones.append("e.vigente = ?")
+        params.append(1 if vigente else 0)
+    if tipo_material:
+        condiciones.append("e.tipo_material = ?")
+        params.append(tipo_material)
+
+    cursor.execute(
+        f"""
+        SELECT e.*,
+               CASE WHEN EXISTS (
+                   SELECT 1 FROM lims_especificacion_muestras m WHERE m.id_especificacion = e.id_especificacion
+               ) THEN 1 ELSE 0 END AS tiene_muestras,
+               CASE WHEN EXISTS (
+                   SELECT 1 FROM lims_especificacion_testigos t WHERE t.id_especificacion = e.id_especificacion
+               ) THEN 1 ELSE 0 END AS tiene_testigos
+        FROM lims_especificaciones e
+        WHERE {" AND ".join(condiciones)}
+        ORDER BY e.erp_DESART, e.version DESC
+        """,
+        *params,
+    )
+    return [
+        _fila_a_especificacion(r, tiene_muestras=bool(r.tiene_muestras), tiene_testigos=bool(r.tiene_testigos))
+        for r in cursor.fetchall()
+    ]
 
 
 @router.get("/especificaciones/{id_especificacion}", response_model=EspecificacionDetalle)
@@ -315,6 +358,7 @@ def revisar_especificacion(
         erp_IdM21=actual.erp_IdM21, erp_CODART=actual.erp_CODART, erp_DESART=actual.erp_DESART,
         tipo_material=actual.tipo_material,
         cantidad_muestra=actual.cantidad_muestra, unidad_muestra=actual.unidad_muestra,
+        cantidad_contramuestra=actual.cantidad_contramuestra, unidad_contramuestra=actual.unidad_contramuestra,
         version=version_nueva, user_id=user["id_usuario"],
     )
     _copiar_ensayos_especificacion(cursor, id_especificacion_origen=id_especificacion, id_especificacion_destino=id_nueva)
@@ -363,6 +407,7 @@ def copiar_especificacion(
         erp_IdM21=body.erp_IdM21, erp_CODART=body.erp_CODART, erp_DESART=body.erp_DESART,
         tipo_material=body.tipo_material,
         cantidad_muestra=original.cantidad_muestra, unidad_muestra=original.unidad_muestra,
+        cantidad_contramuestra=original.cantidad_contramuestra, unidad_contramuestra=original.unidad_contramuestra,
         version=body.version, user_id=user["id_usuario"],
         accion_terapeutica=original.accion_terapeutica, sinonimia=original.sinonimia,
         nro_cas=original.nro_cas, nombre_quimico=original.nombre_quimico,
@@ -379,6 +424,51 @@ def copiar_especificacion(
     )
 
     return _obtener_especificacion_detalle(cursor, id_nueva)
+
+
+@router.put("/especificaciones/{id_especificacion}/cantidades", response_model=EspecificacionResponse)
+def editar_cantidades_especificacion(
+    id_especificacion: int,
+    body: EspecificacionCantidades,
+    user: dict = Depends(require_rol("analista_qc", "admin", "qa")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Actualiza solo las cantidades de muestreo (análisis y contramuestra)
+    de una especificación ya creada, sin necesidad de revisar (nueva versión)
+    -- son datos logísticos para la Solicitud de Muestreo, no parte del
+    contenido analítico versionado (límites/ensayos), así que se pueden
+    completar/corregir en cualquier momento, incluso en una especificación
+    obsoleta (por si hace falta reconstruir una solicitud vieja)."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM lims_especificaciones WHERE id_especificacion = ?", id_especificacion)
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Especificación no encontrada")
+
+    cursor.execute(
+        """
+        UPDATE lims_especificaciones
+        SET cantidad_muestra = ?, unidad_muestra = ?, cantidad_contramuestra = ?, unidad_contramuestra = ?
+        WHERE id_especificacion = ?
+        """,
+        body.cantidad_muestra, body.unidad_muestra, body.cantidad_contramuestra, body.unidad_contramuestra,
+        id_especificacion,
+    )
+
+    audit.registrar(
+        conn, entidad="especificacion", accion="modificar_cantidades",
+        id_usuario=user["id_usuario"], id_entidad=id_especificacion,
+        valor_anterior={
+            "cantidad_muestra": float(row.cantidad_muestra) if row.cantidad_muestra is not None else None,
+            "unidad_muestra": row.unidad_muestra,
+            "cantidad_contramuestra": float(row.cantidad_contramuestra) if row.cantidad_contramuestra is not None else None,
+            "unidad_contramuestra": row.unidad_contramuestra,
+        },
+        valor_nuevo=body.model_dump(),
+    )
+
+    cursor.execute("SELECT * FROM lims_especificaciones WHERE id_especificacion = ?", id_especificacion)
+    return _fila_a_especificacion(cursor.fetchone())
 
 
 # ── Ensayos: catálogo maestro ──────────────────────────────────────
@@ -660,6 +750,198 @@ def eliminar_ensayo_especificacion(
     )
 
 
+# ── Muestras definidas por especificación ─────────────────────────
+#
+# Reemplaza a los campos simples cantidad_muestra/unidad_muestra/cantidad_
+# contramuestra/unidad_contramuestra de lims_especificaciones (deprecados,
+# no se tocan): una especificación puede tener varias muestras, cada una
+# con su propio laboratorio de destino.
+
+_SELECT_ESPECIFICACION_MUESTRAS = """
+    SELECT m.*, lab.nombre AS laboratorio_nombre
+    FROM lims_especificacion_muestras m
+    LEFT JOIN lims_laboratorios lab ON lab.id_laboratorio = m.id_laboratorio
+"""
+
+
+def _fila_a_espec_muestra(row) -> EspecificacionMuestraResponse:
+    return EspecificacionMuestraResponse(
+        id=row.id,
+        id_especificacion=row.id_especificacion,
+        tipo_muestra=row.tipo_muestra,
+        cantidad=float(row.cantidad),
+        unidad=row.unidad,
+        genera_etiqueta=bool(row.genera_etiqueta),
+        id_laboratorio=row.id_laboratorio,
+        laboratorio_nombre=row.laboratorio_nombre,
+        orden=row.orden,
+    )
+
+
+@router.get("/especificaciones/{id_especificacion}/muestras", response_model=list[EspecificacionMuestraResponse])
+def listar_muestras_especificacion(
+    id_especificacion: int,
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM lims_especificaciones WHERE id_especificacion = ?", id_especificacion)
+    if not cursor.fetchone():
+        raise HTTPException(status_code=404, detail="Especificación no encontrada")
+
+    cursor.execute(
+        _SELECT_ESPECIFICACION_MUESTRAS + " WHERE m.id_especificacion = ? ORDER BY m.orden",
+        id_especificacion,
+    )
+    return [_fila_a_espec_muestra(r) for r in cursor.fetchall()]
+
+
+@router.post("/especificaciones/{id_especificacion}/muestras", response_model=EspecificacionMuestraResponse, status_code=201)
+def crear_muestra_especificacion(
+    id_especificacion: int,
+    body: EspecificacionMuestraCreate,
+    user: dict = Depends(require_rol("analista_qc", "admin", "qa")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM lims_especificaciones WHERE id_especificacion = ?", id_especificacion)
+    if not cursor.fetchone():
+        raise HTTPException(status_code=404, detail="Especificación no encontrada")
+
+    if body.id_laboratorio is not None:
+        cursor.execute("SELECT 1 FROM lims_laboratorios WHERE id_laboratorio = ? AND activo = 1", body.id_laboratorio)
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="El laboratorio indicado no existe o está inactivo")
+
+    cursor.execute(
+        "SELECT ISNULL(MAX(orden), 0) AS m FROM lims_especificacion_muestras WHERE id_especificacion = ?",
+        id_especificacion,
+    )
+    orden = cursor.fetchone().m + 1
+
+    try:
+        cursor.execute(
+            """
+            INSERT INTO lims_especificacion_muestras
+                (id_especificacion, tipo_muestra, cantidad, unidad, genera_etiqueta, id_laboratorio, orden)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            id_especificacion, body.tipo_muestra, body.cantidad, body.unidad,
+            1 if body.genera_etiqueta else 0, body.id_laboratorio, orden,
+        )
+    except pyodbc.IntegrityError:
+        raise HTTPException(
+            status_code=400,
+            detail="No se pudo guardar la muestra: el tipo 'testigo' todavía no está habilitado en la base "
+                   "de datos (falta aplicar migrations_especificacion_muestras_tipo_testigo.sql).",
+        )
+    cursor.execute("SELECT @@IDENTITY AS id")
+    id_muestra = int(cursor.fetchone().id)
+
+    audit.registrar(
+        conn, entidad="especificacion_muestra", accion="crear",
+        id_usuario=user["id_usuario"], id_entidad=id_muestra,
+        valor_nuevo={"id_especificacion": id_especificacion, "tipo_muestra": body.tipo_muestra, "cantidad": body.cantidad},
+    )
+
+    cursor.execute(_SELECT_ESPECIFICACION_MUESTRAS + " WHERE m.id = ?", id_muestra)
+    return _fila_a_espec_muestra(cursor.fetchone())
+
+
+@router.put("/especificaciones/{id_especificacion}/muestras/{id_muestra}", response_model=EspecificacionMuestraResponse)
+def editar_muestra_especificacion(
+    id_especificacion: int,
+    id_muestra: int,
+    body: EspecificacionMuestraCreate,
+    user: dict = Depends(require_rol("analista_qc", "admin", "qa")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * FROM lims_especificacion_muestras WHERE id = ? AND id_especificacion = ?",
+        id_muestra, id_especificacion,
+    )
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="La muestra no pertenece a esta especificación")
+
+    if body.id_laboratorio is not None:
+        cursor.execute("SELECT 1 FROM lims_laboratorios WHERE id_laboratorio = ? AND activo = 1", body.id_laboratorio)
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="El laboratorio indicado no existe o está inactivo")
+
+    try:
+        cursor.execute(
+            """
+            UPDATE lims_especificacion_muestras
+            SET tipo_muestra = ?, cantidad = ?, unidad = ?, genera_etiqueta = ?, id_laboratorio = ?
+            WHERE id = ?
+            """,
+            body.tipo_muestra, body.cantidad, body.unidad, 1 if body.genera_etiqueta else 0, body.id_laboratorio,
+            id_muestra,
+        )
+    except pyodbc.IntegrityError:
+        raise HTTPException(
+            status_code=400,
+            detail="No se pudo guardar la muestra: el tipo 'testigo' todavía no está habilitado en la base "
+                   "de datos (falta aplicar migrations_especificacion_muestras_tipo_testigo.sql).",
+        )
+
+    audit.registrar(
+        conn, entidad="especificacion_muestra", accion="modificar",
+        id_usuario=user["id_usuario"], id_entidad=id_muestra,
+        valor_anterior={"tipo_muestra": row.tipo_muestra, "cantidad": float(row.cantidad), "unidad": row.unidad},
+        valor_nuevo={"tipo_muestra": body.tipo_muestra, "cantidad": body.cantidad, "unidad": body.unidad},
+    )
+
+    cursor.execute(_SELECT_ESPECIFICACION_MUESTRAS + " WHERE m.id = ?", id_muestra)
+    return _fila_a_espec_muestra(cursor.fetchone())
+
+
+@router.delete("/especificaciones/{id_especificacion}/muestras/{id_muestra}", status_code=204)
+def eliminar_muestra_especificacion(
+    id_especificacion: int,
+    id_muestra: int,
+    user: dict = Depends(require_rol("qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT 1 FROM lims_especificacion_muestras WHERE id = ? AND id_especificacion = ?",
+        id_muestra, id_especificacion,
+    )
+    if not cursor.fetchone():
+        raise HTTPException(status_code=404, detail="La muestra no pertenece a esta especificación")
+
+    # lims_solicitud_muestras puede no existir todavía en este entorno (ver
+    # migrations_solicitud_muestras.sql) -- si no existe, no hay nada que
+    # pueda estar referenciando esta fila, así que se permite eliminar.
+    cursor.execute("SELECT OBJECT_ID('lims_solicitud_muestras') AS oid")
+    if cursor.fetchone().oid is not None:
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM lims_solicitud_muestras sm
+            INNER JOIN lims_solicitudes_muestreo s ON s.id_solicitud = sm.id_solicitud
+            WHERE sm.id_espec_muestra = ? AND s.estado = 'pendiente'
+            """,
+            id_muestra,
+        )
+        if cursor.fetchone().n > 0:
+            raise HTTPException(
+                status_code=400,
+                detail="No se puede eliminar: tiene solicitudes de muestreo activas referenciándola",
+            )
+
+    cursor.execute("DELETE FROM lims_especificacion_muestras WHERE id = ?", id_muestra)
+
+    audit.registrar(
+        conn, entidad="especificacion_muestra", accion="eliminar",
+        id_usuario=user["id_usuario"], id_entidad=id_muestra,
+        valor_anterior={"id_especificacion": id_especificacion},
+    )
+
+
 # ── Testigos asociados a una especificación ───────────────────────
 
 @router.post("/especificaciones/{id_especificacion}/testigos", response_model=EspecificacionTestigoResponse, status_code=201)
@@ -674,7 +956,7 @@ def asociar_testigo(
     if not cursor.fetchone():
         raise HTTPException(status_code=404, detail="Especificación no encontrada")
 
-    cursor.execute("SELECT codigo, nombre FROM lims_testigos WHERE id_testigo = ?", body.id_testigo)
+    cursor.execute("SELECT * FROM lims_testigos WHERE id_testigo = ?", body.id_testigo)
     testigo = cursor.fetchone()
     if not testigo:
         raise HTTPException(status_code=404, detail="Testigo no encontrado")
@@ -699,9 +981,12 @@ def asociar_testigo(
         valor_nuevo={"id_especificacion": id_especificacion, "id_testigo": body.id_testigo},
     )
 
+    t = _fila_a_testigo(testigo)
     return EspecificacionTestigoResponse(
         id=id_rel, id_especificacion=id_especificacion, id_testigo=body.id_testigo,
-        codigo=testigo.codigo, nombre=testigo.nombre,
+        codigo=t.codigo, nombre=t.nombre,
+        fecha_vencimiento=t.fecha_vencimiento, stock_actual=t.stock_actual, unidad_medida=t.unidad_medida,
+        vencido=t.vencido, por_vencer=t.por_vencer,
     )
 
 
@@ -736,7 +1021,7 @@ def listar_testigos_especificacion(
     cursor = conn.cursor()
     cursor.execute(
         """
-        SELECT et.id, et.id_especificacion, et.id_testigo, t.codigo, t.nombre
+        SELECT et.id AS id_relacion, et.id_especificacion, t.*
         FROM lims_especificacion_testigos et
         INNER JOIN lims_testigos t ON t.id_testigo = et.id_testigo
         WHERE et.id_especificacion = ?
@@ -744,13 +1029,16 @@ def listar_testigos_especificacion(
         """,
         id_especificacion,
     )
-    return [
-        EspecificacionTestigoResponse(
-            id=r.id, id_especificacion=r.id_especificacion, id_testigo=r.id_testigo,
-            codigo=r.codigo, nombre=r.nombre,
-        )
-        for r in cursor.fetchall()
-    ]
+    resultado = []
+    for r in cursor.fetchall():
+        t = _fila_a_testigo(r)
+        resultado.append(EspecificacionTestigoResponse(
+            id=r.id_relacion, id_especificacion=r.id_especificacion, id_testigo=t.id_testigo,
+            codigo=t.codigo, nombre=t.nombre,
+            fecha_vencimiento=t.fecha_vencimiento, stock_actual=t.stock_actual, unidad_medida=t.unidad_medida,
+            vencido=t.vencido, por_vencer=t.por_vencer,
+        ))
+    return resultado
 
 
 # ── Testigos y estándares ─────────────────────────────────────────
@@ -766,6 +1054,7 @@ def crear_testigo(
     stock_minimo: float = Form(...),
     unidad_medida: Optional[str] = Form(None),
     observaciones: Optional[str] = Form(None, max_length=500),
+    id_laboratorio: Optional[int] = Form(None),
     pdf_certificado: Optional[UploadFile] = File(None),
     user: dict = Depends(require_rol("analista_qc", "admin", "qa")),
     conn: pyodbc.Connection = Depends(limss_db),
@@ -778,20 +1067,38 @@ def crear_testigo(
     if cursor.fetchone():
         raise HTTPException(status_code=409, detail=f"El código '{codigo}' ya existe")
 
+    if id_laboratorio is not None:
+        cursor.execute("SELECT 1 FROM lims_laboratorios WHERE id_laboratorio = ? AND activo = 1", id_laboratorio)
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="El laboratorio indicado no existe o está inactivo")
+
     ruta_pdf = None
     if pdf_certificado is not None and pdf_certificado.filename:
         ruta_pdf = storage.guardar_pdf_testigo(pdf_certificado, codigo)
 
-    cursor.execute(
-        """
-        INSERT INTO lims_testigos
-            (codigo, nombre, nro_lote, nro_ir, fecha_vencimiento, stock_actual, stock_minimo,
-             unidad_medida, pdf_certificado, id_usuario_carga, observaciones)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        codigo, nombre, nro_lote, nro_ir, str(fecha_vencimiento), stock_actual, stock_minimo,
-        unidad_medida, ruta_pdf, user["id_usuario"], observaciones,
-    )
+    tiene_lab = _tiene_columna_lab_testigo(cursor)
+    if tiene_lab:
+        cursor.execute(
+            """
+            INSERT INTO lims_testigos
+                (codigo, nombre, nro_lote, nro_ir, fecha_vencimiento, stock_actual, stock_minimo,
+                 unidad_medida, pdf_certificado, id_usuario_carga, observaciones, id_laboratorio)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            codigo, nombre, nro_lote, nro_ir, str(fecha_vencimiento), stock_actual, stock_minimo,
+            unidad_medida, ruta_pdf, user["id_usuario"], observaciones, id_laboratorio,
+        )
+    else:
+        cursor.execute(
+            """
+            INSERT INTO lims_testigos
+                (codigo, nombre, nro_lote, nro_ir, fecha_vencimiento, stock_actual, stock_minimo,
+                 unidad_medida, pdf_certificado, id_usuario_carga, observaciones)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            codigo, nombre, nro_lote, nro_ir, str(fecha_vencimiento), stock_actual, stock_minimo,
+            unidad_medida, ruta_pdf, user["id_usuario"], observaciones,
+        )
     cursor.execute("SELECT @@IDENTITY AS id")
     id_testigo = int(cursor.fetchone().id)
 
@@ -810,7 +1117,7 @@ def crear_testigo(
         valor_nuevo={"codigo": codigo, "stock_actual": stock_actual},
     )
 
-    cursor.execute("SELECT * FROM lims_testigos WHERE id_testigo = ?", id_testigo)
+    cursor.execute(_select_testigos_sql(cursor) + "WHERE t.id_testigo = ?", id_testigo)
     return _fila_a_testigo(cursor.fetchone())
 
 
@@ -824,6 +1131,7 @@ def editar_testigo(
     stock_minimo: float = Form(...),
     unidad_medida: Optional[str] = Form(None),
     observaciones: Optional[str] = Form(None, max_length=500),
+    id_laboratorio: Optional[int] = Form(None),
     pdf_certificado: Optional[UploadFile] = File(None),
     user: dict = Depends(require_rol("analista_qc", "admin", "qa")),
     conn: pyodbc.Connection = Depends(limss_db),
@@ -836,10 +1144,16 @@ def editar_testigo(
         raise HTTPException(status_code=400, detail="El stock no puede ser negativo")
 
     cursor = conn.cursor()
+    tiene_lab = _tiene_columna_lab_testigo(cursor)
     cursor.execute("SELECT * FROM lims_testigos WHERE id_testigo = ?", id_testigo)
     row = cursor.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Testigo no encontrado")
+
+    if tiene_lab and id_laboratorio is not None:
+        cursor.execute("SELECT 1 FROM lims_laboratorios WHERE id_laboratorio = ? AND activo = 1", id_laboratorio)
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="El laboratorio indicado no existe o está inactivo")
 
     ruta_pdf = row.pdf_certificado
     if pdf_certificado is not None:
@@ -857,17 +1171,32 @@ def editar_testigo(
         "unidad_medida": unidad_medida, "observaciones": observaciones,
         "pdf_certificado": ruta_pdf,
     }
+    if tiene_lab:
+        campos_anteriores["id_laboratorio"] = getattr(row, "id_laboratorio", None)
+        campos_nuevos["id_laboratorio"] = id_laboratorio
 
-    cursor.execute(
-        """
-        UPDATE lims_testigos
-        SET nombre = ?, nro_lote = ?, nro_ir = ?, fecha_vencimiento = ?, stock_minimo = ?,
-            unidad_medida = ?, observaciones = ?, pdf_certificado = ?
-        WHERE id_testigo = ?
-        """,
-        nombre, nro_lote, nro_ir, str(fecha_vencimiento), stock_minimo,
-        unidad_medida, observaciones, ruta_pdf, id_testigo,
-    )
+    if tiene_lab:
+        cursor.execute(
+            """
+            UPDATE lims_testigos
+            SET nombre = ?, nro_lote = ?, nro_ir = ?, fecha_vencimiento = ?, stock_minimo = ?,
+                unidad_medida = ?, observaciones = ?, pdf_certificado = ?, id_laboratorio = ?
+            WHERE id_testigo = ?
+            """,
+            nombre, nro_lote, nro_ir, str(fecha_vencimiento), stock_minimo,
+            unidad_medida, observaciones, ruta_pdf, id_laboratorio, id_testigo,
+        )
+    else:
+        cursor.execute(
+            """
+            UPDATE lims_testigos
+            SET nombre = ?, nro_lote = ?, nro_ir = ?, fecha_vencimiento = ?, stock_minimo = ?,
+                unidad_medida = ?, observaciones = ?, pdf_certificado = ?
+            WHERE id_testigo = ?
+            """,
+            nombre, nro_lote, nro_ir, str(fecha_vencimiento), stock_minimo,
+            unidad_medida, observaciones, ruta_pdf, id_testigo,
+        )
 
     valor_anterior = {k: v for k, v in campos_anteriores.items() if v != campos_nuevos[k]}
     valor_nuevo = {k: v for k, v in campos_nuevos.items() if v != campos_anteriores[k]}
@@ -877,8 +1206,53 @@ def editar_testigo(
         valor_anterior=valor_anterior or None, valor_nuevo=valor_nuevo or None,
     )
 
-    cursor.execute("SELECT * FROM lims_testigos WHERE id_testigo = ?", id_testigo)
+    cursor.execute(_select_testigos_sql(cursor) + "WHERE t.id_testigo = ?", id_testigo)
     return _fila_a_testigo(cursor.fetchone())
+
+
+_MSG_TESTIGO_CON_MOVIMIENTOS = (
+    "No se puede eliminar: el testigo tiene movimientos registrados. "
+    "Podés desactivarlo en su lugar."
+)
+
+# Tablas que referencian lims_testigos por FK -- si el testigo aparece en
+# cualquiera de ellas, el DELETE físico rompe integridad referencial.
+_TABLAS_CON_REFERENCIA_A_TESTIGO = [
+    "lims_testigo_movimientos",
+    "lims_remito_testigos_det",
+    "lims_especificacion_testigos",
+    "lims_envio_testigos",
+    "lims_envios",
+]
+
+
+@router.delete("/testigos/{id_testigo}", status_code=204)
+def eliminar_testigo(
+    id_testigo: int,
+    user: dict = Depends(require_rol("qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM lims_testigos WHERE id_testigo = ?", id_testigo)
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Testigo no encontrado")
+
+    for tabla in _TABLAS_CON_REFERENCIA_A_TESTIGO:
+        cursor.execute(f"SELECT 1 FROM {tabla} WHERE id_testigo = ?", id_testigo)
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail=_MSG_TESTIGO_CON_MOVIMIENTOS)
+
+    try:
+        cursor.execute("DELETE FROM lims_testigos WHERE id_testigo = ?", id_testigo)
+    except pyodbc.IntegrityError:
+        raise HTTPException(status_code=400, detail=_MSG_TESTIGO_CON_MOVIMIENTOS)
+
+    audit.registrar(
+        conn, entidad="testigo", accion="eliminar",
+        id_usuario=user["id_usuario"], id_entidad=id_testigo,
+        valor_anterior={"codigo": row.codigo, "nombre": row.nombre, "nro_lote": row.nro_lote},
+    )
 
 
 def _ordenar_por_fecha_vencimiento(testigos: list[TestigoResponse], reverse: bool) -> list[TestigoResponse]:
@@ -903,14 +1277,15 @@ def listar_testigos(
 ):
     cursor = conn.cursor()
     like = f"%{buscar}%"
+    base_sql = _select_testigos_sql(cursor)
     if activo is None:
         cursor.execute(
-            "SELECT * FROM lims_testigos WHERE codigo LIKE ? OR nombre LIKE ? ORDER BY nombre",
+            base_sql + "WHERE t.codigo LIKE ? OR t.nombre LIKE ? ORDER BY t.nombre",
             like, like,
         )
     else:
         cursor.execute(
-            "SELECT * FROM lims_testigos WHERE activo = ? AND (codigo LIKE ? OR nombre LIKE ?) ORDER BY nombre",
+            base_sql + "WHERE t.activo = ? AND (t.codigo LIKE ? OR t.nombre LIKE ?) ORDER BY t.nombre",
             1 if activo else 0, like, like,
         )
     testigos = [_fila_a_testigo(r, fecha_ref=fecha_ref) for r in cursor.fetchall()]
@@ -966,7 +1341,7 @@ def detalle_testigo(
     conn: pyodbc.Connection = Depends(limss_db),
 ):
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM lims_testigos WHERE id_testigo = ?", id_testigo)
+    cursor.execute(_select_testigos_sql(cursor) + "WHERE t.id_testigo = ?", id_testigo)
     row = cursor.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Testigo no encontrado")
@@ -1040,7 +1415,7 @@ def cambiar_estado_testigo(
         valor_anterior={"activo": bool(row.activo)}, valor_nuevo={"activo": activo},
     )
 
-    cursor.execute("SELECT * FROM lims_testigos WHERE id_testigo = ?", id_testigo)
+    cursor.execute(_select_testigos_sql(cursor) + "WHERE t.id_testigo = ?", id_testigo)
     return _fila_a_testigo(cursor.fetchone())
 
 
@@ -1081,5 +1456,12 @@ def ajustar_stock_testigo(
         valor_nuevo={"stock_actual": stock_nuevo}, motivo=body.observaciones,
     )
 
-    cursor.execute("SELECT * FROM lims_testigos WHERE id_testigo = ?", id_testigo)
+    cursor.execute(_select_testigos_sql(cursor) + "WHERE t.id_testigo = ?", id_testigo)
     return _fila_a_testigo(cursor.fetchone())
+
+
+# Reexport sin prefijo para reutilizar la misma clasificación/orden de
+# testigos desde dashboard.py, sin duplicar esta lógica.
+select_testigos_sql = _select_testigos_sql
+fila_a_testigo = _fila_a_testigo
+ordenar_por_fecha_vencimiento = _ordenar_por_fecha_vencimiento

@@ -29,8 +29,6 @@ export default function EspecificacionFormPage({ modo }) {
   const [articulos, setArticulos] = useState([]);
   const [articulo, setArticulo] = useState(null);
   const [tipoMaterial, setTipoMaterial] = useState('');
-  const [cantidadMuestra, setCantidadMuestra] = useState('');
-  const [unidadMuestra, setUnidadMuestra] = useState('');
   const [versionActual, setVersionActual] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(esRevision);
@@ -43,8 +41,6 @@ export default function EspecificacionFormPage({ modo }) {
       .then((esp) => {
         setArticulo({ IdM21: esp.erp_IdM21, CODART: esp.erp_CODART, DESART: esp.erp_DESART });
         setTipoMaterial(esp.tipo_material);
-        setCantidadMuestra(esp.cantidad_muestra ?? '');
-        setUnidadMuestra(esp.unidad_muestra || '');
         setVersionActual(esp.version);
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo cargar la especificación'))
@@ -110,8 +106,6 @@ export default function EspecificacionFormPage({ modo }) {
           erp_CODART: articulo.CODART,
           erp_DESART: articulo.DESART,
           tipo_material: tipoMaterial,
-          cantidad_muestra: cantidadMuestra !== '' ? Number(cantidadMuestra) : null,
-          unidad_muestra: unidadMuestra.trim() || null,
         });
       }
       navigate(`/maestros/especificaciones/${resultado.id_especificacion}`, { replace: true });
@@ -215,31 +209,6 @@ export default function EspecificacionFormPage({ modo }) {
 
               <span className="badge badge-neutral">{labelTipo(tipoMaterial)}</span>
               {esRevision && <span className="badge badge-neutral" style={{ marginLeft: 'var(--sp-2)' }}>Versión actual: {versionActual}</span>}
-
-              <div style={{ display: 'flex', gap: 'var(--sp-3)', marginTop: 'var(--sp-4)' }}>
-                <div className="field" style={{ flex: 1, marginBottom: 0 }}>
-                  <label className="field-label">Cantidad de muestra a enviar</label>
-                  <input
-                    className="field-input"
-                    type="number"
-                    step="any"
-                    placeholder="Ej. 50"
-                    value={cantidadMuestra}
-                    disabled={esRevision}
-                    onChange={(e) => setCantidadMuestra(e.target.value)}
-                  />
-                </div>
-                <div className="field" style={{ flex: 1, marginBottom: 0 }}>
-                  <label className="field-label">Unidad</label>
-                  <input
-                    className="field-input"
-                    placeholder="Ej. g, ml, unidades"
-                    value={unidadMuestra}
-                    disabled={esRevision}
-                    onChange={(e) => setUnidadMuestra(e.target.value)}
-                  />
-                </div>
-              </div>
 
               {esRevision && (
                 <p style={{ color: 'var(--ink-2)', fontSize: 'var(--fs-sm)', marginTop: 'var(--sp-3)', marginBottom: 0 }}>

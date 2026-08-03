@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import TopBar from '../../components/TopBar';
 import { maestrosApi } from '../../api/maestros';
-import { ApiError } from '../../api/client';
+import { muestrasApi } from '../../api/muestras';
+import { ApiError, abrirPdfConAuth } from '../../api/client';
 
 export default function TestigoFormPage({ modo }) {
   const esEdicion = modo === 'editar';
@@ -18,11 +19,17 @@ export default function TestigoFormPage({ modo }) {
   const [stockMinimo, setStockMinimo] = useState('');
   const [unidadMedida, setUnidadMedida] = useState('');
   const [observaciones, setObservaciones] = useState('');
+  const [idLaboratorio, setIdLaboratorio] = useState('');
+  const [laboratorios, setLaboratorios] = useState([]);
   const [archivo, setArchivo] = useState(null);
   const [tieneCertificado, setTieneCertificado] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(esEdicion);
   const [guardando, setGuardando] = useState(false);
+
+  useEffect(() => {
+    muestrasApi.listarLaboratorios(true).then(setLaboratorios).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!esEdicion) return;
@@ -37,6 +44,7 @@ export default function TestigoFormPage({ modo }) {
         setStockMinimo(String(t.stock_minimo));
         setUnidadMedida(t.unidad_medida || '');
         setObservaciones(t.observaciones || '');
+        setIdLaboratorio(t.id_laboratorio != null ? String(t.id_laboratorio) : '');
         setTieneCertificado(!!t.pdf_certificado);
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo cargar el testigo'))
@@ -45,9 +53,7 @@ export default function TestigoFormPage({ modo }) {
 
   async function verCertificado() {
     try {
-      const blob = await maestrosApi.descargarCertificado(id);
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
+      await abrirPdfConAuth(`/api/maestros/testigos/${id}/certificado`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo descargar el certificado');
     }
@@ -77,6 +83,7 @@ export default function TestigoFormPage({ modo }) {
         formData.append('stock_minimo', stockMinimo || '0');
         if (unidadMedida.trim()) formData.append('unidad_medida', unidadMedida.trim());
         if (observaciones.trim()) formData.append('observaciones', observaciones.trim());
+        if (idLaboratorio) formData.append('id_laboratorio', idLaboratorio);
         if (archivo) formData.append('pdf_certificado', archivo);
         await maestrosApi.editarTestigo(id, formData);
         navigate(`/maestros/testigos/${id}`, { replace: true });
@@ -91,6 +98,7 @@ export default function TestigoFormPage({ modo }) {
         formData.append('stock_minimo', stockMinimo || '0');
         if (unidadMedida.trim()) formData.append('unidad_medida', unidadMedida.trim());
         if (observaciones.trim()) formData.append('observaciones', observaciones.trim());
+        if (idLaboratorio) formData.append('id_laboratorio', idLaboratorio);
         if (archivo) formData.append('pdf_certificado', archivo);
         const testigo = await maestrosApi.crearTestigo(formData);
         navigate(`/maestros/testigos/${testigo.id_testigo}`, { replace: true });
@@ -115,7 +123,7 @@ export default function TestigoFormPage({ modo }) {
       <TopBar
         titulo={esEdicion ? 'Editar testigo' : 'Nuevo testigo'}
         subtitulo="Datos Maestros"
-        onBack={() => navigate(esEdicion ? `/maestros/testigos/${id}` : '/maestros/testigos')}
+        onBack={() => navigate(-1)}
       />
       <div className="screen-content">
         <form onSubmit={handleSubmit}>
@@ -224,6 +232,22 @@ export default function TestigoFormPage({ modo }) {
                   disabled={guardando}
                 />
               </div>
+            </div>
+
+            <div className="field">
+              <label className="field-label" htmlFor="idLaboratorio">Laboratorio asignado</label>
+              <select
+                id="idLaboratorio"
+                className="field-input"
+                value={idLaboratorio}
+                onChange={(e) => setIdLaboratorio(e.target.value)}
+                disabled={guardando}
+              >
+                <option value="">Sin asignar</option>
+                {laboratorios.map((l) => (
+                  <option key={l.id_laboratorio} value={l.id_laboratorio}>{l.nombre}</option>
+                ))}
+              </select>
             </div>
 
             <div className="field">

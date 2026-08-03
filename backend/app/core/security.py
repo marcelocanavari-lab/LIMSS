@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 import bcrypt as _bcrypt
 import pyodbc
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 
@@ -94,6 +94,47 @@ def get_current_user(
         "id_sesion": row.id_sesion,
         "token": credentials.credentials,
     }
+
+
+def verificar_acceso_ebr(
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    authorization: Optional[str] = Header(None),
+    conn: pyodbc.Connection = Depends(limss_db),
+) -> None:
+    """Acceso al endpoint de sincronización de usuarios del eBR (sistema
+    externo, sin sesión LIMSS propia): acepta la API key fija configurada
+    en EBR_SYNC_API_KEY, o -- para poder probar el endpoint como admin
+    logueado -- el mismo bearer token que usa el resto de la API."""
+    if settings.ebr_sync_api_key and x_api_key == settings.ebr_sync_api_key:
+        return
+
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1]
+        payload = decode_token(token)
+        id_usuario = payload.get("sub")
+        if id_usuario:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT 1
+                FROM lims_usuarios u
+                JOIN lims_sesiones s ON s.id_usuario = u.id_usuario
+                WHERE u.id_usuario = ?
+                  AND s.token = ?
+                  AND s.fecha_cierre IS NULL
+                  AND s.fecha_expira > GETDATE()
+                  AND u.activo = 1
+                """,
+                int(id_usuario),
+                token,
+            )
+            if cursor.fetchone():
+                return
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="No autorizado: se requiere API key (X-API-Key) o un token válido",
+    )
 
 
 def require_rol(*roles: str):

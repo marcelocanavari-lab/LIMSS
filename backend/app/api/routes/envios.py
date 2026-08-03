@@ -52,11 +52,13 @@ _SELECT_DATOS_REMITO = """
            m.cantidad_enviada, m.unidad_enviada,
            u.nombre + ' ' + u.apellido AS usuario_muestreo_nombre,
            lab.nombre AS laboratorio_nombre, lab.direccion AS laboratorio_direccion,
-           lab.contacto AS laboratorio_contacto
+           lab.contacto AS laboratorio_contacto,
+           c.nombre AS contacto_nombre, c.cargo AS contacto_cargo
     FROM lims_envios e
     INNER JOIN lims_muestras m ON m.id_muestra = e.id_muestra
     INNER JOIN lims_usuarios u ON u.id_usuario = m.id_usuario_muestreo
     INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = e.id_laboratorio
+    LEFT JOIN lims_laboratorio_contactos c ON c.id_contacto = e.id_contacto
 """
 
 

@@ -84,7 +84,7 @@ export default function MuestraDetallePage() {
   if (error || !muestra) {
     return (
       <div className="screen">
-        <TopBar titulo="Muestra" subtitulo="Muestras" onBack={() => navigate('/muestras')} />
+        <TopBar titulo="Muestra" subtitulo="Muestras" onBack={() => navigate(-1)} />
         <div className="screen-content">
           <div className="alert alert-danger">{error || 'No encontrada'}</div>
         </div>
@@ -94,7 +94,7 @@ export default function MuestraDetallePage() {
 
   return (
     <div className="screen">
-      <TopBar titulo={muestra.codigo_muestra} subtitulo="Muestras" onBack={() => navigate('/muestras')} />
+      <TopBar titulo={muestra.codigo_muestra} subtitulo="Muestras" onBack={() => navigate(-1)} />
       <div className="screen-content">
         {successMsg && <div className="alert alert-ok" style={{ marginBottom: 'var(--sp-4)' }}>{successMsg}</div>}
 

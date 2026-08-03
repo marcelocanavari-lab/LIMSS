@@ -28,10 +28,10 @@
   --ink-2: #c2cad6;        /* texto secundario */
   --ink-3: #8b94a3;        /* texto terciario / placeholder */
 
-  /* --- Acento de marca (ámbar instrumental) --- */
-  --accent: #e8a33d;
-  --accent-ink: #1c1305;
-  --accent-soft: #e8a33d22;
+  /* --- Acento de marca (azul Lamar) --- */
+  --accent: #1976D2;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #1976D222;
 
   /* --- Semáforo de estado (uso exclusivo: validación GMP / OOS) --- */
   --ok: #4caf6e;
@@ -53,6 +53,11 @@
   --border: #323a45;
   --border-soft: #262d36;
   --border-focus: var(--accent);
+
+  /* --- Barra superior (marca Lamar) --- */
+  --color-topbar-bg: #FFFFFF;
+  --color-topbar-text: #1565C0;
+  --color-topbar-border: #E0E0E0;
 
   /* --- Tipografía --- */
   --font-display: 'Spectral', Georgia, serif;

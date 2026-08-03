@@ -21,7 +21,7 @@ export default function CargaResultadosBandejaPage() {
 
   return (
     <div className="screen">
-      <TopBar titulo="Carga de Resultados" subtitulo="Envíos con ensayos pendientes de resultado" onBack={() => navigate('/menu')} />
+      <TopBar titulo="Carga de Resultados" subtitulo="Envíos con ensayos pendientes de resultado" onBack={() => navigate(-1)} />
       <div className="screen-content">
         {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}
 

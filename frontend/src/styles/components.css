@@ -19,6 +19,37 @@
   width: 100%;
 }
 
+/* --- Dashboard ---
+   Una sola región de scroll (mismo patrón probado que .screen-content usa
+   en el resto de la app -- el intento anterior con dos zonas flex separadas
+   (.dashboard-scroll + .dashboard-quick-fijo como hermanos) resultó frágil
+   y el scroll se escapaba a toda la página). "Acceso rápido" es el último
+   hijo de esa misma región, pegado abajo con position: sticky -- así queda
+   garantizado visible mientras se scrollea el resto, sin depender de que
+   ningún cálculo de alturas flex/overflow intermedio salga bien. */
+.dashboard-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: var(--sp-4);
+  width: 100%;
+}
+
+.dashboard-quick-fijo {
+  position: sticky;
+  bottom: calc(-1 * var(--sp-4));
+  margin: var(--sp-4) calc(-1 * var(--sp-4)) calc(-1 * var(--sp-4));
+  background: var(--surf-0);
+  padding: var(--sp-3) var(--sp-4);
+  border-top: 1px solid var(--border);
+}
+
+.dashboard-tabla-scroll {
+  overflow-y: auto;
+}
+
 /* Envuelve una .data-table larga para que solo las filas hagan scroll,
    con los encabezados siempre visibles -- se adapta a lo que haya arriba
    (buscador, filtros, formularios) sin alturas fijas por pantalla.
@@ -36,8 +67,9 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--sp-4) var(--sp-5);
-  background: var(--surf-1);
-  border-bottom: 1px solid var(--border-soft);
+  background: var(--color-topbar-bg);
+  color: var(--color-topbar-text);
+  border-bottom: 1px solid var(--color-topbar-border);
 }
 
 .topbar-brand {
@@ -46,18 +78,18 @@
   gap: var(--sp-3);
 }
 
-.topbar-mark {
-  width: 36px;
+.topbar-logo {
   height: 36px;
-  border-radius: 10px;
-  background: var(--accent);
-  color: var(--accent-ink);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: var(--fs-lg);
+  width: auto;
+  display: block;
+}
+
+.topbar .btn-ghost {
+  color: var(--color-topbar-text);
+}
+.topbar .btn-ghost:hover:not(:disabled) {
+  color: var(--color-topbar-text);
+  background: rgba(21, 101, 192, 0.08);
 }
 
 .topbar-user {
@@ -73,10 +105,11 @@
   line-height: 1.25;
 }
 
-.user-chip-name { font-size: var(--fs-sm); font-weight: 600; }
+.user-chip-name { font-size: var(--fs-sm); font-weight: 600; color: var(--color-topbar-text); }
 .user-chip-role {
   font-size: var(--fs-xs);
-  color: var(--ink-2);
+  color: var(--color-topbar-text);
+  opacity: 0.8;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -210,6 +243,93 @@
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: var(--sp-4);
   align-items: start;
+}
+
+/* --- Dashboard de inicio --- */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--sp-4);
+}
+
+.stat-card {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border-radius: var(--radius-md);
+  border: none;
+  text-align: left;
+  width: 100%;
+  min-height: 0;
+  background: var(--surf-2);
+  transition: transform 0.08s ease, filter 0.15s ease;
+}
+.stat-card:hover:not(:disabled) { filter: brightness(1.12); }
+.stat-card:active:not(:disabled) { transform: scale(0.98); }
+
+.stat-card-icon {
+  font-size: 22px;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: var(--surf-3);
+  color: var(--ink-2);
+}
+
+.stat-card-value { font-size: var(--fs-2xl); font-weight: 700; font-family: var(--font-display); line-height: 1; }
+.stat-card-label { font-size: var(--fs-xs); color: var(--ink-2); margin-top: 4px; }
+
+.stat-card-warn .stat-card-icon { background: var(--warn-soft); color: var(--warn); }
+.stat-card-info .stat-card-icon { background: var(--info-soft); color: var(--info); }
+.stat-card-danger .stat-card-icon { background: var(--danger-soft); color: var(--danger); }
+
+.alerta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: var(--sp-4);
+}
+
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+.quick-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 12px 8px;
+  max-height: 80px;
+  background: var(--surf-2);
+  border-radius: var(--radius-md);
+  text-align: center;
+  overflow: hidden;
+}
+.quick-btn:hover:not(:disabled) { background: var(--surf-3); }
+
+.quick-btn-icon { font-size: 20px; line-height: 1; }
+
+.quick-btn-label {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* --- Lista de selección (muestras, ensayos) --- */
@@ -416,6 +536,21 @@
   .screen-content { overflow: visible; height: auto; }
   .printable { padding: 0; max-width: 100%; }
   .printable .card { break-inside: avoid; }
+}
+
+/* --- Secciones acordeón (reportes) --- */
+.acordeon-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--sp-3);
+  cursor: pointer;
+}
+.acordeon-toggle { font-size: var(--fs-lg); color: var(--ink-2); }
+.acordeon-body { margin-top: var(--sp-3); }
+.acordeon-body.cerrado { display: none; }
+@media print {
+  .acordeon-body.cerrado { display: block !important; }
 }
 
 /* --- Etiqueta de muestra (~7cm x 4cm, REQ-ENV-003) --- */

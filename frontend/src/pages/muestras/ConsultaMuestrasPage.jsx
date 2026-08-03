@@ -53,7 +53,7 @@ export default function ConsultaMuestrasPage() {
 
   return (
     <div className="screen">
-      <TopBar titulo="Consulta de Muestras" subtitulo="Estado general y recorrido completo" onBack={() => navigate('/menu')} />
+      <TopBar titulo="Consulta de Muestras" subtitulo="Estado general y recorrido completo" onBack={() => navigate(-1)} />
       <div className="screen-content">
         <div style={{ display: 'flex', gap: 'var(--sp-3)', marginBottom: 'var(--sp-4)', flexWrap: 'wrap' }}>
           <input

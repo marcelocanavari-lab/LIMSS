@@ -16,6 +16,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.core.security import get_current_user, require_rol
 from app.db.connections import erp_db, limss_db
 from app.schemas.muestras import (
+    ContactoLaboratorioCreate,
+    ContactoLaboratorioResponse,
+    ContactoLaboratorioUpdate,
     EnsayoSolicitado,
     EnvioCreate,
     EnvioResponse,
@@ -35,7 +38,7 @@ from app.schemas.muestras import (
 )
 from app.schemas.recorrido import RecorridoResponse
 from app.services import audit
-from app.services.erp_ir import buscar_lineas_ir, formatear_nro_ir
+from app.services.erp_ir import buscar_lineas_ir, formatear_nro_ir, normalizar_fecha_sentinel
 from app.services.erp_lotes import buscar_lote
 from app.services.erp_materiales import obtener_codsar_por_tipo
 from app.services.recorrido import construir_recorrido
@@ -232,6 +235,144 @@ def cambiar_estado_laboratorio(
     return _fila_a_laboratorio(cursor.fetchone())
 
 
+# ── Contactos por laboratorio ─────────────────────────────────────
+#
+# Rutas literales de 3 segmentos ("/laboratorios/{id}/contactos..."): no
+# colisionan con "/{id_muestra}" (un solo segmento) sin importar el orden de
+# declaración, pero se agrupan acá junto al resto de rutas de laboratorios
+# por prolijidad.
+
+def _fila_a_contacto(row) -> ContactoLaboratorioResponse:
+    return ContactoLaboratorioResponse(
+        id_contacto=row.id_contacto, id_laboratorio=row.id_laboratorio, nombre=row.nombre,
+        cargo=row.cargo, email=row.email, telefono=row.telefono, activo=bool(row.activo),
+    )
+
+
+@router.get("/laboratorios/{id_laboratorio}/contactos", response_model=list[ContactoLaboratorioResponse])
+def listar_contactos_laboratorio(
+    id_laboratorio: int,
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM lims_laboratorios WHERE id_laboratorio = ?", id_laboratorio)
+    if not cursor.fetchone():
+        raise HTTPException(status_code=404, detail="Laboratorio no encontrado")
+    cursor.execute(
+        "SELECT * FROM lims_laboratorio_contactos WHERE id_laboratorio = ? AND activo = 1 ORDER BY nombre",
+        id_laboratorio,
+    )
+    return [_fila_a_contacto(r) for r in cursor.fetchall()]
+
+
+@router.post("/laboratorios/{id_laboratorio}/contactos", response_model=ContactoLaboratorioResponse, status_code=201)
+def crear_contacto_laboratorio(
+    id_laboratorio: int,
+    body: ContactoLaboratorioCreate,
+    user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM lims_laboratorios WHERE id_laboratorio = ?", id_laboratorio)
+    if not cursor.fetchone():
+        raise HTTPException(status_code=404, detail="Laboratorio no encontrado")
+
+    cursor.execute(
+        """
+        INSERT INTO lims_laboratorio_contactos (id_laboratorio, nombre, cargo, email, telefono, activo)
+        VALUES (?, ?, ?, ?, ?, 1)
+        """,
+        id_laboratorio, body.nombre, body.cargo, body.email, body.telefono,
+    )
+    cursor.execute("SELECT @@IDENTITY AS id")
+    id_contacto = int(cursor.fetchone().id)
+
+    audit.registrar(
+        conn, entidad="laboratorio_contacto", accion="crear",
+        id_usuario=user["id_usuario"], id_entidad=id_contacto,
+        valor_nuevo={"id_laboratorio": id_laboratorio, "nombre": body.nombre},
+    )
+
+    cursor.execute("SELECT * FROM lims_laboratorio_contactos WHERE id_contacto = ?", id_contacto)
+    return _fila_a_contacto(cursor.fetchone())
+
+
+@router.put("/laboratorios/{id_laboratorio}/contactos/{id_contacto}", response_model=ContactoLaboratorioResponse)
+def editar_contacto_laboratorio(
+    id_laboratorio: int,
+    id_contacto: int,
+    body: ContactoLaboratorioUpdate,
+    user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * FROM lims_laboratorio_contactos WHERE id_contacto = ? AND id_laboratorio = ?",
+        id_contacto, id_laboratorio,
+    )
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Contacto no encontrado")
+
+    cursor.execute(
+        """
+        UPDATE lims_laboratorio_contactos
+        SET nombre = ?, cargo = ?, email = ?, telefono = ?, activo = ?
+        WHERE id_contacto = ?
+        """,
+        body.nombre, body.cargo, body.email, body.telefono, 1 if body.activo else 0, id_contacto,
+    )
+
+    audit.registrar(
+        conn, entidad="laboratorio_contacto", accion="modificar",
+        id_usuario=user["id_usuario"], id_entidad=id_contacto,
+        valor_anterior={"nombre": row.nombre, "cargo": row.cargo, "activo": bool(row.activo)},
+        valor_nuevo={"nombre": body.nombre, "cargo": body.cargo, "activo": body.activo},
+    )
+
+    cursor.execute("SELECT * FROM lims_laboratorio_contactos WHERE id_contacto = ?", id_contacto)
+    return _fila_a_contacto(cursor.fetchone())
+
+
+@router.delete("/laboratorios/{id_laboratorio}/contactos/{id_contacto}", status_code=204)
+def eliminar_contacto_laboratorio(
+    id_laboratorio: int,
+    id_contacto: int,
+    user: dict = Depends(require_rol("qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Si el contacto ya fue usado (envíos o remitos de testigos), no se
+    puede borrar sin dejar referencias huérfanas -- se desactiva en su
+    lugar, igual que el patrón ya usado para testigos/especificaciones."""
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * FROM lims_laboratorio_contactos WHERE id_contacto = ? AND id_laboratorio = ?",
+        id_contacto, id_laboratorio,
+    )
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Contacto no encontrado")
+
+    cursor.execute("SELECT COUNT(*) AS n FROM lims_envios WHERE id_contacto = ?", id_contacto)
+    tiene_envios = cursor.fetchone().n > 0
+    cursor.execute("SELECT COUNT(*) AS n FROM lims_remito_testigos_cab WHERE id_contacto = ?", id_contacto)
+    tiene_remitos_testigos = cursor.fetchone().n > 0
+
+    if tiene_envios or tiene_remitos_testigos:
+        cursor.execute("UPDATE lims_laboratorio_contactos SET activo = 0 WHERE id_contacto = ?", id_contacto)
+        accion = "desactivar"
+    else:
+        cursor.execute("DELETE FROM lims_laboratorio_contactos WHERE id_contacto = ?", id_contacto)
+        accion = "eliminar"
+
+    audit.registrar(
+        conn, entidad="laboratorio_contacto", accion=accion,
+        id_usuario=user["id_usuario"], id_entidad=id_contacto,
+        valor_anterior={"nombre": row.nombre},
+    )
+
+
 # ── Búsqueda de IR en el ERP (REQ-ENV-002) ────────────────────────
 
 @router.get("/erp/ir/{nro_ir}", response_model=list[LineaIR])
@@ -247,7 +388,10 @@ def buscar_ir(
         LineaIR(
             N01Id=r.N01Id, NUMCOMO=formatear_nro_ir(r.NUMCOMO, r.FECCOM), IdM21=r.IdM21,
             CODART=r.CODART, DESART=r.DESART, CANTID=float(r.CANTID),
-            unidad=r.unidad, proveedor=r.proveedor,
+            unidad=r.unidad, proveedor=r.proveedor, proveedor_codigo=r.proveedor_codigo,
+            fecha_ingreso=normalizar_fecha_sentinel(r.FECCOM),
+            fecha_vencimiento=normalizar_fecha_sentinel(r.VENCOM),
+            cantidad_ingresada=float(r.cantidad_total) if r.cantidad_total is not None else None,
             advertencia=(
                 f"Este IR corresponde a un artículo de tipo {r.DESSAR.strip()} (no es Materia Prima). "
                 "Verificá que el número de IR sea correcto."
@@ -277,7 +421,10 @@ def buscar_material(
         return [
             MaterialEncontrado(
                 referencia=formatear_nro_ir(r.NUMCOMO, r.FECCOM), IdM21=r.IdM21, CODART=r.CODART, DESART=r.DESART,
-                cantidad=float(r.CANTID), unidad=r.unidad, proveedor=r.proveedor,
+                cantidad=float(r.CANTID), unidad=r.unidad, proveedor=r.proveedor, proveedor_codigo=r.proveedor_codigo,
+                fecha_ingreso=normalizar_fecha_sentinel(r.FECCOM),
+                fecha_vencimiento=normalizar_fecha_sentinel(r.VENCOM),
+                cantidad_ingresada=float(r.cantidad_total) if r.cantidad_total is not None else None,
                 advertencia=(
                     f"Este IR corresponde a un artículo de tipo {r.DESSAR.strip()} (no es Materia Prima). "
                     "Verificá que el número de IR sea correcto."
@@ -554,6 +701,17 @@ def confirmar_envio(
     if not cursor.fetchone():
         raise HTTPException(status_code=404, detail="Laboratorio no encontrado o inactivo")
 
+    if body.id_contacto is not None:
+        cursor.execute(
+            "SELECT 1 FROM lims_laboratorio_contactos WHERE id_contacto = ? AND id_laboratorio = ? AND activo = 1",
+            body.id_contacto, body.id_laboratorio,
+        )
+        if not cursor.fetchone():
+            raise HTTPException(
+                status_code=400,
+                detail="El contacto indicado no pertenece a este laboratorio o está inactivo",
+            )
+
     ids_espec_ensayo = body.id_espec_ensayo or []
     if ids_espec_ensayo:
         placeholders = ",".join("?" * len(ids_espec_ensayo))
@@ -635,12 +793,12 @@ def confirmar_envio(
     cursor.execute(
         """
         INSERT INTO lims_envios
-            (id_muestra, id_laboratorio,
+            (id_muestra, id_laboratorio, id_contacto,
              temperatura_transporte, nro_remito, transportista,
              analisis_solicitados, protocolo_utilizar, id_usuario_envio)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        id_muestra, body.id_laboratorio,
+        id_muestra, body.id_laboratorio, body.id_contacto,
         body.temperatura_transporte, body.nro_remito, body.transportista,
         body.analisis_solicitados, body.protocolo_utilizar, user["id_usuario"],
     )
@@ -678,6 +836,12 @@ def confirmar_envio(
     cursor.execute("SELECT nombre FROM lims_laboratorios WHERE id_laboratorio = ?", body.id_laboratorio)
     laboratorio_nombre = cursor.fetchone().nombre
 
+    contacto_nombre = None
+    if body.id_contacto is not None:
+        cursor.execute("SELECT nombre FROM lims_laboratorio_contactos WHERE id_contacto = ?", body.id_contacto)
+        c = cursor.fetchone()
+        contacto_nombre = c.nombre if c else None
+
     cursor.execute("SELECT * FROM lims_envios WHERE id_envio = ?", id_envio)
     row = cursor.fetchone()
     return EnvioResponse(
@@ -685,6 +849,8 @@ def confirmar_envio(
         id_muestra=row.id_muestra,
         id_laboratorio=row.id_laboratorio,
         laboratorio_nombre=laboratorio_nombre,
+        id_contacto=row.id_contacto,
+        contacto_nombre=contacto_nombre,
         testigos=testigos_enviados,
         fecha_despacho=row.fecha_despacho,
         temperatura_transporte=row.temperatura_transporte,
@@ -798,9 +964,10 @@ def listar_envios(
     cursor = conn.cursor()
     cursor.execute(
         """
-        SELECT e.*, lab.nombre AS laboratorio_nombre
+        SELECT e.*, lab.nombre AS laboratorio_nombre, c.nombre AS contacto_nombre
         FROM lims_envios e
         INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = e.id_laboratorio
+        LEFT JOIN lims_laboratorio_contactos c ON c.id_contacto = e.id_contacto
         WHERE e.id_muestra = ?
         ORDER BY e.id_envio
         """,
@@ -816,6 +983,8 @@ def listar_envios(
             id_muestra=row.id_muestra,
             id_laboratorio=row.id_laboratorio,
             laboratorio_nombre=row.laboratorio_nombre,
+            id_contacto=row.id_contacto,
+            contacto_nombre=row.contacto_nombre,
             testigos=_obtener_testigos_enviados(cursor, row.id_envio),
             fecha_despacho=row.fecha_despacho,
             temperatura_transporte=row.temperatura_transporte,
@@ -846,13 +1015,15 @@ def obtener_remito(
                m.cantidad_enviada, m.unidad_enviada,
                u.nombre + ' ' + u.apellido AS usuario_muestreo_nombre,
                e.fecha_despacho, e.temperatura_transporte, e.nro_remito, e.transportista,
-               e.analisis_solicitados, e.protocolo_utilizar,
+               e.analisis_solicitados, e.protocolo_utilizar, e.id_contacto,
                lab.nombre AS laboratorio_nombre, lab.direccion AS laboratorio_direccion,
-               lab.contacto AS laboratorio_contacto
+               lab.contacto AS laboratorio_contacto,
+               c.nombre AS contacto_nombre, c.cargo AS contacto_cargo
         FROM lims_muestras m
         INNER JOIN lims_envios e ON e.id_muestra = m.id_muestra
         INNER JOIN lims_usuarios u ON u.id_usuario = m.id_usuario_muestreo
         INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = e.id_laboratorio
+        LEFT JOIN lims_laboratorio_contactos c ON c.id_contacto = e.id_contacto
         WHERE m.id_muestra = ? AND e.id_envio = ?
         """,
         id_muestra, id_envio,
@@ -900,6 +1071,9 @@ def obtener_remito(
         laboratorio_nombre=row.laboratorio_nombre,
         laboratorio_direccion=row.laboratorio_direccion,
         laboratorio_contacto=row.laboratorio_contacto,
+        id_contacto=row.id_contacto,
+        contacto_nombre=row.contacto_nombre,
+        contacto_cargo=row.contacto_cargo,
         fecha_despacho=row.fecha_despacho,
         temperatura_transporte=row.temperatura_transporte,
         nro_remito=row.nro_remito,

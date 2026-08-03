@@ -5,6 +5,18 @@ import TopBar from '../../components/TopBar';
 import { maestrosApi } from '../../api/maestros';
 import { ApiError } from '../../api/client';
 
+const TIPOS_MATERIAL = [
+  { value: '', label: 'Todos' },
+  { value: 'materia_prima', label: 'Materia Prima' },
+  { value: 'granel', label: 'Granel' },
+  { value: 'semi_elaborado', label: 'Semi-Elaborado' },
+  { value: 'producto_terminado', label: 'PT' },
+];
+
+function Indicador({ activo }) {
+  return activo ? <span style={{ color: 'var(--ok, #2e9e5b)', fontWeight: 700 }}>✓</span> : <span style={{ color: 'var(--ink-3)' }}>—</span>;
+}
+
 export default function EspecificacionesPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -13,6 +25,7 @@ export default function EspecificacionesPage() {
   const [especificaciones, setEspecificaciones] = useState([]);
   const [buscar, setBuscar] = useState('');
   const [soloVigentes, setSoloVigentes] = useState(true);
+  const [tipoMaterial, setTipoMaterial] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -21,20 +34,20 @@ export default function EspecificacionesPage() {
     setLoading(true);
     setError('');
     maestrosApi
-      .listarEspecificaciones({ vigente: soloVigentes ? true : null, buscar })
+      .listarEspecificaciones({ vigente: soloVigentes ? true : null, buscar, tipoMaterial: tipoMaterial || undefined })
       .then((data) => activo && setEspecificaciones(data))
       .catch((err) => activo && setError(err instanceof ApiError ? err.message : 'No se pudo cargar el listado'))
       .finally(() => activo && setLoading(false));
     return () => {
       activo = false;
     };
-  }, [buscar, soloVigentes]);
+  }, [buscar, soloVigentes, tipoMaterial]);
 
   return (
     <div className="screen">
-      <TopBar titulo="Especificaciones" subtitulo="Datos Maestros" onBack={() => navigate('/menu')} />
+      <TopBar titulo="Especificaciones" subtitulo="Datos Maestros" onBack={() => navigate(-1)} />
       <div className="screen-content">
-        <div style={{ display: 'flex', gap: 'var(--sp-3)', marginBottom: 'var(--sp-4)', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 'var(--sp-3)', marginBottom: 'var(--sp-3)', flexWrap: 'wrap' }}>
           <input
             className="field-input"
             style={{ flex: 1, minWidth: 200 }}
@@ -53,6 +66,18 @@ export default function EspecificacionesPage() {
               + Nueva especificación
             </button>
           )}
+        </div>
+
+        <div style={{ display: 'flex', gap: 'var(--sp-2)', marginBottom: 'var(--sp-4)', flexWrap: 'wrap' }}>
+          {TIPOS_MATERIAL.map((t) => (
+            <button
+              key={t.value}
+              className={tipoMaterial === t.value ? 'btn btn-primary' : 'btn btn-ghost'}
+              onClick={() => setTipoMaterial(t.value)}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
 
         {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}
@@ -74,6 +99,8 @@ export default function EspecificacionesPage() {
                 <th>Tipo</th>
                 <th>Versión</th>
                 <th>Estado</th>
+                <th>Muestras</th>
+                <th>Testigos</th>
               </tr>
             </thead>
             <tbody>
@@ -94,6 +121,8 @@ export default function EspecificacionesPage() {
                       <span className="badge badge-neutral">Obsoleta</span>
                     )}
                   </td>
+                  <td style={{ textAlign: 'center' }}><Indicador activo={e.tiene_muestras} /></td>
+                  <td style={{ textAlign: 'center' }}><Indicador activo={e.tiene_testigos} /></td>
                 </tr>
               ))}
             </tbody>
