@@ -49,15 +49,18 @@ export const maestrosApi = {
 
   // Testigos
   crearTestigo: (formData) => api.postForm('/api/maestros/testigos', formData),
-  listarTestigos: ({ activo, soloAlertas, buscar = '', estado, stockBajo, orden, fechaRef } = {}) => {
+  listarTestigos: ({ activo, soloAlertas, buscar = '', estado, stockBajo, estados, orden, fechaRef, diasAnticipacion, idCategoria } = {}) => {
     const params = new URLSearchParams();
     if (activo !== undefined && activo !== null) params.set('activo', activo);
     if (soloAlertas) params.set('solo_alertas', 'true');
     if (buscar) params.set('buscar', buscar);
     if (estado) params.set('estado', estado);
     if (stockBajo) params.set('stock_bajo', 'true');
+    if (estados && estados.length > 0) params.set('estados', estados.join(','));
     if (orden) params.set('orden', orden);
     if (fechaRef) params.set('fecha_ref', fechaRef);
+    if (diasAnticipacion !== undefined && diasAnticipacion !== null) params.set('dias_anticipacion', diasAnticipacion);
+    if (idCategoria) params.set('id_categoria', idCategoria);
     return api.get(`/api/maestros/testigos?${params.toString()}`);
   },
   obtenerTestigo: (id) => api.get(`/api/maestros/testigos/${id}`),
@@ -67,4 +70,30 @@ export const maestrosApi = {
   eliminarTestigo: (id) => api.del(`/api/maestros/testigos/${id}`),
   ajustarStockTestigo: (id, cantidad, observaciones) =>
     api.post(`/api/maestros/testigos/${id}/movimiento`, { cantidad, observaciones }),
+
+  // Laboratorios asignados a un testigo (muchos a muchos)
+  listarLaboratoriosTestigo: (id) => api.get(`/api/maestros/testigos/${id}/laboratorios`),
+  asignarLaboratorioTestigo: (id, idLaboratorio, consumoEstimado, unidadConsumo) =>
+    api.post(`/api/maestros/testigos/${id}/laboratorios`, {
+      id_laboratorio: idLaboratorio,
+      consumo_estimado: consumoEstimado !== undefined && consumoEstimado !== '' ? Number(consumoEstimado) : null,
+      unidad_consumo: unidadConsumo || null,
+    }),
+  editarConsumoLaboratorioTestigo: (id, idLaboratorio, consumoEstimado, unidadConsumo) =>
+    api.put(`/api/maestros/testigos/${id}/laboratorios/${idLaboratorio}`, {
+      consumo_estimado: consumoEstimado !== undefined && consumoEstimado !== '' ? Number(consumoEstimado) : null,
+      unidad_consumo: unidadConsumo || null,
+    }),
+  desvincularLaboratorioTestigo: (id, idLaboratorio) =>
+    api.del(`/api/maestros/testigos/${id}/laboratorios/${idLaboratorio}`),
+
+  // Categorías de testigos
+  listarCategoriasTestigo: (activo) => {
+    const params = new URLSearchParams();
+    if (activo !== undefined && activo !== null) params.set('activo', activo);
+    return api.get(`/api/maestros/testigo-categorias?${params.toString()}`);
+  },
+  crearCategoriaTestigo: (data) => api.post('/api/maestros/testigo-categorias', data),
+  editarCategoriaTestigo: (id, data) => api.put(`/api/maestros/testigo-categorias/${id}`, data),
+  eliminarCategoriaTestigo: (id) => api.del(`/api/maestros/testigo-categorias/${id}`),
 };

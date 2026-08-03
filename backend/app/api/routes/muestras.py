@@ -812,13 +812,61 @@ def confirmar_envio(
         )
 
     testigos_enviados = []
+    hubo_alerta_reorden = False
     for testigo in testigos_confirmados:
-        # Solo confirmación de que se incluye en el envío -- el stock se
-        # descuenta en el flujo aparte de remitos de testigos, no acá.
         cursor.execute(
             "INSERT INTO lims_envio_testigos (id_envio, id_testigo, cantidad) VALUES (?, ?, 0)",
             id_envio, testigo.id_testigo,
         )
+
+        # Descuento automático de stock según el consumo configurado para este
+        # testigo en ESTE laboratorio (lims_testigo_laboratorios) -- si no está
+        # configurado, el consumo es manual y no se toca el stock acá.
+        cursor.execute(
+            "SELECT consumo_estimado FROM lims_testigo_laboratorios WHERE id_testigo = ? AND id_laboratorio = ?",
+            testigo.id_testigo, body.id_laboratorio,
+        )
+        consumo_row = cursor.fetchone()
+        consumo_estimado = (
+            float(consumo_row.consumo_estimado)
+            if consumo_row and consumo_row.consumo_estimado is not None
+            else None
+        )
+
+        if consumo_estimado is not None:
+            stock_resultante = float(testigo.stock_actual) - consumo_estimado
+            cursor.execute(
+                "UPDATE lims_testigos SET stock_actual = ? WHERE id_testigo = ?",
+                stock_resultante, testigo.id_testigo,
+            )
+            cursor.execute(
+                """
+                INSERT INTO lims_testigo_movimientos
+                    (id_testigo, id_envio, tipo, cantidad, stock_resultante, id_usuario, observaciones)
+                VALUES (?, ?, 'egreso', ?, ?, ?, ?)
+                """,
+                testigo.id_testigo, id_envio, -consumo_estimado, stock_resultante, user["id_usuario"],
+                f"Consumo por envío de muestra - remito {body.nro_remito or f'(envío #{id_envio})'}",
+            )
+            # Stock negativo no bloquea el envío -- solo indica que hay que
+            # reponer el testigo; se avisa vía alerta_reorden en la respuesta.
+            if stock_resultante <= float(testigo.stock_minimo):
+                hubo_alerta_reorden = True
+            audit.registrar(
+                conn, entidad="testigo", accion="consumo_envio",
+                id_usuario=user["id_usuario"], id_entidad=testigo.id_testigo,
+                valor_anterior={"stock_actual": float(testigo.stock_actual)},
+                valor_nuevo={"stock_actual": stock_resultante, "id_envio": id_envio, "consumo_estimado": consumo_estimado},
+            )
+        else:
+            audit.registrar(
+                conn, entidad="testigo", accion="consumo_envio_omitido",
+                id_usuario=user["id_usuario"], id_entidad=testigo.id_testigo,
+                valor_nuevo={
+                    "id_envio": id_envio, "id_laboratorio": body.id_laboratorio,
+                    "motivo": "Sin consumo_estimado configurado para este testigo/laboratorio -- no se descontó stock automáticamente",
+                },
+            )
 
         testigos_enviados.append(TestigoEnviado(
             id_testigo=testigo.id_testigo, codigo=testigo.codigo, nombre=testigo.nombre, nro_ir=testigo.nro_ir,
@@ -860,7 +908,7 @@ def confirmar_envio(
         protocolo_utilizar=row.protocolo_utilizar,
         id_usuario_envio=row.id_usuario_envio,
         alerta_testigo_por_vencer=alerta_testigo_por_vencer,
-        alerta_reorden=False,
+        alerta_reorden=hubo_alerta_reorden,
         ensayos_solicitados=[
             EnsayoSolicitado(
                 id_espec_ensayo=e.id_espec_ensayo, nombre_ensayo=e.nombre_ensayo,

@@ -12,7 +12,13 @@ import pyodbc
 from fastapi import APIRouter, Depends, Query
 
 from app.api.routes.dictamenes import WHERE_MUESTRA_PENDIENTE_DICTAMEN
-from app.api.routes.maestros import fila_a_testigo, ordenar_por_fecha_vencimiento, select_testigos_sql
+from app.api.routes.maestros import (
+    ESTADOS_TESTIGO_VALIDOS,
+    cumple_filtro_estado_testigo,
+    fila_a_testigo,
+    ordenar_por_fecha_vencimiento,
+    select_testigos_sql,
+)
 from app.core.security import get_current_user
 from app.db.connections import limss_db
 from app.schemas.dashboard import DashboardResumenResponse, MuestreadorActivoItem, SolicitudSinEjecutarItem
@@ -153,39 +159,30 @@ def muestreadores_activos_dashboard(
     ]
 
 
-_ESTADOS_TESTIGO_VALIDOS = {"vencido", "por_vencer", "normal", "sin_vencimiento"}
-
-
-def _clasificar_testigo(t: TestigoResponse) -> str:
-    if t.vencido:
-        return "vencido"
-    if t.por_vencer:
-        return "por_vencer"
-    if t.fecha_vencimiento is None:
-        return "sin_vencimiento"
-    return "normal"
-
-
 @router.get("/testigos", response_model=list[TestigoResponse])
 def testigos_dashboard(
-    estados: str = Query("vencido,por_vencer", description="Lista separada por comas: vencido,por_vencer,normal,sin_vencimiento"),
+    estados: str = Query("", description="Lista separada por comas: vencido,por_vencer,normal,sin_vencimiento,stock_bajo. Vacío/ausente = todos los testigos, sin filtro de estado."),
     orden: str = Query("vencimiento_asc", pattern=r"^(vencimiento_asc|vencimiento_desc|nombre_asc|codigo_asc)$"),
     limite: int = Query(100, ge=1, le=500),
+    fecha_ref: date | None = Query(None, description="Fecha de referencia para calcular vencido/por_vencer; por defecto, hoy"),
+    dias_anticipacion: int = Query(30, ge=0, description="Días de anticipación para considerar 'por vencer'"),
     user: dict = Depends(get_current_user),
     conn: pyodbc.Connection = Depends(limss_db),
 ):
     """Sección "Testigos por vencer" del dashboard, con filtro de estados y
-    orden interactivos -- misma clasificación (30 días) que usa TestigosPage
-    (ver _fila_a_testigo/_select_testigos_sql en maestros.py, reexportados
-    para no duplicar esa lógica acá)."""
-    estados_pedidos = {e.strip() for e in estados.split(",") if e.strip()} & _ESTADOS_TESTIGO_VALIDOS
-    if not estados_pedidos:
-        estados_pedidos = {"vencido", "por_vencer"}
+    orden interactivos -- misma clasificación (fecha_ref/dias_anticipacion
+    configurables) que usa TestigosPage (ver _fila_a_testigo/_select_testigos_sql
+    en maestros.py, reexportados para no duplicar esa lógica acá). Sin ningún
+    estado seleccionado no hay filtro (se devuelven todos los activos); con
+    estados seleccionados, stock_bajo se combina con AND sobre el OR de los
+    de vencimiento (ver _cumple_filtro_estado_testigo)."""
+    estados_pedidos = {e.strip() for e in estados.split(",") if e.strip()} & ESTADOS_TESTIGO_VALIDOS
 
     cursor = conn.cursor()
     cursor.execute(select_testigos_sql(cursor) + "WHERE t.activo = 1")
-    testigos = [fila_a_testigo(r) for r in cursor.fetchall()]
-    testigos = [t for t in testigos if _clasificar_testigo(t) in estados_pedidos]
+    testigos = [fila_a_testigo(r, fecha_ref=fecha_ref, dias_anticipacion=dias_anticipacion, cursor=cursor) for r in cursor.fetchall()]
+    if estados_pedidos:
+        testigos = [t for t in testigos if cumple_filtro_estado_testigo(t, estados_pedidos)]
 
     if orden == "vencimiento_asc":
         testigos = ordenar_por_fecha_vencimiento(testigos, reverse=False)

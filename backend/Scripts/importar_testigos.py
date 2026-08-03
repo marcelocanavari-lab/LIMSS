@@ -283,10 +283,11 @@ def parsear_documento(docx_path: Path) -> dict | None:
                 unidad = "mg"
             elif unidad_doc in ('ml', 'milliliter', 'milliliters', 'mililitros'):
                 unidad = "ml"
-            elif unidad_doc in ('μg', 'ug', 'mcg', 'microgramos'):
-                unidad = "μg"
             else:
-                unidad = unidad_doc
+                # Cualquier otra unidad (μg, kg, L, etc.) no es válida en LIMSS
+                # (solo admite mg/ml) -- se usa mg por defecto en vez de guardar
+                # la unidad cruda del documento.
+                unidad = "mg"
 
     # ── Conservación ──
     m = re.search(r'Conservaci[oó]n\s*[:.]?\s*(.+?)(?:\n|$)', texto_completo, re.IGNORECASE)

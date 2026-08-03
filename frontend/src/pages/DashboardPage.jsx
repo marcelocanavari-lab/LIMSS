@@ -33,6 +33,7 @@ const ESTADOS_TESTIGO = [
   { value: 'por_vencer', label: 'Por vencer' },
   { value: 'normal', label: 'Normal' },
   { value: 'sin_vencimiento', label: 'Sin vencimiento' },
+  { value: 'stock_bajo', label: 'Stock bajo' },
 ];
 
 const ORDENES_TESTIGO = [
@@ -46,6 +47,10 @@ function formatFecha(iso) {
   if (!iso) return '—';
   const [y, m, d] = iso.split('-');
   return `${d}/${m}/${y}`;
+}
+
+function hoyISO() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function StatCard({ titulo, valor, icono, tono, grisEnCero, onClick }) {
@@ -76,51 +81,52 @@ function VistaMuestreador({ links, navigate }) {
 
   return (
     <>
-      <h1 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Mis solicitudes pendientes de ejecutar</h1>
+      <div className="dashboard-scroll">
+        <h1 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Mis solicitudes pendientes de ejecutar</h1>
 
-      {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}
+        {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}
 
-      {loading ? (
-        <div className="state-block"><span className="spinner" /></div>
-      ) : solicitudes.length === 0 ? (
-        <div className="state-block">
-          <span className="state-block-title">Sin solicitudes pendientes</span>
-          <span>No tenés muestreos asignados por ejecutar</span>
-        </div>
-      ) : (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>N° Solicitud</th>
-              <th>Material</th>
-              <th>IR</th>
-              <th>Fecha</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {solicitudes.map((s) => (
-              <tr key={s.id_solicitud}>
-                <td style={{ fontFamily: 'var(--font-mono)' }}>{s.nro_solicitud}</td>
-                <td>{s.erp_DESART} <span style={{ color: 'var(--ink-3)' }}>({s.erp_CODART.trim()})</span></td>
-                <td style={{ fontFamily: 'var(--font-mono)' }}>{s.erp_nro_ir}</td>
-                <td>{new Date(s.fecha_solicitud).toLocaleDateString()}</td>
-                <td>
-                  <button
-                    className="btn btn-primary"
-                    onClick={() => navigate(`/solicitudes-muestreo/${s.id_solicitud}/orden-trabajo-digital`)}
-                  >
-                    Ejecutar
-                  </button>
-                </td>
+        {loading ? (
+          <div className="state-block"><span className="spinner" /></div>
+        ) : solicitudes.length === 0 ? (
+          <div className="state-block">
+            <span className="state-block-title">Sin solicitudes pendientes</span>
+            <span>No tenés muestreos asignados por ejecutar</span>
+          </div>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>N° Solicitud</th>
+                <th>Material</th>
+                <th>IR</th>
+                <th>Fecha</th>
+                <th></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+            </thead>
+            <tbody>
+              {solicitudes.map((s) => (
+                <tr key={s.id_solicitud}>
+                  <td style={{ fontFamily: 'var(--font-mono)' }}>{s.nro_solicitud}</td>
+                  <td>{s.erp_DESART} <span style={{ color: 'var(--ink-3)' }}>({s.erp_CODART.trim()})</span></td>
+                  <td style={{ fontFamily: 'var(--font-mono)' }}>{s.erp_nro_ir}</td>
+                  <td>{new Date(s.fecha_solicitud).toLocaleDateString()}</td>
+                  <td>
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => navigate(`/solicitudes-muestreo/${s.id_solicitud}/orden-trabajo-digital`)}
+                    >
+                      Ejecutar
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
 
       <div className="dashboard-quick-fijo">
-        <h2 style={{ fontSize: 'var(--fs-base)', marginBottom: 'var(--sp-3)' }}>Acceso rápido</h2>
         <div className="quick-grid">
           {links.map((l) => (
             <button key={l.ruta} type="button" className="quick-btn" onClick={() => navigate(l.ruta)}>
@@ -134,8 +140,10 @@ function VistaMuestreador({ links, navigate }) {
 }
 
 function SeccionTestigosPorVencer({ navigate }) {
-  const [estados, setEstados] = useState(['vencido', 'por_vencer']);
+  const [estados, setEstados] = useState([]);
   const [orden, setOrden] = useState('vencimiento_asc');
+  const [fechaRef, setFechaRef] = useState(hoyISO());
+  const [diasAnticipacion, setDiasAnticipacion] = useState('30');
   const [testigos, setTestigos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -144,21 +152,21 @@ function SeccionTestigosPorVencer({ navigate }) {
     setLoading(true);
     setError('');
     dashboardApi
-      .obtenerTestigos({ estados, orden, limite: 100 })
+      .obtenerTestigos({ estados, orden, limite: 100, fechaRef, diasAnticipacion: Number(diasAnticipacion) || 0 })
       .then(setTestigos)
       .catch((err) => {
         setTestigos([]);
         setError(err instanceof ApiError ? err.message : 'No se pudo cargar la lista de testigos');
       })
       .finally(() => setLoading(false));
-  }, [estados, orden]);
+  }, [estados, orden, fechaRef, diasAnticipacion]);
 
   function toggleEstado(value) {
     setEstados((prev) => (prev.includes(value) ? prev.filter((e) => e !== value) : [...prev, value]));
   }
 
   return (
-    <div className="card">
+    <div className="card" style={{ overflow: 'hidden' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--sp-3)' }}>
         <h2 style={{ fontSize: 'var(--fs-base)' }}>Testigos por vencer</h2>
         <button type="button" className="btn btn-ghost" style={{ padding: 0, minHeight: 'auto' }} onClick={() => navigate('/maestros/testigos')}>
@@ -166,7 +174,31 @@ function SeccionTestigosPorVencer({ navigate }) {
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 'var(--sp-2)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 'var(--sp-3)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <label className="field-label" style={{ fontSize: 'var(--fs-xs)', whiteSpace: 'nowrap' }}>Fecha ref.:</label>
+          <input
+            type="date"
+            className="field-input"
+            style={{ height: 32, fontSize: 'var(--fs-xs)' }}
+            value={fechaRef}
+            onChange={(e) => setFechaRef(e.target.value)}
+          />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <label className="field-label" style={{ fontSize: 'var(--fs-xs)', whiteSpace: 'nowrap' }}>Días anticip.:</label>
+          <input
+            type="number"
+            min="0"
+            className="field-input"
+            style={{ height: 32, width: 90, fontSize: 'var(--fs-xs)' }}
+            value={diasAnticipacion}
+            onChange={(e) => setDiasAnticipacion(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center', marginBottom: 'var(--sp-3)' }}>
         {ESTADOS_TESTIGO.map((e) => (
           <button
             key={e.value}
@@ -178,19 +210,17 @@ function SeccionTestigosPorVencer({ navigate }) {
             {e.label}
           </button>
         ))}
-      </div>
-      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 'var(--sp-3)' }}>
-        {ORDENES_TESTIGO.map((o) => (
-          <button
-            key={o.value}
-            type="button"
-            className={orden === o.value ? 'btn btn-primary' : 'btn btn-secondary'}
-            style={{ padding: '0 var(--sp-3)', minHeight: 32, fontSize: 'var(--fs-xs)' }}
-            onClick={() => setOrden(o.value)}
-          >
-            {o.label}
-          </button>
-        ))}
+        <div style={{ width: 1, height: 24, background: 'var(--border)', margin: '0 var(--sp-1)' }} />
+        <select
+          className="field-input"
+          style={{ height: 32, width: 'auto', fontSize: 'var(--fs-xs)' }}
+          value={orden}
+          onChange={(e) => setOrden(e.target.value)}
+        >
+          {ORDENES_TESTIGO.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
       </div>
 
       {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-3)' }}>{error}</div>}
@@ -200,7 +230,7 @@ function SeccionTestigosPorVencer({ navigate }) {
       ) : error ? null : testigos.length === 0 ? (
         <p style={{ color: 'var(--ink-2)', fontSize: 'var(--fs-sm)' }}>Sin testigos para estos filtros</p>
       ) : (
-        <div className="dashboard-tabla-scroll" style={{ maxHeight: 220 }}>
+        <div className="dashboard-tabla-scroll" style={{ maxHeight: 280 }}>
           <table className="data-table">
             <thead>
               <tr>
@@ -217,15 +247,18 @@ function SeccionTestigosPorVencer({ navigate }) {
                   <td>{t.nombre}</td>
                   <td className="num" style={{ whiteSpace: 'nowrap' }}>{formatFecha(t.fecha_vencimiento)}</td>
                   <td>
-                    {t.vencido ? (
-                      <span className="badge badge-danger">Vencido</span>
-                    ) : t.por_vencer ? (
-                      <span className="badge badge-warn">Por vencer</span>
-                    ) : t.fecha_vencimiento ? (
-                      <span className="badge badge-ok">Normal</span>
-                    ) : (
-                      <span className="badge badge-neutral">Sin vencimiento</span>
-                    )}
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {t.vencido ? (
+                        <span className="badge badge-danger">Vencido</span>
+                      ) : t.por_vencer ? (
+                        <span className="badge badge-warn">Por vencer</span>
+                      ) : t.fecha_vencimiento ? (
+                        <span className="badge badge-ok">Normal</span>
+                      ) : (
+                        <span className="badge badge-neutral">Sin vencimiento</span>
+                      )}
+                      {t.stock_bajo && <span className="badge badge-danger">Stock bajo</span>}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -298,7 +331,7 @@ function SeccionSolicitudesSinEjecutar({ navigate }) {
       ) : error ? null : solicitudes.length === 0 ? (
         <p style={{ color: 'var(--ink-2)', fontSize: 'var(--fs-sm)' }}>Sin solicitudes pendientes</p>
       ) : (
-        <div className="dashboard-tabla-scroll" style={{ maxHeight: 220 }}>
+        <div className="dashboard-tabla-scroll" style={{ maxHeight: 312 }}>
           <table className="data-table">
             <thead>
               <tr>
@@ -358,70 +391,71 @@ export default function DashboardPage() {
           <VistaMuestreador links={links} navigate={navigate} />
         ) : (
           <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--sp-4)' }}>
-              <div>
-                <h1 style={{ fontSize: 'var(--fs-lg)', marginBottom: 2 }}>Estado del sistema</h1>
-                <p style={{ color: 'var(--ink-2)', fontSize: 'var(--fs-sm)', margin: 0 }}>
-                  Resumen de pendientes y alertas
-                </p>
+            <div className="dashboard-scroll">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--sp-4)' }}>
+                <div>
+                  <h1 style={{ fontSize: 'var(--fs-lg)', marginBottom: 2 }}>Estado del sistema</h1>
+                  <p style={{ color: 'var(--ink-2)', fontSize: 'var(--fs-sm)', margin: 0 }}>
+                    Resumen de pendientes y alertas
+                  </p>
+                </div>
+                <button type="button" className="btn btn-secondary" onClick={cargar} disabled={loading}>
+                  {loading ? <span className="spinner" /> : 'Actualizar'}
+                </button>
               </div>
-              <button type="button" className="btn btn-secondary" onClick={cargar} disabled={loading}>
-                {loading ? <span className="spinner" /> : 'Actualizar'}
-              </button>
+
+              {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}
+
+              {loading && !resumen ? (
+                <div className="state-block"><span className="spinner" /></div>
+              ) : resumen && (
+                <>
+                  <div className="stat-grid" style={{ marginBottom: 'var(--sp-5)' }}>
+                    <StatCard
+                      titulo="Solicitudes pendientes"
+                      valor={resumen.solicitudes_pendientes}
+                      icono="▤"
+                      tono="warn"
+                      grisEnCero
+                      onClick={() => navigate('/solicitudes-muestreo?estado=pendiente')}
+                    />
+                    <StatCard
+                      titulo="Muestras en proceso"
+                      valor={resumen.muestras_en_proceso}
+                      icono="◆"
+                      tono="info"
+                      grisEnCero={false}
+                      onClick={() => navigate('/consulta-muestras')}
+                    />
+                    <StatCard
+                      titulo="Resultados pendientes"
+                      valor={resumen.resultados_pendientes}
+                      icono="☑"
+                      tono="warn"
+                      grisEnCero
+                      onClick={() => navigate('/carga-resultados')}
+                    />
+                    {puedeVerDictamenes && (
+                      <StatCard
+                        titulo="Dictámenes pendientes"
+                        valor={resumen.dictamenes_pendientes}
+                        icono="⚖"
+                        tono="danger"
+                        grisEnCero
+                        onClick={() => navigate('/dictamenes')}
+                      />
+                    )}
+                  </div>
+
+                  <div className="alerta-grid">
+                    <SeccionTestigosPorVencer navigate={navigate} />
+                    <SeccionSolicitudesSinEjecutar navigate={navigate} />
+                  </div>
+                </>
+              )}
             </div>
 
-            {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}
-
-            {loading && !resumen ? (
-              <div className="state-block"><span className="spinner" /></div>
-            ) : resumen && (
-              <>
-                <div className="stat-grid" style={{ marginBottom: 'var(--sp-5)' }}>
-                  <StatCard
-                    titulo="Solicitudes pendientes"
-                    valor={resumen.solicitudes_pendientes}
-                    icono="▤"
-                    tono="warn"
-                    grisEnCero
-                    onClick={() => navigate('/solicitudes-muestreo?estado=pendiente')}
-                  />
-                  <StatCard
-                    titulo="Muestras en proceso"
-                    valor={resumen.muestras_en_proceso}
-                    icono="◆"
-                    tono="info"
-                    grisEnCero={false}
-                    onClick={() => navigate('/consulta-muestras')}
-                  />
-                  <StatCard
-                    titulo="Resultados pendientes"
-                    valor={resumen.resultados_pendientes}
-                    icono="☑"
-                    tono="warn"
-                    grisEnCero
-                    onClick={() => navigate('/carga-resultados')}
-                  />
-                  {puedeVerDictamenes && (
-                    <StatCard
-                      titulo="Dictámenes pendientes"
-                      valor={resumen.dictamenes_pendientes}
-                      icono="⚖"
-                      tono="danger"
-                      grisEnCero
-                      onClick={() => navigate('/dictamenes')}
-                    />
-                  )}
-                </div>
-
-                <div className="alerta-grid">
-                  <SeccionTestigosPorVencer navigate={navigate} />
-                  <SeccionSolicitudesSinEjecutar navigate={navigate} />
-                </div>
-              </>
-            )}
-
             <div className="dashboard-quick-fijo">
-              <h2 style={{ fontSize: 'var(--fs-base)', marginBottom: 'var(--sp-3)' }}>Acceso rápido</h2>
               <div className="quick-grid">
                 {links.map((l) => (
                   <button key={l.ruta} type="button" className="quick-btn" onClick={() => navigate(l.ruta)}>

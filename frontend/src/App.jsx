@@ -17,6 +17,7 @@ import CatalogoEnsayosPage from './pages/maestros/CatalogoEnsayosPage';
 import TestigosPage from './pages/maestros/TestigosPage';
 import TestigoFormPage from './pages/maestros/TestigoFormPage';
 import TestigoDetallePage from './pages/maestros/TestigoDetallePage';
+import TestigoCategoriasPage from './pages/maestros/TestigoCategoriasPage';
 import ReporteTestigosPage from './pages/maestros/ReporteTestigosPage';
 import RemitosTestigosPage from './pages/maestros/RemitosTestigosPage';
 import RemitoTestigoDetallePage from './pages/maestros/RemitoTestigoDetallePage';
@@ -60,6 +61,7 @@ export default function App() {
           <Route path="/usuarios" element={<PrivateRoute roles={ADMIN}><UsuariosPage /></PrivateRoute>} />
           <Route path="/erp-config" element={<PrivateRoute roles={ADMIN}><ErpConfigPage /></PrivateRoute>} />
           <Route path="/auditoria" element={<PrivateRoute roles={ADMIN}><AuditoriaPage /></PrivateRoute>} />
+          <Route path="/maestros/testigo-categorias" element={<PrivateRoute roles={ADMIN}><TestigoCategoriasPage /></PrivateRoute>} />
 
           {/* ── Datos Maestros (analista_qc, qa, admin) ─────────── */}
           <Route path="/maestros/especificaciones" element={<PrivateRoute roles={GESTION}><EspecificacionesPage /></PrivateRoute>} />

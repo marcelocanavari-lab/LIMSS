@@ -141,6 +141,9 @@ export default function EnvioFormPage() {
       if (resultado.alerta_testigo_por_vencer) {
         window.alert('Atención: el testigo enviado vence en menos de 30 días.');
       }
+      if (resultado.alerta_reorden) {
+        window.alert('Atención: el stock del testigo quedó bajo (o negativo) tras descontar el consumo de este envío. Hay que reponerlo.');
+      }
 
       navigate(`/muestras/${id}/envios/${resultado.id_envio}/remito`, { replace: true });
     } catch (err) {

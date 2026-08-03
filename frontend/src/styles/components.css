@@ -20,29 +20,33 @@
 }
 
 /* --- Dashboard ---
-   Una sola región de scroll (mismo patrón probado que .screen-content usa
-   en el resto de la app -- el intento anterior con dos zonas flex separadas
-   (.dashboard-scroll + .dashboard-quick-fijo como hermanos) resultó frágil
-   y el scroll se escapaba a toda la página). "Acceso rápido" es el último
-   hijo de esa misma región, pegado abajo con position: sticky -- así queda
-   garantizado visible mientras se scrollea el resto, sin depender de que
-   ningún cálculo de alturas flex/overflow intermedio salga bien. */
+   Altura fija (100vh menos la altura exacta del TopBar, 73px: padding
+   var(--sp-4) arriba/abajo (16+16) + contenido máximo 40px (botón "Salir")
+   + 1px de borde) con overflow:hidden -- así el contenedor nunca puede
+   crecer más que la pantalla y forzar scroll a nivel de página. Adentro,
+   dos zonas: la scrolleable (cards + testigos + solicitudes) con flex:1 +
+   overflow-y:auto + min-height:0 (crítico: sin esto flex no respeta el
+   overflow y el scroll se escapa a la página completa), y la de acceso
+   rápido con flex-shrink:0 para que nunca se comprima ni haga falta scroll
+   para verla. */
 .dashboard-content {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
+  height: calc(100vh - 73px);
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  padding: var(--sp-4);
   width: 100%;
 }
 
+.dashboard-scroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding: var(--sp-4);
+}
+
 .dashboard-quick-fijo {
-  position: sticky;
-  bottom: calc(-1 * var(--sp-4));
-  margin: var(--sp-4) calc(-1 * var(--sp-4)) calc(-1 * var(--sp-4));
-  background: var(--surf-0);
-  padding: var(--sp-3) var(--sp-4);
+  flex-shrink: 0;
+  padding: 8px var(--sp-4);
   border-top: 1px solid var(--border);
 }
 
@@ -307,8 +311,8 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 12px 8px;
-  max-height: 80px;
+  padding: 6px 10px;
+  max-height: 52px;
   background: var(--surf-2);
   border-radius: var(--radius-md);
   text-align: center;
@@ -319,7 +323,7 @@
 .quick-btn-icon { font-size: 20px; line-height: 1; }
 
 .quick-btn-label {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1.2;
   text-align: center;

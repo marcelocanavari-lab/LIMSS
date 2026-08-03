@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import TopBar from '../../components/TopBar';
 import { maestrosApi } from '../../api/maestros';
-import { muestrasApi } from '../../api/muestras';
 import { ApiError, abrirPdfConAuth } from '../../api/client';
 
 export default function TestigoFormPage({ modo }) {
@@ -17,10 +16,11 @@ export default function TestigoFormPage({ modo }) {
   const [fechaVencimiento, setFechaVencimiento] = useState('');
   const [stockActual, setStockActual] = useState('');
   const [stockMinimo, setStockMinimo] = useState('');
-  const [unidadMedida, setUnidadMedida] = useState('');
+  const [unidadMedida, setUnidadMedida] = useState('mg');
+  const [origen, setOrigen] = useState('');
+  const [idCategoria, setIdCategoria] = useState('');
+  const [categorias, setCategorias] = useState([]);
   const [observaciones, setObservaciones] = useState('');
-  const [idLaboratorio, setIdLaboratorio] = useState('');
-  const [laboratorios, setLaboratorios] = useState([]);
   const [archivo, setArchivo] = useState(null);
   const [tieneCertificado, setTieneCertificado] = useState(false);
   const [error, setError] = useState('');
@@ -28,7 +28,7 @@ export default function TestigoFormPage({ modo }) {
   const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
-    muestrasApi.listarLaboratorios(true).then(setLaboratorios).catch(() => {});
+    maestrosApi.listarCategoriasTestigo(true).then(setCategorias).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -40,11 +40,12 @@ export default function TestigoFormPage({ modo }) {
         setNombre(t.nombre);
         setNroLote(t.nro_lote);
         setNroIr(t.nro_ir || '');
-        setFechaVencimiento(t.fecha_vencimiento);
+        setFechaVencimiento(t.fecha_vencimiento || '');
         setStockMinimo(String(t.stock_minimo));
-        setUnidadMedida(t.unidad_medida || '');
+        setUnidadMedida(t.unidad_medida || 'mg');
+        setOrigen(t.origen || '');
+        setIdCategoria(t.id_categoria != null ? String(t.id_categoria) : '');
         setObservaciones(t.observaciones || '');
-        setIdLaboratorio(t.id_laboratorio != null ? String(t.id_laboratorio) : '');
         setTieneCertificado(!!t.pdf_certificado);
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo cargar el testigo'))
@@ -63,7 +64,7 @@ export default function TestigoFormPage({ modo }) {
     e.preventDefault();
     setError('');
 
-    if (!nombre.trim() || !nroLote.trim() || !fechaVencimiento || (!esEdicion && !codigo.trim())) {
+    if (!nombre.trim() || !nroLote.trim() || (!esEdicion && !codigo.trim())) {
       setError('Completá todos los campos obligatorios');
       return;
     }
@@ -79,11 +80,12 @@ export default function TestigoFormPage({ modo }) {
         formData.append('nombre', nombre.trim());
         formData.append('nro_lote', nroLote.trim());
         if (nroIr.trim()) formData.append('nro_ir', nroIr.trim());
-        formData.append('fecha_vencimiento', fechaVencimiento);
+        if (fechaVencimiento) formData.append('fecha_vencimiento', fechaVencimiento);
         formData.append('stock_minimo', stockMinimo || '0');
-        if (unidadMedida.trim()) formData.append('unidad_medida', unidadMedida.trim());
+        formData.append('unidad_medida', unidadMedida);
+        if (origen) formData.append('origen', origen);
+        if (idCategoria) formData.append('id_categoria', idCategoria);
         if (observaciones.trim()) formData.append('observaciones', observaciones.trim());
-        if (idLaboratorio) formData.append('id_laboratorio', idLaboratorio);
         if (archivo) formData.append('pdf_certificado', archivo);
         await maestrosApi.editarTestigo(id, formData);
         navigate(`/maestros/testigos/${id}`, { replace: true });
@@ -93,12 +95,13 @@ export default function TestigoFormPage({ modo }) {
         formData.append('nombre', nombre.trim());
         formData.append('nro_lote', nroLote.trim());
         if (nroIr.trim()) formData.append('nro_ir', nroIr.trim());
-        formData.append('fecha_vencimiento', fechaVencimiento);
+        if (fechaVencimiento) formData.append('fecha_vencimiento', fechaVencimiento);
         formData.append('stock_actual', stockActual || '0');
         formData.append('stock_minimo', stockMinimo || '0');
-        if (unidadMedida.trim()) formData.append('unidad_medida', unidadMedida.trim());
+        formData.append('unidad_medida', unidadMedida);
+        if (origen) formData.append('origen', origen);
+        if (idCategoria) formData.append('id_categoria', idCategoria);
         if (observaciones.trim()) formData.append('observaciones', observaciones.trim());
-        if (idLaboratorio) formData.append('id_laboratorio', idLaboratorio);
         if (archivo) formData.append('pdf_certificado', archivo);
         const testigo = await maestrosApi.crearTestigo(formData);
         navigate(`/maestros/testigos/${testigo.id_testigo}`, { replace: true });
@@ -181,7 +184,7 @@ export default function TestigoFormPage({ modo }) {
             </div>
 
             <div className="field">
-              <label className="field-label" htmlFor="fechaVencimiento">Fecha de vencimiento / recertificación</label>
+              <label className="field-label" htmlFor="fechaVencimiento">Fecha de vencimiento / recertificación (opcional)</label>
               <input
                 id="fechaVencimiento"
                 className="field-input"
@@ -222,33 +225,72 @@ export default function TestigoFormPage({ modo }) {
                 />
               </div>
               <div className="field" style={{ flex: 1 }}>
-                <label className="field-label" htmlFor="unidadMedida">Unidad</label>
-                <input
-                  id="unidadMedida"
-                  className="field-input"
-                  placeholder="g, mL, u..."
-                  value={unidadMedida}
-                  onChange={(e) => setUnidadMedida(e.target.value)}
-                  disabled={guardando}
-                />
+                <label className="field-label">Unidad</label>
+                <div style={{ display: 'flex', gap: 'var(--sp-4)', height: 'var(--tap-min)', alignItems: 'center' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="unidadMedida"
+                      value="mg"
+                      checked={unidadMedida === 'mg'}
+                      onChange={() => setUnidadMedida('mg')}
+                      disabled={guardando}
+                    />
+                    mg
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="unidadMedida"
+                      value="ml"
+                      checked={unidadMedida === 'ml'}
+                      onChange={() => setUnidadMedida('ml')}
+                      disabled={guardando}
+                    />
+                    ml
+                  </label>
+                </div>
               </div>
             </div>
 
-            <div className="field">
-              <label className="field-label" htmlFor="idLaboratorio">Laboratorio asignado</label>
-              <select
-                id="idLaboratorio"
-                className="field-input"
-                value={idLaboratorio}
-                onChange={(e) => setIdLaboratorio(e.target.value)}
-                disabled={guardando}
-              >
-                <option value="">Sin asignar</option>
-                {laboratorios.map((l) => (
-                  <option key={l.id_laboratorio} value={l.id_laboratorio}>{l.nombre}</option>
-                ))}
-              </select>
+            <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+              <div className="field" style={{ flex: 1 }}>
+                <label className="field-label" htmlFor="origen">Origen</label>
+                <select
+                  id="origen"
+                  className="field-input"
+                  value={origen}
+                  onChange={(e) => setOrigen(e.target.value)}
+                  disabled={guardando}
+                >
+                  <option value="">Sin especificar</option>
+                  <option value="USP">USP</option>
+                  <option value="EP">EP</option>
+                  <option value="INAME">INAME</option>
+                </select>
+              </div>
+              <div className="field" style={{ flex: 1 }}>
+                <label className="field-label" htmlFor="idCategoria">Categoría</label>
+                <select
+                  id="idCategoria"
+                  className="field-input"
+                  value={idCategoria}
+                  onChange={(e) => setIdCategoria(e.target.value)}
+                  disabled={guardando}
+                >
+                  <option value="">Sin categoría</option>
+                  {categorias.map((c) => (
+                    <option key={c.id_categoria} value={c.id_categoria}>{c.nombre}</option>
+                  ))}
+                </select>
+              </div>
             </div>
+
+            {esEdicion && (
+              <p style={{ fontSize: 'var(--fs-xs)', color: 'var(--ink-2)', marginTop: -8, marginBottom: 'var(--sp-3)' }}>
+                Los laboratorios asignados se gestionan desde la ficha del testigo.
+              </p>
+            )}
 
             <div className="field">
               <label className="field-label" htmlFor="observaciones">Observaciones</label>

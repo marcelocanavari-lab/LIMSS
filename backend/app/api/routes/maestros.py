@@ -7,7 +7,7 @@ laboratorio externo (Módulo I).
 """
 import os
 from datetime import date, datetime
-from typing import Optional
+from typing import Literal, Optional
 
 import pyodbc
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
@@ -30,7 +30,13 @@ from app.schemas.maestros import (
     EspecificacionResponse,
     EspecificacionTestigoCreate,
     EspecificacionTestigoResponse,
+    LaboratorioAsignado,
     TestigoAjusteStock,
+    TestigoCategoriaCreate,
+    TestigoCategoriaResponse,
+    TestigoCategoriaUpdate,
+    TestigoLaboratorioConsumoUpdate,
+    TestigoLaboratorioCreate,
     TestigoMovimientoResponse,
     TestigoResponse,
 )
@@ -178,25 +184,99 @@ def _tiene_columna_lab_testigo(cursor) -> bool:
     return cursor.fetchone().c is not None
 
 
+def _tiene_tabla_testigo_laboratorios(cursor) -> bool:
+    """lims_testigo_laboratorios (relación muchos a muchos testigo-laboratorio)
+    puede no existir todavía (ver migrations_testigo_laboratorios_m2m.sql,
+    pendiente de ejecutar en algunos entornos)."""
+    cursor.execute("SELECT OBJECT_ID('lims_testigo_laboratorios', 'U') AS id")
+    return cursor.fetchone().id is not None
+
+
+def _laboratorios_de_testigo(cursor, id_testigo: int) -> list[LaboratorioAsignado]:
+    if not _tiene_tabla_testigo_laboratorios(cursor):
+        return []
+    cursor.execute(
+        """
+        SELECT lab.id_laboratorio, lab.nombre, tl.consumo_estimado, tl.unidad_consumo
+        FROM lims_testigo_laboratorios tl
+        JOIN lims_laboratorios lab ON lab.id_laboratorio = tl.id_laboratorio
+        WHERE tl.id_testigo = ?
+        ORDER BY lab.nombre
+        """,
+        id_testigo,
+    )
+    return [
+        LaboratorioAsignado(
+            id_laboratorio=r.id_laboratorio,
+            nombre=r.nombre,
+            consumo_estimado=float(r.consumo_estimado) if r.consumo_estimado is not None else None,
+            unidad_consumo=r.unidad_consumo,
+        )
+        for r in cursor.fetchall()
+    ]
+
+
 def _select_testigos_sql(cursor) -> str:
-    """Alias 't' consistente en ambas ramas para que el WHERE/ORDER BY
-    apendeado después (con o sin el JOIN) sea siempre válido."""
+    """Alias 't' consistente en todas las ramas para que el WHERE/ORDER BY
+    apendeado después (con o sin el JOIN de laboratorio) sea siempre válido.
+    El JOIN de categoría (lims_testigo_categorias) sí está siempre disponible
+    -- a diferencia de id_laboratorio, esa columna ya existe en todos los
+    entornos."""
     if _tiene_columna_lab_testigo(cursor):
         return (
-            "SELECT t.*, lab.nombre AS laboratorio_nombre FROM lims_testigos t "
+            "SELECT t.*, lab.nombre AS laboratorio_nombre, cat.nombre AS categoria_nombre FROM lims_testigos t "
             "LEFT JOIN lims_laboratorios lab ON lab.id_laboratorio = t.id_laboratorio "
+            "LEFT JOIN lims_testigo_categorias cat ON cat.id_categoria = t.id_categoria "
         )
-    return "SELECT t.* FROM lims_testigos t "
+    return (
+        "SELECT t.*, cat.nombre AS categoria_nombre FROM lims_testigos t "
+        "LEFT JOIN lims_testigo_categorias cat ON cat.id_categoria = t.id_categoria "
+    )
 
 
-def _fila_a_testigo(row, fecha_ref: Optional[date] = None) -> TestigoResponse:
+ESTADOS_TESTIGO_VALIDOS = {"vencido", "por_vencer", "normal", "sin_vencimiento", "stock_bajo"}
+
+
+_ESTADOS_VENCIMIENTO = {"vencido", "por_vencer", "normal", "sin_vencimiento"}
+
+
+def _cumple_filtro_estado_testigo(t: TestigoResponse, estados_pedidos: set) -> bool:
+    """stock_bajo es un eje independiente del vencimiento, no un estado más
+    dentro del mismo OR -- se combina con AND sobre el resultado de los
+    estados de vencimiento seleccionados (que sí se combinan entre sí con
+    OR). Ej.: {'vencido','stock_bajo'} -> vencido Y stock_bajo (intersección),
+    no vencido O stock_bajo. Si solo se pide 'stock_bajo', no hay restricción
+    de vencimiento; si no se pide, no hay restricción de stock."""
+    estados_venc_pedidos = estados_pedidos & _ESTADOS_VENCIMIENTO
+    if not estados_venc_pedidos:
+        cumple_vencimiento = True
+    else:
+        cumple_vencimiento = (
+            ("vencido" in estados_venc_pedidos and t.vencido)
+            or ("por_vencer" in estados_venc_pedidos and t.por_vencer)
+            or ("normal" in estados_venc_pedidos and t.fecha_vencimiento is not None and not t.vencido and not t.por_vencer)
+            or ("sin_vencimiento" in estados_venc_pedidos and t.fecha_vencimiento is None)
+        )
+
+    if "stock_bajo" in estados_pedidos:
+        cumple_stock = t.stock_bajo
+    else:
+        cumple_stock = True
+
+    return cumple_vencimiento and cumple_stock
+
+
+def _fila_a_testigo(row, fecha_ref: Optional[date] = None, dias_anticipacion: int = 30, cursor=None) -> TestigoResponse:
     hoy = fecha_ref or date.today()
     fecha_vencimiento = _a_fecha(row.fecha_vencimiento)
     # Sin fecha de vencimiento cargada, no se puede considerar vencido ni
     # próximo a vencer.
     vencido = fecha_vencimiento is not None and fecha_vencimiento < hoy
-    por_vencer = fecha_vencimiento is not None and not vencido and (fecha_vencimiento - hoy).days < 30
-    stock_bajo = float(row.stock_actual) < float(row.stock_minimo)
+    por_vencer = (
+        fecha_vencimiento is not None and not vencido
+        and (fecha_vencimiento - hoy).days <= dias_anticipacion
+    )
+    stock_bajo = float(row.stock_actual) <= float(row.stock_minimo)
     return TestigoResponse(
         id_testigo=row.id_testigo,
         codigo=row.codigo,
@@ -217,6 +297,10 @@ def _fila_a_testigo(row, fecha_ref: Optional[date] = None) -> TestigoResponse:
         stock_bajo=stock_bajo,
         id_laboratorio=getattr(row, "id_laboratorio", None),
         laboratorio_nombre=getattr(row, "laboratorio_nombre", None),
+        laboratorios=_laboratorios_de_testigo(cursor, row.id_testigo) if cursor is not None else [],
+        origen=getattr(row, "origen", None),
+        id_categoria=getattr(row, "id_categoria", None),
+        categoria_nombre=getattr(row, "categoria_nombre", None),
     )
 
 
@@ -1041,6 +1125,122 @@ def listar_testigos_especificacion(
     return resultado
 
 
+# ── Categorías de testigos ─────────────────────────────────────────
+
+def _fila_a_categoria_testigo(row) -> TestigoCategoriaResponse:
+    return TestigoCategoriaResponse(
+        id_categoria=row.id_categoria, codigo=row.codigo, nombre=row.nombre, activo=bool(row.activo),
+    )
+
+
+@router.get("/testigo-categorias", response_model=list[TestigoCategoriaResponse])
+def listar_categorias_testigo(
+    activo: Optional[bool] = Query(None, description="true=solo activas, false=solo inactivas, omitir=todas"),
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    if activo is None:
+        cursor.execute("SELECT * FROM lims_testigo_categorias ORDER BY nombre")
+    else:
+        cursor.execute("SELECT * FROM lims_testigo_categorias WHERE activo = ? ORDER BY nombre", 1 if activo else 0)
+    return [_fila_a_categoria_testigo(r) for r in cursor.fetchall()]
+
+
+@router.post("/testigo-categorias", response_model=TestigoCategoriaResponse, status_code=201)
+def crear_categoria_testigo(
+    body: TestigoCategoriaCreate,
+    user: dict = Depends(require_rol("admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM lims_testigo_categorias WHERE codigo = ?", body.codigo)
+    if cursor.fetchone():
+        raise HTTPException(status_code=409, detail=f"El código '{body.codigo}' ya existe")
+
+    cursor.execute(
+        "INSERT INTO lims_testigo_categorias (codigo, nombre) VALUES (?, ?)",
+        body.codigo, body.nombre,
+    )
+    cursor.execute("SELECT @@IDENTITY AS id")
+    id_categoria = int(cursor.fetchone().id)
+
+    audit.registrar(
+        conn, entidad="testigo_categoria", accion="crear",
+        id_usuario=user["id_usuario"], id_entidad=id_categoria,
+        valor_nuevo={"codigo": body.codigo, "nombre": body.nombre},
+    )
+
+    cursor.execute("SELECT * FROM lims_testigo_categorias WHERE id_categoria = ?", id_categoria)
+    return _fila_a_categoria_testigo(cursor.fetchone())
+
+
+@router.put("/testigo-categorias/{id_categoria}", response_model=TestigoCategoriaResponse)
+def editar_categoria_testigo(
+    id_categoria: int,
+    body: TestigoCategoriaUpdate,
+    user: dict = Depends(require_rol("admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM lims_testigo_categorias WHERE id_categoria = ?", id_categoria)
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Categoría no encontrada")
+
+    cursor.execute(
+        "SELECT 1 FROM lims_testigo_categorias WHERE codigo = ? AND id_categoria != ?",
+        body.codigo, id_categoria,
+    )
+    if cursor.fetchone():
+        raise HTTPException(status_code=409, detail=f"El código '{body.codigo}' ya existe")
+
+    campos_anteriores = {"codigo": row.codigo, "nombre": row.nombre, "activo": bool(row.activo)}
+    campos_nuevos = {"codigo": body.codigo, "nombre": body.nombre, "activo": body.activo}
+
+    cursor.execute(
+        "UPDATE lims_testigo_categorias SET codigo = ?, nombre = ?, activo = ? WHERE id_categoria = ?",
+        body.codigo, body.nombre, 1 if body.activo else 0, id_categoria,
+    )
+
+    audit.registrar(
+        conn, entidad="testigo_categoria", accion="modificar",
+        id_usuario=user["id_usuario"], id_entidad=id_categoria,
+        valor_anterior=campos_anteriores, valor_nuevo=campos_nuevos,
+    )
+
+    cursor.execute("SELECT * FROM lims_testigo_categorias WHERE id_categoria = ?", id_categoria)
+    return _fila_a_categoria_testigo(cursor.fetchone())
+
+
+@router.delete("/testigo-categorias/{id_categoria}", status_code=204)
+def eliminar_categoria_testigo(
+    id_categoria: int,
+    user: dict = Depends(require_rol("admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM lims_testigo_categorias WHERE id_categoria = ?", id_categoria)
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Categoría no encontrada")
+
+    cursor.execute("SELECT 1 FROM lims_testigos WHERE id_categoria = ?", id_categoria)
+    if cursor.fetchone():
+        raise HTTPException(
+            status_code=400,
+            detail="No se puede eliminar: hay testigos asociados a esta categoría. Podés desactivarla en su lugar.",
+        )
+
+    cursor.execute("DELETE FROM lims_testigo_categorias WHERE id_categoria = ?", id_categoria)
+
+    audit.registrar(
+        conn, entidad="testigo_categoria", accion="eliminar",
+        id_usuario=user["id_usuario"], id_entidad=id_categoria,
+        valor_anterior={"codigo": row.codigo, "nombre": row.nombre},
+    )
+
+
 # ── Testigos y estándares ─────────────────────────────────────────
 
 @router.post("/testigos", response_model=TestigoResponse, status_code=201)
@@ -1049,10 +1249,12 @@ def crear_testigo(
     nombre: str = Form(..., min_length=1, max_length=150),
     nro_lote: str = Form(..., min_length=1, max_length=50),
     nro_ir: Optional[str] = Form(None, max_length=6),
-    fecha_vencimiento: date = Form(...),
+    fecha_vencimiento: Optional[date] = Form(None, description="Opcional: dejar vacío si el testigo no vence"),
     stock_actual: float = Form(...),
     stock_minimo: float = Form(...),
-    unidad_medida: Optional[str] = Form(None),
+    unidad_medida: Literal["mg", "ml"] = Form("mg"),
+    origen: Optional[Literal["USP", "EP", "INAME"]] = Form(None),
+    id_categoria: Optional[int] = Form(None),
     observaciones: Optional[str] = Form(None, max_length=500),
     id_laboratorio: Optional[int] = Form(None),
     pdf_certificado: Optional[UploadFile] = File(None),
@@ -1072,9 +1274,16 @@ def crear_testigo(
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="El laboratorio indicado no existe o está inactivo")
 
+    if id_categoria is not None:
+        cursor.execute("SELECT 1 FROM lims_testigo_categorias WHERE id_categoria = ? AND activo = 1", id_categoria)
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="La categoría indicada no existe o está inactiva")
+
     ruta_pdf = None
     if pdf_certificado is not None and pdf_certificado.filename:
         ruta_pdf = storage.guardar_pdf_testigo(pdf_certificado, codigo)
+
+    fecha_vencimiento_sql = str(fecha_vencimiento) if fecha_vencimiento else None
 
     tiene_lab = _tiene_columna_lab_testigo(cursor)
     if tiene_lab:
@@ -1082,22 +1291,22 @@ def crear_testigo(
             """
             INSERT INTO lims_testigos
                 (codigo, nombre, nro_lote, nro_ir, fecha_vencimiento, stock_actual, stock_minimo,
-                 unidad_medida, pdf_certificado, id_usuario_carga, observaciones, id_laboratorio)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 unidad_medida, pdf_certificado, id_usuario_carga, observaciones, id_laboratorio, origen, id_categoria)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            codigo, nombre, nro_lote, nro_ir, str(fecha_vencimiento), stock_actual, stock_minimo,
-            unidad_medida, ruta_pdf, user["id_usuario"], observaciones, id_laboratorio,
+            codigo, nombre, nro_lote, nro_ir, fecha_vencimiento_sql, stock_actual, stock_minimo,
+            unidad_medida, ruta_pdf, user["id_usuario"], observaciones, id_laboratorio, origen, id_categoria,
         )
     else:
         cursor.execute(
             """
             INSERT INTO lims_testigos
                 (codigo, nombre, nro_lote, nro_ir, fecha_vencimiento, stock_actual, stock_minimo,
-                 unidad_medida, pdf_certificado, id_usuario_carga, observaciones)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 unidad_medida, pdf_certificado, id_usuario_carga, observaciones, origen, id_categoria)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            codigo, nombre, nro_lote, nro_ir, str(fecha_vencimiento), stock_actual, stock_minimo,
-            unidad_medida, ruta_pdf, user["id_usuario"], observaciones,
+            codigo, nombre, nro_lote, nro_ir, fecha_vencimiento_sql, stock_actual, stock_minimo,
+            unidad_medida, ruta_pdf, user["id_usuario"], observaciones, origen, id_categoria,
         )
     cursor.execute("SELECT @@IDENTITY AS id")
     id_testigo = int(cursor.fetchone().id)
@@ -1118,7 +1327,7 @@ def crear_testigo(
     )
 
     cursor.execute(_select_testigos_sql(cursor) + "WHERE t.id_testigo = ?", id_testigo)
-    return _fila_a_testigo(cursor.fetchone())
+    return _fila_a_testigo(cursor.fetchone(), cursor=cursor)
 
 
 @router.put("/testigos/{id_testigo}", response_model=TestigoResponse)
@@ -1127,9 +1336,11 @@ def editar_testigo(
     nombre: str = Form(..., min_length=1, max_length=150),
     nro_lote: str = Form(..., min_length=1, max_length=50),
     nro_ir: Optional[str] = Form(None, max_length=6),
-    fecha_vencimiento: date = Form(...),
+    fecha_vencimiento: Optional[date] = Form(None, description="Opcional: dejar vacío si el testigo no vence"),
     stock_minimo: float = Form(...),
-    unidad_medida: Optional[str] = Form(None),
+    unidad_medida: Literal["mg", "ml"] = Form("mg"),
+    origen: Optional[Literal["USP", "EP", "INAME"]] = Form(None),
+    id_categoria: Optional[int] = Form(None),
     observaciones: Optional[str] = Form(None, max_length=500),
     id_laboratorio: Optional[int] = Form(None),
     pdf_certificado: Optional[UploadFile] = File(None),
@@ -1155,21 +1366,31 @@ def editar_testigo(
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="El laboratorio indicado no existe o está inactivo")
 
+    if id_categoria is not None:
+        cursor.execute("SELECT 1 FROM lims_testigo_categorias WHERE id_categoria = ? AND activo = 1", id_categoria)
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="La categoría indicada no existe o está inactiva")
+
     ruta_pdf = row.pdf_certificado
     if pdf_certificado is not None:
         ruta_pdf = storage.guardar_pdf_testigo(pdf_certificado, row.codigo)
 
+    fecha_vencimiento_sql = str(fecha_vencimiento) if fecha_vencimiento else None
+
     campos_anteriores = {
         "nombre": row.nombre, "nro_lote": row.nro_lote, "nro_ir": row.nro_ir,
-        "fecha_vencimiento": str(row.fecha_vencimiento), "stock_minimo": float(row.stock_minimo),
+        "fecha_vencimiento": str(row.fecha_vencimiento) if row.fecha_vencimiento else None,
+        "stock_minimo": float(row.stock_minimo),
         "unidad_medida": row.unidad_medida, "observaciones": row.observaciones,
         "pdf_certificado": row.pdf_certificado,
+        "origen": getattr(row, "origen", None), "id_categoria": getattr(row, "id_categoria", None),
     }
     campos_nuevos = {
         "nombre": nombre, "nro_lote": nro_lote, "nro_ir": nro_ir,
-        "fecha_vencimiento": str(fecha_vencimiento), "stock_minimo": stock_minimo,
+        "fecha_vencimiento": fecha_vencimiento_sql, "stock_minimo": stock_minimo,
         "unidad_medida": unidad_medida, "observaciones": observaciones,
         "pdf_certificado": ruta_pdf,
+        "origen": origen, "id_categoria": id_categoria,
     }
     if tiene_lab:
         campos_anteriores["id_laboratorio"] = getattr(row, "id_laboratorio", None)
@@ -1180,22 +1401,23 @@ def editar_testigo(
             """
             UPDATE lims_testigos
             SET nombre = ?, nro_lote = ?, nro_ir = ?, fecha_vencimiento = ?, stock_minimo = ?,
-                unidad_medida = ?, observaciones = ?, pdf_certificado = ?, id_laboratorio = ?
+                unidad_medida = ?, observaciones = ?, pdf_certificado = ?, id_laboratorio = ?,
+                origen = ?, id_categoria = ?
             WHERE id_testigo = ?
             """,
-            nombre, nro_lote, nro_ir, str(fecha_vencimiento), stock_minimo,
-            unidad_medida, observaciones, ruta_pdf, id_laboratorio, id_testigo,
+            nombre, nro_lote, nro_ir, fecha_vencimiento_sql, stock_minimo,
+            unidad_medida, observaciones, ruta_pdf, id_laboratorio, origen, id_categoria, id_testigo,
         )
     else:
         cursor.execute(
             """
             UPDATE lims_testigos
             SET nombre = ?, nro_lote = ?, nro_ir = ?, fecha_vencimiento = ?, stock_minimo = ?,
-                unidad_medida = ?, observaciones = ?, pdf_certificado = ?
+                unidad_medida = ?, observaciones = ?, pdf_certificado = ?, origen = ?, id_categoria = ?
             WHERE id_testigo = ?
             """,
-            nombre, nro_lote, nro_ir, str(fecha_vencimiento), stock_minimo,
-            unidad_medida, observaciones, ruta_pdf, id_testigo,
+            nombre, nro_lote, nro_ir, fecha_vencimiento_sql, stock_minimo,
+            unidad_medida, observaciones, ruta_pdf, origen, id_categoria, id_testigo,
         )
 
     valor_anterior = {k: v for k, v in campos_anteriores.items() if v != campos_nuevos[k]}
@@ -1207,7 +1429,7 @@ def editar_testigo(
     )
 
     cursor.execute(_select_testigos_sql(cursor) + "WHERE t.id_testigo = ?", id_testigo)
-    return _fila_a_testigo(cursor.fetchone())
+    return _fila_a_testigo(cursor.fetchone(), cursor=cursor)
 
 
 _MSG_TESTIGO_CON_MOVIMIENTOS = (
@@ -1270,8 +1492,19 @@ def listar_testigos(
     buscar: str = Query(""),
     estado: Optional[str] = Query(None, pattern=r"^(normal|por_vencer|vencido|sin_vencimiento)$"),
     stock_bajo: Optional[bool] = Query(None),
+    estados: Optional[str] = Query(
+        None,
+        description=(
+            "Lista separada por comas (vencido,por_vencer,normal,sin_vencimiento,stock_bajo), "
+            "combinados con OR -- usado por el filtro de checkboxes de TestigosPage. "
+            "Si se envía, reemplaza a 'estado' + 'stock_bajo' (que siguen andando solos para "
+            "ReporteTestigosPage, sin tocar su comportamiento)."
+        ),
+    ),
     orden: Optional[str] = Query(None, pattern=r"^(vencimiento_asc|vencimiento_desc|nombre_asc|codigo_asc|stock_asc|ir_asc)$"),
     fecha_ref: Optional[date] = Query(None, description="Fecha de referencia para calcular vencido/por_vencer; por defecto, hoy"),
+    dias_anticipacion: int = Query(30, ge=0, description="Días de anticipación para considerar 'por vencer'"),
+    id_categoria: Optional[int] = Query(None, description="Filtrar por categoría de testigo"),
     user: dict = Depends(get_current_user),
     conn: pyodbc.Connection = Depends(limss_db),
 ):
@@ -1288,22 +1521,31 @@ def listar_testigos(
             base_sql + "WHERE t.activo = ? AND (t.codigo LIKE ? OR t.nombre LIKE ?) ORDER BY t.nombre",
             1 if activo else 0, like, like,
         )
-    testigos = [_fila_a_testigo(r, fecha_ref=fecha_ref) for r in cursor.fetchall()]
+    testigos = [_fila_a_testigo(r, fecha_ref=fecha_ref, dias_anticipacion=dias_anticipacion, cursor=cursor) for r in cursor.fetchall()]
+
+    if id_categoria is not None:
+        testigos = [t for t in testigos if t.id_categoria == id_categoria]
 
     if solo_alertas:
         testigos = [t for t in testigos if t.vencido or t.por_vencer or t.stock_bajo]
 
-    if estado == "normal":
-        testigos = [t for t in testigos if t.fecha_vencimiento is not None and not t.vencido and not t.por_vencer]
-    elif estado == "por_vencer":
-        testigos = [t for t in testigos if t.por_vencer]
-    elif estado == "vencido":
-        testigos = [t for t in testigos if t.vencido]
-    elif estado == "sin_vencimiento":
-        testigos = [t for t in testigos if t.fecha_vencimiento is None]
+    if estados:
+        estados_pedidos = {e.strip() for e in estados.split(",") if e.strip()} & ESTADOS_TESTIGO_VALIDOS
+        if not estados_pedidos:
+            estados_pedidos = {"vencido", "por_vencer"}
+        testigos = [t for t in testigos if _cumple_filtro_estado_testigo(t, estados_pedidos)]
+    else:
+        if estado == "normal":
+            testigos = [t for t in testigos if t.fecha_vencimiento is not None and not t.vencido and not t.por_vencer]
+        elif estado == "por_vencer":
+            testigos = [t for t in testigos if t.por_vencer]
+        elif estado == "vencido":
+            testigos = [t for t in testigos if t.vencido]
+        elif estado == "sin_vencimiento":
+            testigos = [t for t in testigos if t.fecha_vencimiento is None]
 
-    if stock_bajo:
-        testigos = [t for t in testigos if t.stock_bajo]
+        if stock_bajo:
+            testigos = [t for t in testigos if t.stock_bajo]
 
     if orden == "vencimiento_asc":
         testigos = _ordenar_por_fecha_vencimiento(testigos, reverse=False)
@@ -1345,7 +1587,139 @@ def detalle_testigo(
     row = cursor.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Testigo no encontrado")
-    return _fila_a_testigo(row)
+    return _fila_a_testigo(row, cursor=cursor)
+
+
+_MSG_FALTA_MIGRACION_LAB_TESTIGO = (
+    "Falta ejecutar la migración de laboratorios de testigo "
+    "(migrations_testigo_laboratorios_m2m.sql)"
+)
+
+
+@router.get("/testigos/{id_testigo}/laboratorios", response_model=list[LaboratorioAsignado])
+def listar_laboratorios_testigo(
+    id_testigo: int,
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM lims_testigos WHERE id_testigo = ?", id_testigo)
+    if not cursor.fetchone():
+        raise HTTPException(status_code=404, detail="Testigo no encontrado")
+    return _laboratorios_de_testigo(cursor, id_testigo)
+
+
+@router.post("/testigos/{id_testigo}/laboratorios", response_model=list[LaboratorioAsignado], status_code=201)
+def asignar_laboratorio_testigo(
+    id_testigo: int,
+    body: TestigoLaboratorioCreate,
+    user: dict = Depends(require_rol("analista_qc", "admin", "qa")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    if not _tiene_tabla_testigo_laboratorios(cursor):
+        raise HTTPException(status_code=503, detail=_MSG_FALTA_MIGRACION_LAB_TESTIGO)
+
+    cursor.execute("SELECT 1 FROM lims_testigos WHERE id_testigo = ?", id_testigo)
+    if not cursor.fetchone():
+        raise HTTPException(status_code=404, detail="Testigo no encontrado")
+
+    cursor.execute("SELECT 1 FROM lims_laboratorios WHERE id_laboratorio = ? AND activo = 1", body.id_laboratorio)
+    if not cursor.fetchone():
+        raise HTTPException(status_code=404, detail="El laboratorio indicado no existe o está inactivo")
+
+    cursor.execute(
+        "SELECT 1 FROM lims_testigo_laboratorios WHERE id_testigo = ? AND id_laboratorio = ?",
+        id_testigo, body.id_laboratorio,
+    )
+    if cursor.fetchone():
+        raise HTTPException(status_code=409, detail="El laboratorio ya está asignado a este testigo")
+
+    unidad_consumo = body.unidad_consumo or ("mg" if body.consumo_estimado is not None else None)
+
+    cursor.execute(
+        "INSERT INTO lims_testigo_laboratorios (id_testigo, id_laboratorio, consumo_estimado, unidad_consumo) VALUES (?, ?, ?, ?)",
+        id_testigo, body.id_laboratorio, body.consumo_estimado, unidad_consumo,
+    )
+
+    audit.registrar(
+        conn, entidad="testigo_laboratorio", accion="asignar",
+        id_usuario=user["id_usuario"], id_entidad=id_testigo,
+        valor_nuevo={
+            "id_testigo": id_testigo, "id_laboratorio": body.id_laboratorio,
+            "consumo_estimado": body.consumo_estimado, "unidad_consumo": unidad_consumo,
+        },
+    )
+
+    return _laboratorios_de_testigo(cursor, id_testigo)
+
+
+@router.put("/testigos/{id_testigo}/laboratorios/{id_laboratorio}", response_model=list[LaboratorioAsignado])
+def editar_consumo_laboratorio_testigo(
+    id_testigo: int,
+    id_laboratorio: int,
+    body: TestigoLaboratorioConsumoUpdate,
+    user: dict = Depends(require_rol("analista_qc", "admin", "qa")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Actualiza el consumo estimado por análisis de un laboratorio ya
+    asignado al testigo (usado por confirmar_envio para descontar stock
+    automáticamente). No reasigna ni desvincula -- eso sigue siendo POST/DELETE."""
+    cursor = conn.cursor()
+    if not _tiene_tabla_testigo_laboratorios(cursor):
+        raise HTTPException(status_code=503, detail=_MSG_FALTA_MIGRACION_LAB_TESTIGO)
+
+    cursor.execute(
+        "SELECT 1 FROM lims_testigo_laboratorios WHERE id_testigo = ? AND id_laboratorio = ?",
+        id_testigo, id_laboratorio,
+    )
+    if not cursor.fetchone():
+        raise HTTPException(status_code=404, detail="El laboratorio no está asignado a este testigo")
+
+    unidad_consumo = body.unidad_consumo or ("mg" if body.consumo_estimado is not None else None)
+
+    cursor.execute(
+        "UPDATE lims_testigo_laboratorios SET consumo_estimado = ?, unidad_consumo = ? WHERE id_testigo = ? AND id_laboratorio = ?",
+        body.consumo_estimado, unidad_consumo, id_testigo, id_laboratorio,
+    )
+
+    audit.registrar(
+        conn, entidad="testigo_laboratorio", accion="modificar_consumo",
+        id_usuario=user["id_usuario"], id_entidad=id_testigo,
+        valor_nuevo={
+            "id_testigo": id_testigo, "id_laboratorio": id_laboratorio,
+            "consumo_estimado": body.consumo_estimado, "unidad_consumo": unidad_consumo,
+        },
+    )
+
+    return _laboratorios_de_testigo(cursor, id_testigo)
+
+
+@router.delete("/testigos/{id_testigo}/laboratorios/{id_laboratorio}", response_model=list[LaboratorioAsignado])
+def desvincular_laboratorio_testigo(
+    id_testigo: int,
+    id_laboratorio: int,
+    user: dict = Depends(require_rol("qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    if not _tiene_tabla_testigo_laboratorios(cursor):
+        raise HTTPException(status_code=503, detail=_MSG_FALTA_MIGRACION_LAB_TESTIGO)
+
+    cursor.execute(
+        "DELETE FROM lims_testigo_laboratorios WHERE id_testigo = ? AND id_laboratorio = ?",
+        id_testigo, id_laboratorio,
+    )
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=404, detail="El laboratorio no está asignado a este testigo")
+
+    audit.registrar(
+        conn, entidad="testigo_laboratorio", accion="desvincular",
+        id_usuario=user["id_usuario"], id_entidad=id_testigo,
+        valor_anterior={"id_testigo": id_testigo, "id_laboratorio": id_laboratorio},
+    )
+
+    return _laboratorios_de_testigo(cursor, id_testigo)
 
 
 @router.get("/testigos/{id_testigo}/movimientos", response_model=list[TestigoMovimientoResponse])
@@ -1416,7 +1790,7 @@ def cambiar_estado_testigo(
     )
 
     cursor.execute(_select_testigos_sql(cursor) + "WHERE t.id_testigo = ?", id_testigo)
-    return _fila_a_testigo(cursor.fetchone())
+    return _fila_a_testigo(cursor.fetchone(), cursor=cursor)
 
 
 @router.post("/testigos/{id_testigo}/movimiento", response_model=TestigoResponse, status_code=201)
@@ -1457,7 +1831,7 @@ def ajustar_stock_testigo(
     )
 
     cursor.execute(_select_testigos_sql(cursor) + "WHERE t.id_testigo = ?", id_testigo)
-    return _fila_a_testigo(cursor.fetchone())
+    return _fila_a_testigo(cursor.fetchone(), cursor=cursor)
 
 
 # Reexport sin prefijo para reutilizar la misma clasificación/orden de
@@ -1465,3 +1839,4 @@ def ajustar_stock_testigo(
 select_testigos_sql = _select_testigos_sql
 fila_a_testigo = _fila_a_testigo
 ordenar_por_fecha_vencimiento = _ordenar_por_fecha_vencimiento
+cumple_filtro_estado_testigo = _cumple_filtro_estado_testigo

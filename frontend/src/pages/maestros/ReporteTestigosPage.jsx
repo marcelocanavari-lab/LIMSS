@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import TopBar from '../../components/TopBar';
@@ -52,11 +52,18 @@ export default function ReporteTestigosPage() {
   const [stockBajo, setStockBajo] = useState(false);
   const [orden, setOrden] = useState('');
   const [fechaRef, setFechaRef] = useState(hoyISO());
+  const [diasAnticipacion, setDiasAnticipacion] = useState('30');
+  const [idCategoria, setIdCategoria] = useState('');
+  const [categorias, setCategorias] = useState([]);
   const [resultados, setResultados] = useState(null);
   const [fechaGeneracion, setFechaGeneracion] = useState(null);
   const [fechaRefUsada, setFechaRefUsada] = useState(null);
   const [generando, setGenerando] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    maestrosApi.listarCategoriasTestigo(true).then(setCategorias).catch(() => {});
+  }, []);
 
   async function generarReporte() {
     setError('');
@@ -67,6 +74,8 @@ export default function ReporteTestigosPage() {
         stockBajo: stockBajo || undefined,
         orden: orden || undefined,
         fechaRef: fechaRef || undefined,
+        diasAnticipacion: diasAnticipacion !== '' ? Number(diasAnticipacion) : undefined,
+        idCategoria: idCategoria || undefined,
       });
       setResultados(data);
       setFechaGeneracion(new Date());
@@ -111,6 +120,18 @@ export default function ReporteTestigosPage() {
             </div>
 
             <div className="field" style={{ flex: 1, minWidth: 180 }}>
+              <label className="field-label" htmlFor="diasAnticipacion">Días de anticipación</label>
+              <input
+                id="diasAnticipacion"
+                className="field-input"
+                type="number"
+                min="0"
+                value={diasAnticipacion}
+                onChange={(e) => setDiasAnticipacion(e.target.value)}
+              />
+            </div>
+
+            <div className="field" style={{ flex: 1, minWidth: 180 }}>
               <label className="field-label" htmlFor="estado">Estado</label>
               <select id="estado" className="field-input" value={estado} onChange={(e) => setEstado(e.target.value)}>
                 {ESTADOS.map((o) => (
@@ -124,6 +145,16 @@ export default function ReporteTestigosPage() {
               <select id="orden" className="field-input" value={orden} onChange={(e) => setOrden(e.target.value)}>
                 {ORDENES.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="field" style={{ flex: 1, minWidth: 180 }}>
+              <label className="field-label" htmlFor="idCategoria">Categoría</label>
+              <select id="idCategoria" className="field-input" value={idCategoria} onChange={(e) => setIdCategoria(e.target.value)}>
+                <option value="">Todas</option>
+                {categorias.map((c) => (
+                  <option key={c.id_categoria} value={c.id_categoria}>{c.nombre}</option>
                 ))}
               </select>
             </div>

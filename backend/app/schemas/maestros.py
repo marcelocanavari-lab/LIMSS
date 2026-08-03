@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Literal, Optional
 from datetime import date, datetime
 
 
@@ -177,6 +177,24 @@ class EspecificacionTestigoResponse(BaseModel):
 
 # ── Testigos ───────────────────────────────────────────────────
 
+class LaboratorioAsignado(BaseModel):
+    id_laboratorio: int
+    nombre: str
+    consumo_estimado: Optional[float] = None
+    unidad_consumo: Optional[Literal["mg", "ml"]] = None
+
+
+class TestigoLaboratorioCreate(BaseModel):
+    id_laboratorio: int
+    consumo_estimado: Optional[float] = Field(None, ge=0)
+    unidad_consumo: Optional[Literal["mg", "ml"]] = None
+
+
+class TestigoLaboratorioConsumoUpdate(BaseModel):
+    consumo_estimado: Optional[float] = Field(None, ge=0)
+    unidad_consumo: Optional[Literal["mg", "ml"]] = None
+
+
 class TestigoResponse(BaseModel):
     id_testigo: int
     codigo: str
@@ -186,7 +204,7 @@ class TestigoResponse(BaseModel):
     fecha_vencimiento: Optional[date] = None
     stock_actual: float
     stock_minimo: float
-    unidad_medida: Optional[str] = None
+    unidad_medida: Literal["mg", "ml"] = "mg"
     pdf_certificado: Optional[str] = None
     activo: bool
     id_usuario_carga: int
@@ -197,6 +215,28 @@ class TestigoResponse(BaseModel):
     stock_bajo: bool
     id_laboratorio: Optional[int] = None
     laboratorio_nombre: Optional[str] = None
+    laboratorios: list[LaboratorioAsignado] = []
+    origen: Optional[Literal["USP", "EP", "INAME"]] = None
+    id_categoria: Optional[int] = None
+    categoria_nombre: Optional[str] = None
+
+
+class TestigoCategoriaCreate(BaseModel):
+    codigo: str = Field(..., min_length=1, max_length=20)
+    nombre: str = Field(..., min_length=1, max_length=100)
+
+
+class TestigoCategoriaUpdate(BaseModel):
+    codigo: str = Field(..., min_length=1, max_length=20)
+    nombre: str = Field(..., min_length=1, max_length=100)
+    activo: bool
+
+
+class TestigoCategoriaResponse(BaseModel):
+    id_categoria: int
+    codigo: str
+    nombre: str
+    activo: bool
 
 
 class TestigoMovimientoResponse(BaseModel):
