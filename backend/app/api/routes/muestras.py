@@ -23,6 +23,7 @@ from app.schemas.muestras import (
     EnvioCreate,
     EnvioResponse,
     EtiquetaResponse,
+    FacturaResumenEnvio,
     LaboratorioCreate,
     LaboratorioResponse,
     LaboratorioUpdate,
@@ -36,6 +37,7 @@ from app.schemas.muestras import (
     TestigoEnviado,
     TestigoRemito,
 )
+from app.schemas.facturas import EnvioSinFacturar
 from app.schemas.recorrido import RecorridoResponse
 from app.services import audit
 from app.services.erp_ir import buscar_lineas_ir, formatear_nro_ir, normalizar_fecha_sentinel
@@ -371,6 +373,42 @@ def eliminar_contacto_laboratorio(
         id_usuario=user["id_usuario"], id_entidad=id_contacto,
         valor_anterior={"nombre": row.nombre},
     )
+
+
+@router.get("/laboratorios/{id_laboratorio}/envios-sin-facturar", response_model=list[EnvioSinFacturar])
+def envios_sin_facturar(
+    id_laboratorio: int,
+    user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Envíos de este laboratorio que todavía no están vinculados a ninguna
+    factura (lims_factura_envios) -- para poblar el selector al crear/editar
+    una factura en el módulo de Facturación."""
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT e.id_envio, e.nro_remito, e.fecha_despacho, e.id_laboratorio,
+               m.codigo_muestra, m.erp_CODART, m.erp_DESART, m.erp_nro_ir,
+               lab.nombre AS laboratorio_nombre,
+               (SELECT COUNT(*) FROM lims_envio_ensayos ee WHERE ee.id_envio = e.id_envio) AS cant_ensayos
+        FROM lims_envios e
+        INNER JOIN lims_muestras m ON m.id_muestra = e.id_muestra
+        INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = e.id_laboratorio
+        WHERE e.id_laboratorio = ?
+          AND NOT EXISTS (SELECT 1 FROM lims_factura_envios fe WHERE fe.id_envio = e.id_envio)
+        ORDER BY e.fecha_despacho DESC
+        """,
+        id_laboratorio,
+    )
+    return [
+        EnvioSinFacturar(
+            id_envio=r.id_envio, nro_remito=r.nro_remito, codigo_muestra=r.codigo_muestra,
+            fecha_despacho=r.fecha_despacho, id_laboratorio=r.id_laboratorio, laboratorio_nombre=r.laboratorio_nombre,
+            erp_CODART=r.erp_CODART, erp_DESART=r.erp_DESART, erp_nro_ir=r.erp_nro_ir,
+            cantidad_ensayos=r.cant_ensayos,
+        )
+        for r in cursor.fetchall()
+    ]
 
 
 # ── Búsqueda de IR en el ERP (REQ-ENV-002) ────────────────────────
@@ -981,6 +1019,22 @@ def _obtener_protocolo_envio(cursor, id_envio: int) -> Optional[ProtocoloEnvio]:
     )
 
 
+def _obtener_factura_de_envio(cursor, id_envio: int) -> Optional[FacturaResumenEnvio]:
+    cursor.execute(
+        """
+        SELECT f.id_factura, f.nro_factura, f.estado_pago
+        FROM lims_factura_envios fe
+        JOIN lims_facturas f ON f.id_factura = fe.id_factura
+        WHERE fe.id_envio = ?
+        """,
+        id_envio,
+    )
+    row = cursor.fetchone()
+    if not row:
+        return None
+    return FacturaResumenEnvio(id_factura=row.id_factura, nro_factura=row.nro_factura, estado_pago=row.estado_pago)
+
+
 def _obtener_testigos_enviados(cursor, id_envio: int) -> list[TestigoEnviado]:
     cursor.execute(
         """
@@ -1044,6 +1098,7 @@ def listar_envios(
             ensayos_solicitados=ensayos,
             protocolo=_obtener_protocolo_envio(cursor, row.id_envio),
             completo=_envio_completo(ensayos),
+            factura=_obtener_factura_de_envio(cursor, row.id_envio),
         ))
     return envios
 

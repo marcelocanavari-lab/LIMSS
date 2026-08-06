@@ -177,12 +177,39 @@ export const api = {
    navegación directa (href, window.open con la URL del backend) no manda ese
    header, así que en tablets (sin sesión de cookies) el backend devuelve 401
    y el visor de PDF del sistema operativo no puede mostrar nada. Se resuelve
-   trayendo el PDF ya autenticado como blob y abriendo esa URL local en su lugar. */
+   trayendo el PDF ya autenticado como blob y abriendo esa URL local en su lugar.
+
+   La ventana se abre ANTES del fetch (no después) porque Safari en iOS
+   bloquea como popup no autorizado cualquier window.open() llamado luego de
+   un await -- abriéndola primero y recién redirigiéndola al blob una vez
+   descargado, funciona en Safari iOS, Chrome Android, Chrome/Edge desktop y
+   Firefox por igual. */
 export async function abrirPdfConAuth(path) {
-  const blob = await api.getBlob(path);
-  const url = URL.createObjectURL(blob);
-  window.open(url, '_blank');
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  const ventana = window.open('', '_blank');
+
+  try {
+    const headers = {};
+    const token = getToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`${API_BASE}${path}`, { headers });
+
+    if (!res.ok) {
+      ventana.close();
+      throw new Error(`Error ${res.status}`);
+    }
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+
+    ventana.location.href = url;
+
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (error) {
+    ventana.close();
+    console.error('Error al abrir PDF:', error);
+    alert('No se pudo abrir el PDF. Intentá de nuevo.');
+  }
 }
 
 export { ApiError };

@@ -38,6 +38,9 @@ from app.schemas.maestros import (
     TestigoLaboratorioConsumoUpdate,
     TestigoLaboratorioCreate,
     TestigoMovimientoResponse,
+    TestigoOrigenCreate,
+    TestigoOrigenResponse,
+    TestigoOrigenUpdate,
     TestigoResponse,
 )
 from app.services import audit, storage
@@ -219,18 +222,21 @@ def _laboratorios_de_testigo(cursor, id_testigo: int) -> list[LaboratorioAsignad
 def _select_testigos_sql(cursor) -> str:
     """Alias 't' consistente en todas las ramas para que el WHERE/ORDER BY
     apendeado después (con o sin el JOIN de laboratorio) sea siempre válido.
-    El JOIN de categoría (lims_testigo_categorias) sí está siempre disponible
-    -- a diferencia de id_laboratorio, esa columna ya existe en todos los
-    entornos."""
+    Los JOIN de categoría (lims_testigo_categorias) y origen
+    (lims_testigo_origenes) sí están siempre disponibles -- a diferencia de
+    id_laboratorio, esas columnas ya existen en todos los entornos."""
     if _tiene_columna_lab_testigo(cursor):
         return (
-            "SELECT t.*, lab.nombre AS laboratorio_nombre, cat.nombre AS categoria_nombre FROM lims_testigos t "
+            "SELECT t.*, lab.nombre AS laboratorio_nombre, cat.nombre AS categoria_nombre, "
+            "org.nombre AS origen_nombre FROM lims_testigos t "
             "LEFT JOIN lims_laboratorios lab ON lab.id_laboratorio = t.id_laboratorio "
             "LEFT JOIN lims_testigo_categorias cat ON cat.id_categoria = t.id_categoria "
+            "LEFT JOIN lims_testigo_origenes org ON org.id_origen = t.id_origen "
         )
     return (
-        "SELECT t.*, cat.nombre AS categoria_nombre FROM lims_testigos t "
+        "SELECT t.*, cat.nombre AS categoria_nombre, org.nombre AS origen_nombre FROM lims_testigos t "
         "LEFT JOIN lims_testigo_categorias cat ON cat.id_categoria = t.id_categoria "
+        "LEFT JOIN lims_testigo_origenes org ON org.id_origen = t.id_origen "
     )
 
 
@@ -298,7 +304,8 @@ def _fila_a_testigo(row, fecha_ref: Optional[date] = None, dias_anticipacion: in
         id_laboratorio=getattr(row, "id_laboratorio", None),
         laboratorio_nombre=getattr(row, "laboratorio_nombre", None),
         laboratorios=_laboratorios_de_testigo(cursor, row.id_testigo) if cursor is not None else [],
-        origen=getattr(row, "origen", None),
+        id_origen=getattr(row, "id_origen", None),
+        origen_nombre=getattr(row, "origen_nombre", None),
         id_categoria=getattr(row, "id_categoria", None),
         categoria_nombre=getattr(row, "categoria_nombre", None),
     )
@@ -1241,6 +1248,122 @@ def eliminar_categoria_testigo(
     )
 
 
+# ── Orígenes de testigos ────────────────────────────────────────────
+
+def _fila_a_origen_testigo(row) -> TestigoOrigenResponse:
+    return TestigoOrigenResponse(
+        id_origen=row.id_origen, codigo=row.codigo, nombre=row.nombre, activo=bool(row.activo),
+    )
+
+
+@router.get("/testigo-origenes", response_model=list[TestigoOrigenResponse])
+def listar_origenes_testigo(
+    activo: Optional[bool] = Query(None, description="true=solo activos, false=solo inactivos, omitir=todos"),
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    if activo is None:
+        cursor.execute("SELECT * FROM lims_testigo_origenes ORDER BY nombre")
+    else:
+        cursor.execute("SELECT * FROM lims_testigo_origenes WHERE activo = ? ORDER BY nombre", 1 if activo else 0)
+    return [_fila_a_origen_testigo(r) for r in cursor.fetchall()]
+
+
+@router.post("/testigo-origenes", response_model=TestigoOrigenResponse, status_code=201)
+def crear_origen_testigo(
+    body: TestigoOrigenCreate,
+    user: dict = Depends(require_rol("admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM lims_testigo_origenes WHERE codigo = ?", body.codigo)
+    if cursor.fetchone():
+        raise HTTPException(status_code=409, detail=f"El código '{body.codigo}' ya existe")
+
+    cursor.execute(
+        "INSERT INTO lims_testigo_origenes (codigo, nombre) VALUES (?, ?)",
+        body.codigo, body.nombre,
+    )
+    cursor.execute("SELECT @@IDENTITY AS id")
+    id_origen = int(cursor.fetchone().id)
+
+    audit.registrar(
+        conn, entidad="testigo_origen", accion="crear",
+        id_usuario=user["id_usuario"], id_entidad=id_origen,
+        valor_nuevo={"codigo": body.codigo, "nombre": body.nombre},
+    )
+
+    cursor.execute("SELECT * FROM lims_testigo_origenes WHERE id_origen = ?", id_origen)
+    return _fila_a_origen_testigo(cursor.fetchone())
+
+
+@router.put("/testigo-origenes/{id_origen}", response_model=TestigoOrigenResponse)
+def editar_origen_testigo(
+    id_origen: int,
+    body: TestigoOrigenUpdate,
+    user: dict = Depends(require_rol("admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM lims_testigo_origenes WHERE id_origen = ?", id_origen)
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Origen no encontrado")
+
+    cursor.execute(
+        "SELECT 1 FROM lims_testigo_origenes WHERE codigo = ? AND id_origen != ?",
+        body.codigo, id_origen,
+    )
+    if cursor.fetchone():
+        raise HTTPException(status_code=409, detail=f"El código '{body.codigo}' ya existe")
+
+    campos_anteriores = {"codigo": row.codigo, "nombre": row.nombre, "activo": bool(row.activo)}
+    campos_nuevos = {"codigo": body.codigo, "nombre": body.nombre, "activo": body.activo}
+
+    cursor.execute(
+        "UPDATE lims_testigo_origenes SET codigo = ?, nombre = ?, activo = ? WHERE id_origen = ?",
+        body.codigo, body.nombre, 1 if body.activo else 0, id_origen,
+    )
+
+    audit.registrar(
+        conn, entidad="testigo_origen", accion="modificar",
+        id_usuario=user["id_usuario"], id_entidad=id_origen,
+        valor_anterior=campos_anteriores, valor_nuevo=campos_nuevos,
+    )
+
+    cursor.execute("SELECT * FROM lims_testigo_origenes WHERE id_origen = ?", id_origen)
+    return _fila_a_origen_testigo(cursor.fetchone())
+
+
+@router.delete("/testigo-origenes/{id_origen}", status_code=204)
+def eliminar_origen_testigo(
+    id_origen: int,
+    user: dict = Depends(require_rol("admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM lims_testigo_origenes WHERE id_origen = ?", id_origen)
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Origen no encontrado")
+
+    cursor.execute("SELECT 1 FROM lims_testigos WHERE id_origen = ?", id_origen)
+    if cursor.fetchone():
+        raise HTTPException(
+            status_code=400,
+            detail="No se puede eliminar: hay testigos asociados a este origen. Podés desactivarlo en su lugar.",
+        )
+
+    cursor.execute("DELETE FROM lims_testigo_origenes WHERE id_origen = ?", id_origen)
+
+    audit.registrar(
+        conn, entidad="testigo_origen", accion="eliminar",
+        id_usuario=user["id_usuario"], id_entidad=id_origen,
+        valor_anterior={"codigo": row.codigo, "nombre": row.nombre},
+    )
+
+
 # ── Testigos y estándares ─────────────────────────────────────────
 
 @router.post("/testigos", response_model=TestigoResponse, status_code=201)
@@ -1253,7 +1376,7 @@ def crear_testigo(
     stock_actual: float = Form(...),
     stock_minimo: float = Form(...),
     unidad_medida: Literal["mg", "ml"] = Form("mg"),
-    origen: Optional[Literal["USP", "EP", "INAME"]] = Form(None),
+    id_origen: Optional[int] = Form(None),
     id_categoria: Optional[int] = Form(None),
     observaciones: Optional[str] = Form(None, max_length=500),
     id_laboratorio: Optional[int] = Form(None),
@@ -1279,6 +1402,11 @@ def crear_testigo(
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="La categoría indicada no existe o está inactiva")
 
+    if id_origen is not None:
+        cursor.execute("SELECT 1 FROM lims_testigo_origenes WHERE id_origen = ? AND activo = 1", id_origen)
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="El origen indicado no existe o está inactivo")
+
     ruta_pdf = None
     if pdf_certificado is not None and pdf_certificado.filename:
         ruta_pdf = storage.guardar_pdf_testigo(pdf_certificado, codigo)
@@ -1291,22 +1419,22 @@ def crear_testigo(
             """
             INSERT INTO lims_testigos
                 (codigo, nombre, nro_lote, nro_ir, fecha_vencimiento, stock_actual, stock_minimo,
-                 unidad_medida, pdf_certificado, id_usuario_carga, observaciones, id_laboratorio, origen, id_categoria)
+                 unidad_medida, pdf_certificado, id_usuario_carga, observaciones, id_laboratorio, id_origen, id_categoria)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             codigo, nombre, nro_lote, nro_ir, fecha_vencimiento_sql, stock_actual, stock_minimo,
-            unidad_medida, ruta_pdf, user["id_usuario"], observaciones, id_laboratorio, origen, id_categoria,
+            unidad_medida, ruta_pdf, user["id_usuario"], observaciones, id_laboratorio, id_origen, id_categoria,
         )
     else:
         cursor.execute(
             """
             INSERT INTO lims_testigos
                 (codigo, nombre, nro_lote, nro_ir, fecha_vencimiento, stock_actual, stock_minimo,
-                 unidad_medida, pdf_certificado, id_usuario_carga, observaciones, origen, id_categoria)
+                 unidad_medida, pdf_certificado, id_usuario_carga, observaciones, id_origen, id_categoria)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             codigo, nombre, nro_lote, nro_ir, fecha_vencimiento_sql, stock_actual, stock_minimo,
-            unidad_medida, ruta_pdf, user["id_usuario"], observaciones, origen, id_categoria,
+            unidad_medida, ruta_pdf, user["id_usuario"], observaciones, id_origen, id_categoria,
         )
     cursor.execute("SELECT @@IDENTITY AS id")
     id_testigo = int(cursor.fetchone().id)
@@ -1339,7 +1467,7 @@ def editar_testigo(
     fecha_vencimiento: Optional[date] = Form(None, description="Opcional: dejar vacío si el testigo no vence"),
     stock_minimo: float = Form(...),
     unidad_medida: Literal["mg", "ml"] = Form("mg"),
-    origen: Optional[Literal["USP", "EP", "INAME"]] = Form(None),
+    id_origen: Optional[int] = Form(None),
     id_categoria: Optional[int] = Form(None),
     observaciones: Optional[str] = Form(None, max_length=500),
     id_laboratorio: Optional[int] = Form(None),
@@ -1371,6 +1499,11 @@ def editar_testigo(
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="La categoría indicada no existe o está inactiva")
 
+    if id_origen is not None:
+        cursor.execute("SELECT 1 FROM lims_testigo_origenes WHERE id_origen = ? AND activo = 1", id_origen)
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="El origen indicado no existe o está inactivo")
+
     ruta_pdf = row.pdf_certificado
     if pdf_certificado is not None:
         ruta_pdf = storage.guardar_pdf_testigo(pdf_certificado, row.codigo)
@@ -1383,14 +1516,14 @@ def editar_testigo(
         "stock_minimo": float(row.stock_minimo),
         "unidad_medida": row.unidad_medida, "observaciones": row.observaciones,
         "pdf_certificado": row.pdf_certificado,
-        "origen": getattr(row, "origen", None), "id_categoria": getattr(row, "id_categoria", None),
+        "id_origen": getattr(row, "id_origen", None), "id_categoria": getattr(row, "id_categoria", None),
     }
     campos_nuevos = {
         "nombre": nombre, "nro_lote": nro_lote, "nro_ir": nro_ir,
         "fecha_vencimiento": fecha_vencimiento_sql, "stock_minimo": stock_minimo,
         "unidad_medida": unidad_medida, "observaciones": observaciones,
         "pdf_certificado": ruta_pdf,
-        "origen": origen, "id_categoria": id_categoria,
+        "id_origen": id_origen, "id_categoria": id_categoria,
     }
     if tiene_lab:
         campos_anteriores["id_laboratorio"] = getattr(row, "id_laboratorio", None)
@@ -1402,22 +1535,22 @@ def editar_testigo(
             UPDATE lims_testigos
             SET nombre = ?, nro_lote = ?, nro_ir = ?, fecha_vencimiento = ?, stock_minimo = ?,
                 unidad_medida = ?, observaciones = ?, pdf_certificado = ?, id_laboratorio = ?,
-                origen = ?, id_categoria = ?
+                id_origen = ?, id_categoria = ?
             WHERE id_testigo = ?
             """,
             nombre, nro_lote, nro_ir, fecha_vencimiento_sql, stock_minimo,
-            unidad_medida, observaciones, ruta_pdf, id_laboratorio, origen, id_categoria, id_testigo,
+            unidad_medida, observaciones, ruta_pdf, id_laboratorio, id_origen, id_categoria, id_testigo,
         )
     else:
         cursor.execute(
             """
             UPDATE lims_testigos
             SET nombre = ?, nro_lote = ?, nro_ir = ?, fecha_vencimiento = ?, stock_minimo = ?,
-                unidad_medida = ?, observaciones = ?, pdf_certificado = ?, origen = ?, id_categoria = ?
+                unidad_medida = ?, observaciones = ?, pdf_certificado = ?, id_origen = ?, id_categoria = ?
             WHERE id_testigo = ?
             """,
             nombre, nro_lote, nro_ir, fecha_vencimiento_sql, stock_minimo,
-            unidad_medida, observaciones, ruta_pdf, origen, id_categoria, id_testigo,
+            unidad_medida, observaciones, ruta_pdf, id_origen, id_categoria, id_testigo,
         )
 
     valor_anterior = {k: v for k, v in campos_anteriores.items() if v != campos_nuevos[k]}

@@ -199,7 +199,7 @@ export default function TestigoDetallePage() {
               <tr><td>Stock actual</td><td className="num" style={{ textAlign: 'left' }}>{testigo.stock_actual} {testigo.unidad_medida || ''}</td></tr>
               <tr><td>Stock mínimo</td><td className="num" style={{ textAlign: 'left' }}>{testigo.stock_minimo} {testigo.unidad_medida || ''}</td></tr>
               <tr><td>Categoría</td><td style={{ textAlign: 'left' }}>{testigo.categoria_nombre || '—'}</td></tr>
-              <tr><td>Origen</td><td style={{ textAlign: 'left' }}>{testigo.origen || '—'}</td></tr>
+              <tr><td>Origen</td><td style={{ textAlign: 'left' }}>{testigo.origen_nombre || '—'}</td></tr>
               <tr><td>Observaciones</td><td style={{ textAlign: 'left' }}>{testigo.observaciones || '—'}</td></tr>
             </tbody>
           </table>

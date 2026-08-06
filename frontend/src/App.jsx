@@ -18,6 +18,7 @@ import TestigosPage from './pages/maestros/TestigosPage';
 import TestigoFormPage from './pages/maestros/TestigoFormPage';
 import TestigoDetallePage from './pages/maestros/TestigoDetallePage';
 import TestigoCategoriasPage from './pages/maestros/TestigoCategoriasPage';
+import TestigoOrigenesPage from './pages/maestros/TestigoOrigenesPage';
 import ReporteTestigosPage from './pages/maestros/ReporteTestigosPage';
 import RemitosTestigosPage from './pages/maestros/RemitosTestigosPage';
 import RemitoTestigoDetallePage from './pages/maestros/RemitoTestigoDetallePage';
@@ -38,6 +39,9 @@ import CargaResultadosPage from './pages/resultados/CargaResultadosPage';
 import CargaResultadosOrdenTrabajoPage from './pages/resultados/CargaResultadosOrdenTrabajoPage';
 import DictamenesPage from './pages/dictamenes/DictamenesPage';
 import DictamenDetallePage from './pages/dictamenes/DictamenDetallePage';
+import FacturasPage from './pages/facturas/FacturasPage';
+import FacturaFormPage from './pages/facturas/FacturaFormPage';
+import FacturaDetallePage from './pages/facturas/FacturaDetallePage';
 
 // Roles reutilizados en varias rutas -- mismo criterio que usa el backend
 // (require_rol) y el menú v2.0, para que "lo que se ve" y "lo que se puede
@@ -62,6 +66,7 @@ export default function App() {
           <Route path="/erp-config" element={<PrivateRoute roles={ADMIN}><ErpConfigPage /></PrivateRoute>} />
           <Route path="/auditoria" element={<PrivateRoute roles={ADMIN}><AuditoriaPage /></PrivateRoute>} />
           <Route path="/maestros/testigo-categorias" element={<PrivateRoute roles={ADMIN}><TestigoCategoriasPage /></PrivateRoute>} />
+          <Route path="/maestros/testigo-origenes" element={<PrivateRoute roles={ADMIN}><TestigoOrigenesPage /></PrivateRoute>} />
 
           {/* ── Datos Maestros (analista_qc, qa, admin) ─────────── */}
           <Route path="/maestros/especificaciones" element={<PrivateRoute roles={GESTION}><EspecificacionesPage /></PrivateRoute>} />
@@ -109,6 +114,12 @@ export default function App() {
           {/* ── Control de Calidad (solo qa, admin) ─────────────── */}
           <Route path="/dictamenes" element={<PrivateRoute roles={QA_ADMIN}><DictamenesPage /></PrivateRoute>} />
           <Route path="/dictamenes/muestras/:id" element={<PrivateRoute roles={QA_ADMIN}><DictamenDetallePage /></PrivateRoute>} />
+
+          {/* ── Facturación de Laboratorios (analista_qc, qa, admin) ── */}
+          <Route path="/facturas" element={<PrivateRoute roles={GESTION}><FacturasPage /></PrivateRoute>} />
+          <Route path="/facturas/nueva" element={<PrivateRoute roles={GESTION}><FacturaFormPage modo="crear" /></PrivateRoute>} />
+          <Route path="/facturas/:id" element={<PrivateRoute roles={GESTION}><FacturaDetallePage /></PrivateRoute>} />
+          <Route path="/facturas/:id/editar" element={<PrivateRoute roles={GESTION}><FacturaFormPage modo="editar" /></PrivateRoute>} />
 
           <Route path="/" element={<Navigate to="/menu" replace />} />
           <Route path="*" element={<Navigate to="/menu" replace />} />

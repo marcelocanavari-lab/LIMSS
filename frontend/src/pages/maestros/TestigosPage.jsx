@@ -15,13 +15,6 @@ const ESTADOS_TESTIGO = [
   { value: 'stock_bajo', label: 'Stock bajo' },
 ];
 
-const ORIGENES_TESTIGO = [
-  { value: '', label: 'Todos los orígenes' },
-  { value: 'USP', label: 'USP' },
-  { value: 'EP', label: 'EP' },
-  { value: 'INAME', label: 'INAME' },
-];
-
 const ORDENES_TESTIGO = [
   { value: 'codigo_asc', label: 'Código (A-Z)' },
   { value: 'nombre_asc', label: 'Nombre (A-Z)' },
@@ -71,7 +64,8 @@ export default function TestigosPage() {
   const [estados, setEstados] = useState(DEFAULT_ESTADOS);
   const [categorias, setCategorias] = useState([]);
   const [idCategoria, setIdCategoria] = useState('');
-  const [origen, setOrigen] = useState('');
+  const [origenes, setOrigenes] = useState([]);
+  const [idOrigen, setIdOrigen] = useState('');
   const [fechaRef, setFechaRef] = useState(hoyISO());
   const [diasAnticipacion, setDiasAnticipacion] = useState(DEFAULT_DIAS_ANTICIPACION);
   const [orden, setOrden] = useState(DEFAULT_ORDEN);
@@ -88,7 +82,7 @@ export default function TestigosPage() {
     setBuscar('');
     setEstados(DEFAULT_ESTADOS);
     setIdCategoria('');
-    setOrigen('');
+    setIdOrigen('');
     setFechaRef(hoyISO());
     setDiasAnticipacion(DEFAULT_DIAS_ANTICIPACION);
     setOrden(DEFAULT_ORDEN);
@@ -96,6 +90,7 @@ export default function TestigosPage() {
 
   useEffect(() => {
     maestrosApi.listarCategoriasTestigo(true).then(setCategorias).catch(() => {});
+    maestrosApi.listarOrigenesTestigo(true).then(setOrigenes).catch(() => {});
   }, []);
 
   const [testigoAEliminar, setTestigoAEliminar] = useState(null);
@@ -181,7 +176,7 @@ export default function TestigosPage() {
 
   // El origen no tiene filtro propio en el backend -- se filtra en memoria
   // sobre lo ya traído, sin agregar un parámetro nuevo al endpoint.
-  const testigosVisibles = origen ? testigos.filter((t) => t.origen === origen) : testigos;
+  const testigosVisibles = idOrigen ? testigos.filter((t) => t.id_origen === Number(idOrigen)) : testigos;
 
   return (
     <div className="screen">
@@ -238,11 +233,12 @@ export default function TestigosPage() {
           <select
             className="field-input"
             style={{ height: 32, width: 'auto', fontSize: 'var(--fs-xs)' }}
-            value={origen}
-            onChange={(e) => setOrigen(e.target.value)}
+            value={idOrigen}
+            onChange={(e) => setIdOrigen(e.target.value)}
           >
-            {ORIGENES_TESTIGO.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
+            <option value="">Todos los orígenes</option>
+            {origenes.map((o) => (
+              <option key={o.id_origen} value={o.id_origen}>{o.nombre}</option>
             ))}
           </select>
         </div>
@@ -357,7 +353,7 @@ export default function TestigosPage() {
                     )}
                   </td>
                   <td>{t.categoria_nombre || <span style={{ color: 'var(--ink-2)' }}>—</span>}</td>
-                  <td>{t.origen || <span style={{ color: 'var(--ink-2)' }}>—</span>}</td>
+                  <td>{t.origen_nombre || <span style={{ color: 'var(--ink-2)' }}>—</span>}</td>
                   <td>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{badgesEstado(t)}</div>
                   </td>

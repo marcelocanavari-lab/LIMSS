@@ -25,6 +25,7 @@ const QUICK_LINKS = [
   { label: 'Laboratorios', ruta: '/muestras/laboratorios', roles: GESTION },
   { label: 'Reporte de Testigos', ruta: '/maestros/testigos/reporte', roles: QA_ADMIN },
   { label: 'Dictamen QA', ruta: '/dictamenes', roles: QA_ADMIN },
+  { label: 'Facturación', ruta: '/facturas', roles: GESTION },
   { label: 'Administración', ruta: '/admin', roles: ['admin'] },
 ];
 

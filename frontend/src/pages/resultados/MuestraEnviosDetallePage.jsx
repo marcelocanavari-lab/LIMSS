@@ -5,6 +5,18 @@ import TopBar from '../../components/TopBar';
 import { muestrasApi } from '../../api/muestras';
 import { ApiError } from '../../api/client';
 
+const BADGE_ESTADO_PAGO = {
+  pendiente: 'badge-warn',
+  pagado: 'badge-ok',
+  anulado: 'badge-danger',
+};
+
+const LABEL_ESTADO_PAGO = {
+  pendiente: 'Pendiente',
+  pagado: 'Pagado',
+  anulado: 'Anulado',
+};
+
 export default function MuestraEnviosDetallePage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -101,6 +113,29 @@ export default function MuestraEnviosDetallePage() {
                   </li>
                 ))}
               </ul>
+
+              <div style={{ marginBottom: 'var(--sp-3)', fontSize: 'var(--fs-sm)' }}>
+                {en.factura ? (
+                  <span>
+                    Factura: <span style={{ fontFamily: 'var(--font-mono)' }}>{en.factura.nro_factura}</span>{' '}
+                    <span className={`badge ${BADGE_ESTADO_PAGO[en.factura.estado_pago] || 'badge-neutral'}`}>
+                      {LABEL_ESTADO_PAGO[en.factura.estado_pago] || en.factura.estado_pago}
+                    </span>{' '}
+                    {puedeGestionar && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        style={{ padding: 0 }}
+                        onClick={() => navigate(`/facturas/${en.factura.id_factura}`)}
+                      >
+                        Ver factura →
+                      </button>
+                    )}
+                  </span>
+                ) : (
+                  <span style={{ color: 'var(--ink-2)' }}>Sin factura asociada</span>
+                )}
+              </div>
 
               <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
                 <button className="btn btn-secondary" onClick={() => navigate(`/muestras/${id}/envios/${en.id_envio}/remito`)}>

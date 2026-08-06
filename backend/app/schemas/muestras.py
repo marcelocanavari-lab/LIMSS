@@ -193,6 +193,12 @@ class ProtocoloEnvio(BaseModel):
     fecha_carga: datetime
 
 
+class FacturaResumenEnvio(BaseModel):
+    id_factura: int
+    nro_factura: str
+    estado_pago: str
+
+
 class EnvioResponse(BaseModel):
     id_envio: int
     id_muestra: int
@@ -213,6 +219,7 @@ class EnvioResponse(BaseModel):
     ensayos_solicitados: list[EnsayoSolicitado] = []
     protocolo: Optional[ProtocoloEnvio] = None
     completo: bool = False
+    factura: Optional[FacturaResumenEnvio] = None
 
 
 class RemitoResponse(BaseModel):

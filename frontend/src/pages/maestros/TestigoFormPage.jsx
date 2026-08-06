@@ -17,7 +17,8 @@ export default function TestigoFormPage({ modo }) {
   const [stockActual, setStockActual] = useState('');
   const [stockMinimo, setStockMinimo] = useState('');
   const [unidadMedida, setUnidadMedida] = useState('mg');
-  const [origen, setOrigen] = useState('');
+  const [idOrigen, setIdOrigen] = useState('');
+  const [origenes, setOrigenes] = useState([]);
   const [idCategoria, setIdCategoria] = useState('');
   const [categorias, setCategorias] = useState([]);
   const [observaciones, setObservaciones] = useState('');
@@ -29,6 +30,7 @@ export default function TestigoFormPage({ modo }) {
 
   useEffect(() => {
     maestrosApi.listarCategoriasTestigo(true).then(setCategorias).catch(() => {});
+    maestrosApi.listarOrigenesTestigo(true).then(setOrigenes).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -43,7 +45,7 @@ export default function TestigoFormPage({ modo }) {
         setFechaVencimiento(t.fecha_vencimiento || '');
         setStockMinimo(String(t.stock_minimo));
         setUnidadMedida(t.unidad_medida || 'mg');
-        setOrigen(t.origen || '');
+        setIdOrigen(t.id_origen != null ? String(t.id_origen) : '');
         setIdCategoria(t.id_categoria != null ? String(t.id_categoria) : '');
         setObservaciones(t.observaciones || '');
         setTieneCertificado(!!t.pdf_certificado);
@@ -83,7 +85,7 @@ export default function TestigoFormPage({ modo }) {
         if (fechaVencimiento) formData.append('fecha_vencimiento', fechaVencimiento);
         formData.append('stock_minimo', stockMinimo || '0');
         formData.append('unidad_medida', unidadMedida);
-        if (origen) formData.append('origen', origen);
+        if (idOrigen) formData.append('id_origen', idOrigen);
         if (idCategoria) formData.append('id_categoria', idCategoria);
         if (observaciones.trim()) formData.append('observaciones', observaciones.trim());
         if (archivo) formData.append('pdf_certificado', archivo);
@@ -99,7 +101,7 @@ export default function TestigoFormPage({ modo }) {
         formData.append('stock_actual', stockActual || '0');
         formData.append('stock_minimo', stockMinimo || '0');
         formData.append('unidad_medida', unidadMedida);
-        if (origen) formData.append('origen', origen);
+        if (idOrigen) formData.append('id_origen', idOrigen);
         if (idCategoria) formData.append('id_categoria', idCategoria);
         if (observaciones.trim()) formData.append('observaciones', observaciones.trim());
         if (archivo) formData.append('pdf_certificado', archivo);
@@ -255,18 +257,18 @@ export default function TestigoFormPage({ modo }) {
 
             <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
               <div className="field" style={{ flex: 1 }}>
-                <label className="field-label" htmlFor="origen">Origen</label>
+                <label className="field-label" htmlFor="idOrigen">Origen</label>
                 <select
-                  id="origen"
+                  id="idOrigen"
                   className="field-input"
-                  value={origen}
-                  onChange={(e) => setOrigen(e.target.value)}
+                  value={idOrigen}
+                  onChange={(e) => setIdOrigen(e.target.value)}
                   disabled={guardando}
                 >
-                  <option value="">Sin especificar</option>
-                  <option value="USP">USP</option>
-                  <option value="EP">EP</option>
-                  <option value="INAME">INAME</option>
+                  <option value="">Sin origen</option>
+                  {origenes.map((o) => (
+                    <option key={o.id_origen} value={o.id_origen}>{o.nombre}</option>
+                  ))}
                 </select>
               </div>
               <div className="field" style={{ flex: 1 }}>

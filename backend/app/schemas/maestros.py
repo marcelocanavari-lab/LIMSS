@@ -216,9 +216,28 @@ class TestigoResponse(BaseModel):
     id_laboratorio: Optional[int] = None
     laboratorio_nombre: Optional[str] = None
     laboratorios: list[LaboratorioAsignado] = []
-    origen: Optional[Literal["USP", "EP", "INAME"]] = None
+    id_origen: Optional[int] = None
+    origen_nombre: Optional[str] = None
     id_categoria: Optional[int] = None
     categoria_nombre: Optional[str] = None
+
+
+class TestigoOrigenCreate(BaseModel):
+    codigo: str = Field(..., min_length=1, max_length=20)
+    nombre: str = Field(..., min_length=1, max_length=100)
+
+
+class TestigoOrigenUpdate(BaseModel):
+    codigo: str = Field(..., min_length=1, max_length=20)
+    nombre: str = Field(..., min_length=1, max_length=100)
+    activo: bool
+
+
+class TestigoOrigenResponse(BaseModel):
+    id_origen: int
+    codigo: str
+    nombre: str
+    activo: bool
 
 
 class TestigoCategoriaCreate(BaseModel):

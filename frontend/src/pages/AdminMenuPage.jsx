@@ -4,6 +4,7 @@ import TopBar from '../components/TopBar';
 const ITEMS = [
   { label: 'Gestión de Usuarios', ruta: '/usuarios' },
   { label: 'Categorías de Testigos', ruta: '/maestros/testigo-categorias' },
+  { label: 'Orígenes de Testigos', ruta: '/maestros/testigo-origenes' },
   { label: 'Configuración ERP', ruta: '/erp-config' },
   { label: 'Auditoría', ruta: '/auditoria' },
 ];

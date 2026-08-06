@@ -542,6 +542,32 @@
   .printable .card { break-inside: avoid; }
 }
 
+/* --- Reporte de Testigos: la tabla es más ancha que la pantalla (muchas
+   columnas) -- se scrollea horizontalmente en su propio contenedor en vez
+   de desbordar la página, así el fondo de fila (tr) no se corta antes del
+   borde derecho. Solo aplica en pantalla: en @media print se resetea para
+   no alterar el PDF (que imprime en su formato normal, portrait). */
+.reporte-tabla-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.reporte-tabla-scroll .data-table {
+  min-width: 1400px;
+  width: max-content;
+}
+
+@media print {
+  .reporte-tabla-scroll {
+    overflow-x: visible;
+  }
+
+  .reporte-tabla-scroll .data-table {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
 /* --- Secciones acordeón (reportes) --- */
 .acordeon-header {
   display: flex;

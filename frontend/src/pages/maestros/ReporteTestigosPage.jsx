@@ -55,6 +55,8 @@ export default function ReporteTestigosPage() {
   const [diasAnticipacion, setDiasAnticipacion] = useState('30');
   const [idCategoria, setIdCategoria] = useState('');
   const [categorias, setCategorias] = useState([]);
+  const [idOrigen, setIdOrigen] = useState('');
+  const [origenes, setOrigenes] = useState([]);
   const [resultados, setResultados] = useState(null);
   const [fechaGeneracion, setFechaGeneracion] = useState(null);
   const [fechaRefUsada, setFechaRefUsada] = useState(null);
@@ -63,7 +65,14 @@ export default function ReporteTestigosPage() {
 
   useEffect(() => {
     maestrosApi.listarCategoriasTestigo(true).then(setCategorias).catch(() => {});
+    maestrosApi.listarOrigenesTestigo(true).then(setOrigenes).catch(() => {});
   }, []);
+
+  // El origen no tiene filtro propio en el backend (igual que en TestigosPage)
+  // -- se filtra en memoria sobre lo ya traído.
+  const resultadosFiltrados = resultados
+    ? (idOrigen ? resultados.filter((t) => t.id_origen === Number(idOrigen)) : resultados)
+    : null;
 
   async function generarReporte() {
     setError('');
@@ -158,6 +167,16 @@ export default function ReporteTestigosPage() {
                 ))}
               </select>
             </div>
+
+            <div className="field" style={{ flex: 1, minWidth: 180 }}>
+              <label className="field-label" htmlFor="idOrigen">Origen</label>
+              <select id="idOrigen" className="field-input" value={idOrigen} onChange={(e) => setIdOrigen(e.target.value)}>
+                <option value="">Todos</option>
+                {origenes.map((o) => (
+                  <option key={o.id_origen} value={o.id_origen}>{o.nombre}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', marginBottom: 'var(--sp-4)' }}>
@@ -172,10 +191,10 @@ export default function ReporteTestigosPage() {
 
         {error && <div className="alert alert-danger no-print" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}
 
-        {resultados && (
+        {resultadosFiltrados && (
           <div className="printable">
             <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--sp-4)' }}>
-              <span>{resultados.length} testigo{resultados.length === 1 ? '' : 's'} encontrado{resultados.length === 1 ? '' : 's'}</span>
+              <span>{resultadosFiltrados.length} testigo{resultadosFiltrados.length === 1 ? '' : 's'} encontrado{resultadosFiltrados.length === 1 ? '' : 's'}</span>
               <button className="btn btn-secondary" onClick={() => window.print()}>Imprimir / Exportar PDF</button>
             </div>
 
@@ -185,42 +204,50 @@ export default function ReporteTestigosPage() {
             </p>
             <p style={{ color: 'var(--ink-2)', marginBottom: 'var(--sp-4)' }}>
               Generado el {fechaGeneracion?.toLocaleString()} por {user?.nombre} {user?.apellido} ({user?.codigo}) —{' '}
-              {resultados.length} registro{resultados.length === 1 ? '' : 's'}
+              {resultadosFiltrados.length} registro{resultadosFiltrados.length === 1 ? '' : 's'}
             </p>
 
-            {resultados.length === 0 ? (
+            {resultadosFiltrados.length === 0 ? (
               <div className="state-block"><span className="state-block-title">Sin resultados</span></div>
             ) : (
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Código</th>
-                    <th>Nombre</th>
-                    <th>Lote</th>
-                    <th>N° IR</th>
-                    <th>Vencimiento</th>
-                    <th>Stock</th>
-                    <th>Unidad</th>
-                    <th>Estado</th>
-                    <th>Certificado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {resultados.map((t) => (
-                    <tr key={t.id_testigo}>
-                      <td style={{ fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{t.codigo}</td>
-                      <td>{t.nombre}</td>
-                      <td>{t.nro_lote}</td>
-                      <td style={{ whiteSpace: 'nowrap' }}>{t.nro_ir || '—'}</td>
-                      <td className="num" style={{ whiteSpace: 'nowrap' }}>{formatFecha(t.fecha_vencimiento)}</td>
-                      <td className="num">{t.stock_actual}</td>
-                      <td>{t.unidad_medida || '—'}</td>
-                      <td>{labelEstado(t)}</td>
-                      <td>{t.pdf_certificado ? 'Sí' : 'No'}</td>
+              <div className="reporte-tabla-scroll">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Código</th>
+                      <th>Nombre</th>
+                      <th>Lote</th>
+                      <th>N° IR</th>
+                      <th>Vencimiento</th>
+                      <th>Stock</th>
+                      <th>Unidad</th>
+                      <th>Laboratorio(s)</th>
+                      <th>Categoría</th>
+                      <th>Origen</th>
+                      <th>Estado</th>
+                      <th>Certificado</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {resultadosFiltrados.map((t) => (
+                      <tr key={t.id_testigo}>
+                        <td style={{ fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{t.codigo}</td>
+                        <td>{t.nombre}</td>
+                        <td>{t.nro_lote}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}>{t.nro_ir || '—'}</td>
+                        <td className="num" style={{ whiteSpace: 'nowrap' }}>{formatFecha(t.fecha_vencimiento)}</td>
+                        <td className="num">{t.stock_actual}</td>
+                        <td>{t.unidad_medida || '—'}</td>
+                        <td>{t.laboratorios && t.laboratorios.length > 0 ? t.laboratorios.map((l) => l.nombre).join(', ') : '—'}</td>
+                        <td>{t.categoria_nombre || '—'}</td>
+                        <td>{t.origen_nombre || '—'}</td>
+                        <td>{labelEstado(t)}</td>
+                        <td>{t.pdf_certificado ? 'Sí' : 'No'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         )}

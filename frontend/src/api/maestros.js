@@ -96,4 +96,14 @@ export const maestrosApi = {
   crearCategoriaTestigo: (data) => api.post('/api/maestros/testigo-categorias', data),
   editarCategoriaTestigo: (id, data) => api.put(`/api/maestros/testigo-categorias/${id}`, data),
   eliminarCategoriaTestigo: (id) => api.del(`/api/maestros/testigo-categorias/${id}`),
+
+  // Orígenes de testigos
+  listarOrigenesTestigo: (activo) => {
+    const params = new URLSearchParams();
+    if (activo !== undefined && activo !== null) params.set('activo', activo);
+    return api.get(`/api/maestros/testigo-origenes?${params.toString()}`);
+  },
+  crearOrigenTestigo: (data) => api.post('/api/maestros/testigo-origenes', data),
+  editarOrigenTestigo: (id, data) => api.put(`/api/maestros/testigo-origenes/${id}`, data),
+  eliminarOrigenTestigo: (id) => api.del(`/api/maestros/testigo-origenes/${id}`),
 };
