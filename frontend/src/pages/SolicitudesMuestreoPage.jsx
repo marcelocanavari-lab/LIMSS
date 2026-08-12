@@ -120,6 +120,14 @@ export default function SolicitudesMuestreoPage() {
   const [errorDoc, setErrorDoc] = useState('');
   const [guardandoDoc, setGuardandoDoc] = useState(false);
 
+  // ── Modal: completar laboratorio/muestreador (solicitudes del agente) ──
+  const [completandoId, setCompletandoId] = useState(null);
+  const [completarLaboratorios, setCompletarLaboratorios] = useState([]);
+  const [completarIdLaboratorio, setCompletarIdLaboratorio] = useState('');
+  const [completarIdMuestreador, setCompletarIdMuestreador] = useState('');
+  const [errorCompletar, setErrorCompletar] = useState('');
+  const [guardandoCompletar, setGuardandoCompletar] = useState(false);
+
   function cargar() {
     setLoading(true);
     setError('');
@@ -430,6 +438,57 @@ export default function SolicitudesMuestreoPage() {
     }
   }
 
+  async function abrirCompletar(s) {
+    setCompletandoId(s.id_solicitud);
+    setErrorCompletar('');
+    setCompletarIdLaboratorio(s.id_laboratorio ? String(s.id_laboratorio) : '');
+    setCompletarIdMuestreador(s.id_muestreador ? String(s.id_muestreador) : '');
+    setCompletarLaboratorios([]);
+    try {
+      const detalle = await solicitudesMuestreoApi.obtener(s.id_solicitud);
+      if (detalle.id_especificacion) {
+        const ensayos = await maestrosApi.listarEnsayosEspecificacion(detalle.id_especificacion);
+        const labs = [];
+        const vistos = new Set();
+        for (const en of ensayos) {
+          if (en.id_laboratorio && !vistos.has(en.id_laboratorio)) {
+            vistos.add(en.id_laboratorio);
+            labs.push({ id_laboratorio: en.id_laboratorio, nombre: en.laboratorio_nombre });
+          }
+        }
+        setCompletarLaboratorios(labs);
+      }
+    } catch (err) {
+      setErrorCompletar(err instanceof ApiError ? err.message : 'No se pudieron cargar los laboratorios disponibles');
+    }
+  }
+
+  function cerrarCompletar() {
+    setCompletandoId(null);
+  }
+
+  async function handleCompletar(e) {
+    e.preventDefault();
+    if (!completarIdLaboratorio && !completarIdMuestreador) {
+      setErrorCompletar('Elegí un laboratorio y/o un muestreador para completar');
+      return;
+    }
+    setErrorCompletar('');
+    setGuardandoCompletar(true);
+    try {
+      await solicitudesMuestreoApi.completarLaboratorio(completandoId, {
+        id_laboratorio: completarIdLaboratorio ? Number(completarIdLaboratorio) : null,
+        id_muestreador: completarIdMuestreador ? Number(completarIdMuestreador) : null,
+      });
+      cerrarCompletar();
+      cargar();
+    } catch (err) {
+      setErrorCompletar(err instanceof ApiError ? err.message : 'No se pudo completar la solicitud');
+    } finally {
+      setGuardandoCompletar(false);
+    }
+  }
+
   function abrirAnular(s) {
     setAnulandoId(s.id_solicitud);
     setMotivoAnular('');
@@ -522,8 +581,15 @@ export default function SolicitudesMuestreoPage() {
                   <tr key={s.id_solicitud}>
                     <td style={{ fontFamily: 'var(--font-mono)' }}>{s.nro_solicitud}</td>
                     <td style={{ fontFamily: 'var(--font-mono)' }}>{s.erp_nro_ir}</td>
-                    <td>{s.erp_DESART} <span style={{ color: 'var(--ink-3)' }}>({s.erp_CODART.trim()})</span></td>
-                    <td>{s.laboratorio_nombre}</td>
+                    <td>
+                      {s.erp_DESART} <span style={{ color: 'var(--ink-3)' }}>({s.erp_CODART.trim()})</span>
+                      {s.origen === 'agente' && (
+                        <span className="badge badge-info" style={{ marginLeft: 4 }} title="Generada automáticamente por el Agente de Muestreo">
+                          Agente IA
+                        </span>
+                      )}
+                    </td>
+                    <td>{s.laboratorio_nombre || <span style={{ color: 'var(--ink-3)' }}>Sin asignar</span>}</td>
                     <td>{s.muestreador_nombre || '—'}</td>
                     <td>
                       <span className={`badge ${BADGE_ESTADO[s.estado] || 'badge-neutral'}`}>{labelEstado(s.estado)}</span>
@@ -556,6 +622,9 @@ export default function SolicitudesMuestreoPage() {
                             + Documentación proveedor
                           </button>
                         )
+                      )}
+                      {s.estado === 'pendiente' && puedeCrear && (!s.id_laboratorio || !s.id_muestreador) && (
+                        <button className="btn btn-ghost" onClick={() => abrirCompletar(s)}>Completar</button>
                       )}
                       {s.estado === 'pendiente' && !s.id_muestra && puedeGenerarEnvio && (
                         <button
@@ -971,6 +1040,69 @@ export default function SolicitudesMuestreoPage() {
               <button type="button" className="btn btn-ghost" onClick={cerrarAdjuntarDocumentacion} disabled={guardandoDoc}>Cancelar</button>
               <button type="submit" className="btn btn-primary" disabled={guardandoDoc}>
                 {guardandoDoc ? <span className="spinner" /> : 'Adjuntar'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {completandoId && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 'var(--sp-4)',
+          }}
+          onClick={cerrarCompletar}
+        >
+          <form
+            onSubmit={handleCompletar}
+            className="card"
+            style={{ width: '90%', maxWidth: 420 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Completar solicitud</h2>
+            <p style={{ color: 'var(--ink-2)', fontSize: 'var(--fs-sm)', marginBottom: 'var(--sp-3)' }}>
+              Solicitud generada por el Agente de Muestreo sin laboratorio y/o muestreador asignado.
+              Completá lo que haga falta.
+            </p>
+
+            <div className="field">
+              <label className="field-label">Laboratorio</label>
+              <select
+                className="field-input"
+                value={completarIdLaboratorio}
+                onChange={(e) => setCompletarIdLaboratorio(e.target.value)}
+                disabled={guardandoCompletar || completarLaboratorios.length === 0}
+              >
+                <option value="">
+                  {completarLaboratorios.length === 0 ? 'Sin laboratorios disponibles' : 'Seleccioná un laboratorio...'}
+                </option>
+                {completarLaboratorios.map((l) => (
+                  <option key={l.id_laboratorio} value={l.id_laboratorio}>{l.nombre}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label className="field-label">Muestreador asignado</label>
+              <select
+                className="field-input"
+                value={completarIdMuestreador}
+                onChange={(e) => setCompletarIdMuestreador(e.target.value)}
+                disabled={guardandoCompletar}
+              >
+                <option value="">Seleccioná un muestreador...</option>
+                {muestreadores.map((m) => (
+                  <option key={m.id_usuario} value={m.id_usuario}>{m.nombre_completo}</option>
+                ))}
+              </select>
+            </div>
+
+            {errorCompletar && <div className="alert alert-danger" style={{ marginTop: 'var(--sp-3)' }}>{errorCompletar}</div>}
+            <div style={{ display: 'flex', gap: 'var(--sp-3)', marginTop: 'var(--sp-4)' }}>
+              <button type="button" className="btn btn-ghost" onClick={cerrarCompletar} disabled={guardandoCompletar}>Cancelar</button>
+              <button type="submit" className="btn btn-primary" disabled={guardandoCompletar}>
+                {guardandoCompletar ? <span className="spinner" /> : 'Guardar'}
               </button>
             </div>
           </form>

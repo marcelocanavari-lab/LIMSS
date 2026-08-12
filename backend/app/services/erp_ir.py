@@ -35,6 +35,7 @@ GIM02ANA.IdT04 = 2 (tipo "proveedor") -- confirmado por el usuario, aunque
 hoy no se esté cargando en la práctica (puede venir NULL).
 """
 import re
+from typing import Optional
 
 import pyodbc
 from fastapi import HTTPException
@@ -68,13 +69,97 @@ def _parsear_nro_ir(nro_ir: str) -> tuple[str, int]:
     return construir_numcomo(numero), anio
 
 
-def _tipo_comprobante_ir(erp: pyodbc.Connection) -> int:
+def tipo_comprobante_ir(erp: pyodbc.Connection) -> int:
+    """T05Id del tipo de comprobante 'IR' (GIT05TCM.CODTCM = 'IR')."""
     cursor = erp.cursor()
     cursor.execute("SELECT T05Id FROM GIT05TCM WHERE CODTCM = 'IR'")
     fila = cursor.fetchone()
     if not fila:
         raise HTTPException(status_code=502, detail="El ERP no tiene configurado el tipo de comprobante 'IR'")
     return fila.T05Id
+
+
+# Alias histórico -- buscar_lineas_ir/obtener_vencimiento_lote seguían
+# llamando a esta función por su nombre privado original.
+_tipo_comprobante_ir = tipo_comprobante_ir
+
+
+_QUERY_LINEAS_POR_N01ID = """
+    SELECT cab.N01Id, cab.NUMCOMO, cab.FECCOM, cab.FECCOR, cab.VENCOM,
+           its.IdM21, its.CANTID,
+           art.CODART, art.DESART, umd.ABREV AS unidad,
+           ana.CODANA AS proveedor_codigo, ana.DESANA AS proveedor,
+           sar.CODSAR, sar.DESSAR,
+           (SELECT SUM(its2.CANTID) FROM GIN02ITS its2 WHERE its2.IdN01O = cab.N01Id) AS cantidad_total
+    FROM GIN01CPB cab
+    INNER JOIN GIN02ITS its ON its.IdN01O = cab.N01Id
+    INNER JOIN GIM21ART art ON art.M21Id = its.IdM21
+    LEFT JOIN GIT21UMD umd ON umd.T21Id = art.IdT21M
+    LEFT JOIN GIM02ANA ana ON ana.M02Id = cab.IdM02O AND ana.IdT04 = 2
+    LEFT JOIN GIT59SAR sar ON sar.T59Id = art.IdT59
+    WHERE cab.N01Id = ?
+"""
+
+
+def _lineas_por_n01id(erp: pyodbc.Connection, n01id: int):
+    """Query de JOIN compartida entre buscar_lineas_ir (resuelve el N01Id a
+    partir de "NNN/AA") y lineas_comprobante_por_id (ya tiene el N01Id) --
+    un solo lugar para mantener si cambia el esquema del ERP."""
+    cursor = erp.cursor()
+    cursor.execute(_QUERY_LINEAS_POR_N01ID, n01id)
+    return cursor.fetchall()
+
+
+def comprobantes_ir_nuevos(erp: pyodbc.Connection, id_tipo_ir: int, ultimo_n01id: int, fecha_inicio) -> list[int]:
+    """N01Id de comprobantes IR (LETCOMO='X') con N01Id > ultimo_n01id Y
+    FECCOR >= fecha_inicio, ordenados ascendente -- usado por el agente de
+    detección automática para saber qué comprobantes todavía tiene que
+    evaluar (ver app/services/agente_muestreo.py). fecha_inicio filtra
+    comprobantes históricos de antes de que el agente existiera (ver
+    agente_muestreo_fecha_inicio en lims_erp_config) -- N01Id es un
+    correlativo de carga, no de fecha del documento, así que un comprobante
+    viejo puede tener un N01Id más alto que ultimo_n01id si se cargó tarde;
+    por eso el filtro de fecha es necesario además del de N01Id, no en
+    lugar de.
+
+    Nota: esta lista NO es "todos los N01Id > ultimo_n01id" -- los
+    descartados por fecha quedan afuera acá a propósito (no se evalúan, ver
+    ciclo_polling). Para el avance de la marca de agua se usa por separado
+    max_n01id_nuevo, que sí ve el rango completo sin el filtro de fecha."""
+    cursor = erp.cursor()
+    cursor.execute(
+        "SELECT N01Id FROM GIN01CPB WHERE IdT05O = ? AND LETCOMO = 'X' AND N01Id > ? AND FECCOR >= ? ORDER BY N01Id ASC",
+        id_tipo_ir, ultimo_n01id, fecha_inicio,
+    )
+    return [fila.N01Id for fila in cursor.fetchall()]
+
+
+def max_n01id_nuevo(erp: pyodbc.Connection, id_tipo_ir: int, ultimo_n01id: int) -> Optional[int]:
+    """Máximo N01Id entre TODOS los comprobantes IR con N01Id > ultimo_n01id,
+    sin filtrar por fecha -- se usa solo para avanzar la marca de agua
+    (agente_muestreo_ultimo_n01id) más allá de los comprobantes descartados
+    por comprobantes_ir_nuevos por ser anteriores a agente_muestreo_fecha_inicio,
+    para no tener que volver a escanear ese rango en cada ciclo futuro. Esos
+    comprobantes igual quedan sin evaluar -- no generan fila en
+    lims_agente_control ni cuentan como error (ver ciclo_polling)."""
+    cursor = erp.cursor()
+    cursor.execute(
+        "SELECT MAX(N01Id) AS max_n01id FROM GIN01CPB WHERE IdT05O = ? AND LETCOMO = 'X' AND N01Id > ?",
+        id_tipo_ir, ultimo_n01id,
+    )
+    fila = cursor.fetchone()
+    return fila.max_n01id if fila and fila.max_n01id is not None else None
+
+
+def lineas_comprobante_por_id(erp: pyodbc.Connection, n01id: int):
+    """Igual que buscar_lineas_ir pero recibiendo el N01Id directo (ya
+    resuelto, ej. por comprobantes_ir_nuevos) en vez del string "NNN/AA" --
+    no hace falta resolver NUMCOMO/FECCOR porque el comprobante ya está
+    identificado. Cada IR trae un solo ítem (confirmado), así que en la
+    práctica devuelve como máximo una fila -- se mantiene la forma de
+    lista/cursor igual que buscar_lineas_ir por si en el futuro deja de
+    ser siempre 1 a 1."""
+    return _lineas_por_n01id(erp, n01id)
 
 
 def formatear_nro_ir(numcomo: str, feccor) -> str:
@@ -114,25 +199,7 @@ def buscar_lineas_ir(erp: pyodbc.Connection, nro_ir: str):
     if not cabecera:
         return []
 
-    cursor.execute(
-        """
-        SELECT cab.N01Id, cab.NUMCOMO, cab.FECCOM, cab.FECCOR, cab.VENCOM,
-               its.IdM21, its.CANTID,
-               art.CODART, art.DESART, umd.ABREV AS unidad,
-               ana.CODANA AS proveedor_codigo, ana.DESANA AS proveedor,
-               sar.CODSAR, sar.DESSAR,
-               (SELECT SUM(its2.CANTID) FROM GIN02ITS its2 WHERE its2.IdN01O = cab.N01Id) AS cantidad_total
-        FROM GIN01CPB cab
-        INNER JOIN GIN02ITS its ON its.IdN01O = cab.N01Id
-        INNER JOIN GIM21ART art ON art.M21Id = its.IdM21
-        LEFT JOIN GIT21UMD umd ON umd.T21Id = art.IdT21M
-        LEFT JOIN GIM02ANA ana ON ana.M02Id = cab.IdM02O AND ana.IdT04 = 2
-        LEFT JOIN GIT59SAR sar ON sar.T59Id = art.IdT59
-        WHERE cab.N01Id = ?
-        """,
-        cabecera.N01Id,
-    )
-    return cursor.fetchall()
+    return _lineas_por_n01id(erp, cabecera.N01Id)
 
 
 def obtener_vencimiento_lote(erp: pyodbc.Connection, nro_ir: str):

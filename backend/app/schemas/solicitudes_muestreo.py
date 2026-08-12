@@ -49,8 +49,12 @@ class SolicitudMuestreoResponse(BaseModel):
     erp_nro_ir: str
     erp_CODART: str
     erp_DESART: str
-    id_laboratorio: int
-    laboratorio_nombre: str
+    # NULL en solicitudes generadas por el agente cuando la especificación
+    # tiene 0 o más de un laboratorio posible (ver evaluar_comprobante en
+    # app/services/agente_muestreo.py) -- QA la completa a mano con PUT
+    # .../completar-laboratorio antes de poder ejecutar el muestreo.
+    id_laboratorio: Optional[int] = None
+    laboratorio_nombre: Optional[str] = None
     id_muestreador: Optional[int] = None
     muestreador_nombre: Optional[str] = None
     estado: str
@@ -104,6 +108,19 @@ class SolicitudMuestreoResponse(BaseModel):
     # momento de crear la solicitud o después. None = todavía pendiente.
     # El archivo se sirve por GET /{id_solicitud}/documentacion-proveedor.
     documentacion_proveedor_nombre_original: Optional[str] = None
+    # 'manual' (QA la crea desde "+ Nueva solicitud") o 'agente' (generada
+    # automáticamente al detectar un IR nuevo -- ver app/services/agente_muestreo.py).
+    origen: str = "manual"
+
+
+class SolicitudMuestreoCompletar(BaseModel):
+    """Completa id_laboratorio y/o id_muestreador en una solicitud
+    'pendiente' que quedó sin alguno de los dos -- pensado para las que
+    generó el agente (ver SolicitudMuestreoResponse.origen), que puede
+    dejarlos en blanco cuando la especificación no resuelve un único
+    laboratorio o para que QA elija quién muestrea."""
+    id_laboratorio: Optional[int] = None
+    id_muestreador: Optional[int] = None
 
 
 class EnsayoSolicitudMuestreo(BaseModel):
