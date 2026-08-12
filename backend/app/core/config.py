@@ -40,6 +40,13 @@ class Settings(BaseSettings):
     # Storage de archivos (PDFs de testigos, protocolos, etc.)
     storage_path: str = r"\\LAMARSERVER\LIMSS\storage"
 
+    # API key de Anthropic para el agente de detección de IR (ver
+    # app/services/agente_muestreo.py) -- solo se usa para redactar la
+    # justificación en lenguaje claro del log, nunca para decidir si se
+    # genera la solicitud. Vacío = el agente sigue funcionando igual, solo
+    # con una justificación genérica en vez de la redactada por Claude.
+    anthropic_api_key: str = ""
+
     # App
     app_name: str = "LIMSS Laboratorio Lamar"
     app_env: str = "development"

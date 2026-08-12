@@ -20,6 +20,11 @@ export const solicitudesMuestreoApi = {
   obtener: (id) => api.get(`/api/solicitudes-muestreo/${id}`),
   anular: (id, motivo) => api.put(`/api/solicitudes-muestreo/${id}/anular`, { motivo }),
 
+  // Completa laboratorio y/o muestreador de una solicitud pendiente que
+  // quedó sin alguno de los dos -- pensado para las que generó el agente
+  // (origen='agente', ver AgenteMuestreoPage).
+  completarLaboratorio: (id, data) => api.put(`/api/solicitudes-muestreo/${id}/completar-laboratorio`, data),
+
   // Documentación del proveedor (remito y/o factura, un solo archivo) --
   // opcional, se puede adjuntar en la creación (ver crear) o después.
   subirDocumentacionProveedor: (id, archivo) => {

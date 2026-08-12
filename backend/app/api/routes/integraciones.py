@@ -12,12 +12,17 @@ persona navegando. Misma EBR_SYNC_API_KEY que ya usa la sincronización de
 usuarios (GET /api/auth/usuarios-ebr) -- un solo secreto compartido para
 toda la integración server-to-server con el eBR, no uno por endpoint.
 """
+import json
+from datetime import date, datetime, timedelta
+from typing import Optional
+
 import pyodbc
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.routes.solicitudes_muestreo import generar_codigo_muestra
-from app.core.security import verificar_acceso_ebr
+from app.core.security import require_rol, verificar_acceso_ebr
 from app.db.connections import limss_db
+from app.schemas.agente_muestreo import AgenteEvaluacion, AgenteLogEntry
 from app.schemas.integraciones import (
     DictamenEstadoInfo,
     EnvioEstadoInfo,
@@ -26,7 +31,7 @@ from app.schemas.integraciones import (
     MuestraIntegracionResponse,
     ProtocoloEstadoInfo,
 )
-from app.services import audit
+from app.services import agente_muestreo, audit
 
 router = APIRouter(prefix="/api/integraciones", tags=["Integraciones eBR"])
 
@@ -172,3 +177,109 @@ def estado_muestra_integracion(
         id_muestra=muestra.id_muestra, codigo_muestra=muestra.codigo_muestra, estado=muestra.estado,
         envios=envios, protocolos=protocolos, dictamen=dictamen,
     )
+
+
+# ── Agente de detección automática de IR (RF-08, RF-09) ────────────────────
+#
+# A diferencia de los endpoints de arriba, estos son de uso interno del
+# equipo (QA/admin logueados en LIMSS) -- requieren la autenticación normal
+# de sesión, no la API key de eBR. Quedan bajo /api/integraciones porque
+# conceptualmente es otra integración server-to-server (LIMSS <-> ERP GI_LX),
+# aunque el consumidor acá sea la propia UI de LIMSS y no un sistema externo.
+
+_SELECT_CONTROL = """
+    SELECT c.*, s.nro_solicitud AS nro_solicitud_generada
+    FROM lims_agente_control c
+    LEFT JOIN lims_solicitudes_muestreo s ON s.id_solicitud = c.id_solicitud_generada
+"""
+
+
+def _logs_de_control(cursor, id_control: int) -> list[AgenteLogEntry]:
+    cursor.execute(
+        "SELECT * FROM lims_agente_log WHERE id_control = ? ORDER BY fecha_hora DESC",
+        id_control,
+    )
+    return [
+        AgenteLogEntry(
+            id=l.id, fecha_hora=l.fecha_hora,
+            datos_consultados=json.loads(l.datos_consultados) if l.datos_consultados else None,
+            decision=l.decision, justificacion=l.justificacion, error_detalle=l.error_detalle,
+        )
+        for l in cursor.fetchall()
+    ]
+
+
+def _fila_a_evaluacion(cursor, row) -> AgenteEvaluacion:
+    return AgenteEvaluacion(
+        id=row.id, id_comprobante_erp=row.id_comprobante_erp, erp_idm21=row.erp_idm21,
+        erp_codart=row.erp_codart, erp_codsar=row.erp_codsar, fecha_evaluacion=row.fecha_evaluacion,
+        resultado=row.resultado, id_solicitud_generada=row.id_solicitud_generada,
+        nro_solicitud_generada=row.nro_solicitud_generada, reintentos=row.reintentos,
+        logs=_logs_de_control(cursor, row.id),
+    )
+
+
+@router.get("/agente/evaluaciones", response_model=list[AgenteEvaluacion])
+def listar_evaluaciones_agente(
+    id_comprobante_erp: Optional[int] = Query(None),
+    resultado: Optional[str] = Query(
+        None, pattern=r"^(solicitud_generada|no_requiere_muestreo|subarticulo_no_configurado|error)$",
+    ),
+    desde: Optional[date] = Query(None, description="Fecha de evaluación desde (inclusive)"),
+    hasta: Optional[date] = Query(None, description="Fecha de evaluación hasta (inclusive)"),
+    user: dict = Depends(require_rol("qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    condiciones = []
+    params: list = []
+    if id_comprobante_erp is not None:
+        condiciones.append("c.id_comprobante_erp = ?")
+        params.append(id_comprobante_erp)
+    if resultado:
+        condiciones.append("c.resultado = ?")
+        params.append(resultado)
+    if desde:
+        condiciones.append("c.fecha_evaluacion >= ?")
+        params.append(datetime.combine(desde, datetime.min.time()))
+    if hasta:
+        condiciones.append("c.fecha_evaluacion < ?")
+        params.append(datetime.combine(hasta + timedelta(days=1), datetime.min.time()))
+
+    where = ("WHERE " + " AND ".join(condiciones)) if condiciones else ""
+    cursor.execute(_SELECT_CONTROL + f" {where} ORDER BY c.fecha_evaluacion DESC", *params)
+    controles = cursor.fetchall()
+    return [_fila_a_evaluacion(cursor, c) for c in controles]
+
+
+@router.post("/agente/reprocesar/{id_comprobante_erp}", response_model=AgenteEvaluacion)
+def reprocesar_comprobante_agente(
+    id_comprobante_erp: int,
+    user: dict = Depends(require_rol("qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Reevalúa un comprobante IR puntual (por N01Id), ignorando el control
+    existente -- útil para casos de 'error' o cuando se acaba de configurar
+    un subartículo que antes no estaba. evaluar_y_registrar_comprobante hace
+    upsert por id_comprobante_erp, así que no importa si ya tenía fila."""
+    agente_muestreo.evaluar_y_registrar_comprobante(id_comprobante_erp)
+
+    cursor = conn.cursor()
+    cursor.execute(_SELECT_CONTROL + " WHERE c.id_comprobante_erp = ?", id_comprobante_erp)
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No se encontró el comprobante N01Id={id_comprobante_erp} en el ERP, o no se pudo evaluar",
+        )
+    return _fila_a_evaluacion(cursor, row)
+
+
+@router.post("/agente/ejecutar-ahora")
+def ejecutar_ciclo_agente_ahora(
+    user: dict = Depends(require_rol("qa", "admin")),
+):
+    """Dispara un ciclo de polling completo fuera del intervalo programado --
+    pensado para pruebas manuales (ver 'Prueba manual al terminar' en la
+    especificación del agente), no para uso rutinario."""
+    return agente_muestreo.ciclo_polling()

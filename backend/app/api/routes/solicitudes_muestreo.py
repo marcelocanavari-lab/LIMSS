@@ -48,6 +48,7 @@ from app.schemas.solicitudes_muestreo import (
     OrdenTrabajoDigitalBody,
     OrdenTrabajoDigitalResponse,
     SolicitudMuestreoAnular,
+    SolicitudMuestreoCompletar,
     SolicitudMuestreoCreate,
     SolicitudMuestreoDetalle,
     SolicitudMuestreoResponse,
@@ -95,7 +96,7 @@ _SELECT_SOLICITUD = """
     SELECT s.*, lab.nombre AS laboratorio_nombre, u.nombre + ' ' + u.apellido AS usuario_qa,
            um.nombre + ' ' + um.apellido AS muestreador_nombre
     FROM lims_solicitudes_muestreo s
-    INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = s.id_laboratorio
+    LEFT JOIN lims_laboratorios lab ON lab.id_laboratorio = s.id_laboratorio
     INNER JOIN lims_usuarios u ON u.id_usuario = s.id_usuario_qa
     LEFT JOIN lims_usuarios um ON um.id_usuario = s.id_muestreador
 """
@@ -144,6 +145,7 @@ def _fila_a_solicitud(row) -> SolicitudMuestreoResponse:
         aspecto_mp=_g(row, "aspecto_mp"),
         protocolo_proveedor_nombre_original=_g(row, "protocolo_proveedor_nombre_original"),
         documentacion_proveedor_nombre_original=_g(row, "documentacion_proveedor_nombre_original"),
+        origen=_g(row, "origen") or "manual",
     )
 
 
@@ -231,13 +233,16 @@ def _obtener_cantidades(cursor, id_especificacion: Optional[int]) -> dict:
     return resultado
 
 
-def _obtener_ensayos(cursor, id_solicitud: int, id_especificacion: Optional[int], id_laboratorio: int) -> list[EnsayoSolicitudMuestreo]:
+def _obtener_ensayos(cursor, id_solicitud: int, id_especificacion: Optional[int], id_laboratorio: Optional[int]) -> list[EnsayoSolicitudMuestreo]:
     """Ensayos del laboratorio elegido al crear la solicitud, con su
     resultado ya cargado en la Orden de Trabajo digital si lo hay -- LEFT
     JOIN por id_solicitud, así que antes de confirmar el muestreo todos los
     valores vienen en None (mismo shape para el formulario en blanco, la
-    Orden de Trabajo impresa ya completada, y GET .../ensayos-para-orden)."""
-    if id_especificacion is None:
+    Orden de Trabajo impresa ya completada, y GET .../ensayos-para-orden).
+
+    id_laboratorio puede ser None en una solicitud generada por el agente
+    que todavía no tiene laboratorio asignado (ver origen/completar-laboratorio)."""
+    if id_especificacion is None or id_laboratorio is None:
         return []
     cursor.execute(
         """
@@ -534,6 +539,66 @@ def crear_solicitud(
     return _fila_a_solicitud(_obtener_solicitud_o_404(cursor, id_solicitud))
 
 
+@router.put("/{id_solicitud}/completar-laboratorio", response_model=SolicitudMuestreoResponse)
+def completar_laboratorio(
+    id_solicitud: int,
+    body: SolicitudMuestreoCompletar,
+    user: dict = Depends(require_rol("qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Completa id_laboratorio y/o id_muestreador en una solicitud pendiente
+    que quedó sin alguno de los dos -- pensado para las que generó el
+    agente (origen='agente'): deja el laboratorio en blanco cuando la
+    especificación no resuelve a un único laboratorio, y siempre deja el
+    muestreador en blanco (ver app/services/agente_muestreo.py). Solo toca
+    los campos que vengan con valor -- si un campo no se manda, se
+    conserva el que ya tenía la solicitud."""
+    cursor = conn.cursor()
+    row = _obtener_solicitud_o_404(cursor, id_solicitud)
+    if row.estado != "pendiente":
+        raise HTTPException(status_code=400, detail=f"La solicitud está '{row.estado}', no se puede modificar")
+
+    id_laboratorio = body.id_laboratorio if body.id_laboratorio is not None else row.id_laboratorio
+    id_muestreador = body.id_muestreador if body.id_muestreador is not None else row.id_muestreador
+
+    if body.id_laboratorio is not None:
+        cursor.execute("SELECT 1 FROM lims_laboratorios WHERE id_laboratorio = ? AND activo = 1", id_laboratorio)
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="El laboratorio indicado no existe o está inactivo")
+        if row.id_especificacion is not None:
+            cursor.execute(
+                "SELECT 1 FROM lims_especificacion_ensayos WHERE id_especificacion = ? AND id_laboratorio = ?",
+                row.id_especificacion, id_laboratorio,
+            )
+            if not cursor.fetchone():
+                raise HTTPException(
+                    status_code=400,
+                    detail="El laboratorio seleccionado no tiene ensayos asignados para la especificación de este artículo",
+                )
+
+    if body.id_muestreador is not None:
+        cursor.execute("SELECT rol, activo FROM lims_usuarios WHERE id_usuario = ?", id_muestreador)
+        muestreador = cursor.fetchone()
+        if not muestreador or not muestreador.activo:
+            raise HTTPException(status_code=404, detail="El muestreador indicado no existe o está inactivo")
+        if muestreador.rol not in _ROLES_MUESTREADOR_O_SUPERIOR:
+            raise HTTPException(status_code=400, detail="El usuario asignado no tiene un rol habilitado para muestrear")
+
+    cursor.execute(
+        "UPDATE lims_solicitudes_muestreo SET id_laboratorio = ?, id_muestreador = ? WHERE id_solicitud = ?",
+        id_laboratorio, id_muestreador, id_solicitud,
+    )
+
+    audit.registrar(
+        conn, entidad="solicitud_muestreo", accion="completar_laboratorio",
+        id_usuario=user["id_usuario"], id_entidad=id_solicitud,
+        valor_anterior={"id_laboratorio": row.id_laboratorio, "id_muestreador": row.id_muestreador},
+        valor_nuevo={"id_laboratorio": id_laboratorio, "id_muestreador": id_muestreador},
+    )
+
+    return _fila_a_solicitud(_obtener_solicitud_o_404(cursor, id_solicitud))
+
+
 @router.get("/{id_solicitud}", response_model=SolicitudMuestreoDetalle)
 def detalle_solicitud(
     id_solicitud: int,
@@ -825,6 +890,11 @@ def generar_envio_anticipado(
         )
     if row.id_muestreador is None:
         raise HTTPException(status_code=400, detail="La solicitud no tiene un muestreador asignado")
+    if row.id_laboratorio is None:
+        raise HTTPException(
+            status_code=400,
+            detail="La solicitud no tiene laboratorio asignado -- completalo con PUT .../completar-laboratorio",
+        )
 
     id_muestra, codigo_muestra = _crear_muestra_desde_solicitud(cursor, row, datos_muestreo_pendientes=True)
     cursor.execute(
@@ -870,6 +940,11 @@ def confirmar_orden_trabajo(
         )
     if row.id_muestreador is None:
         raise HTTPException(status_code=400, detail="La solicitud no tiene un muestreador asignado")
+    if row.id_laboratorio is None:
+        raise HTTPException(
+            status_code=400,
+            detail="La solicitud no tiene laboratorio asignado -- completalo con PUT .../completar-laboratorio",
+        )
 
     df = body.datos_fisicos
     cursor.execute(
@@ -962,6 +1037,11 @@ def anular_solicitud(
 # la integración con el eBR usa el mismo generador de código SAMP-AAAA-NNNN
 # que el flujo normal de confirmación de muestreo, en vez de duplicarlo.
 generar_codigo_muestra = _generar_codigo_muestra
+
+# Reexport para app/services/agente_muestreo.py: la solicitud que genera el
+# agente al detectar un IR nuevo usa el mismo generador de nro_solicitud
+# SOL-AAAA-NNN que "+ Nueva solicitud", en vez de duplicarlo.
+generar_nro_solicitud = _generar_nro_solicitud
 
 # Reexport para app/api/routes/muestras.py: la reimpresión de etiquetas desde
 # Consulta de Muestras usa el mismo armado de PDF que "Descargar etiquetas"

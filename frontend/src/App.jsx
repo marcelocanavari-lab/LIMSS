@@ -8,6 +8,8 @@ import DashboardPage from './pages/DashboardPage';
 import AdminMenuPage from './pages/AdminMenuPage';
 import UsuariosPage from './pages/UsuariosPage';
 import ErpConfigPage from './pages/ErpConfigPage';
+import SubarticulosConfigPage from './pages/SubarticulosConfigPage';
+import AgenteMuestreoPage from './pages/AgenteMuestreoPage';
 import AuditoriaPage from './pages/AuditoriaPage';
 import SolicitudesMuestreoPage from './pages/SolicitudesMuestreoPage';
 import MisSolicitudesPage from './pages/MisSolicitudesPage';
@@ -67,6 +69,8 @@ export default function App() {
           <Route path="/admin" element={<PrivateRoute roles={ADMIN}><AdminMenuPage /></PrivateRoute>} />
           <Route path="/usuarios" element={<PrivateRoute roles={ADMIN}><UsuariosPage /></PrivateRoute>} />
           <Route path="/erp-config" element={<PrivateRoute roles={ADMIN}><ErpConfigPage /></PrivateRoute>} />
+          <Route path="/subarticulos-config" element={<PrivateRoute roles={ADMIN}><SubarticulosConfigPage /></PrivateRoute>} />
+          <Route path="/agente-muestreo" element={<PrivateRoute roles={QA_ADMIN}><AgenteMuestreoPage /></PrivateRoute>} />
           <Route path="/auditoria" element={<PrivateRoute roles={ADMIN}><AuditoriaPage /></PrivateRoute>} />
           <Route path="/maestros/testigo-categorias" element={<PrivateRoute roles={ADMIN}><TestigoCategoriasPage /></PrivateRoute>} />
           <Route path="/maestros/testigo-origenes" element={<PrivateRoute roles={ADMIN}><TestigoOrigenesPage /></PrivateRoute>} />

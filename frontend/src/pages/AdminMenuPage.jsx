@@ -6,6 +6,8 @@ const ITEMS = [
   { label: 'Categorías de Testigos', ruta: '/maestros/testigo-categorias' },
   { label: 'Orígenes de Testigos', ruta: '/maestros/testigo-origenes' },
   { label: 'Configuración ERP', ruta: '/erp-config' },
+  { label: 'Subartículos y Muestreo', ruta: '/subarticulos-config' },
+  { label: 'Agente de Muestreo', ruta: '/agente-muestreo' },
   { label: 'Auditoría', ruta: '/auditoria' },
 ];
 

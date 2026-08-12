@@ -40,6 +40,18 @@ def obtener_codsar_por_tipo(conn: pyodbc.Connection) -> dict:
     return mapeo
 
 
+def listar_subarticulos_erp(erp: pyodbc.Connection):
+    """Catálogo completo de subartículos del ERP (GIT59SAR) -- tabla maestra
+    chica (tipos de material: materia prima, granel, semi-elaborado, etc.),
+    no confundir con GIM21ART (los artículos individuales -- miles de filas,
+    un material puntual del ERP). Es el universo real de erp_codsar que se
+    puede configurar en lims_erp_subarticulo_config (ver pantalla de
+    administración de Subartículos y Muestreo)."""
+    cursor = erp.cursor()
+    cursor.execute("SELECT T59Id, CODSAR, DESSAR FROM GIT59SAR ORDER BY CODSAR")
+    return cursor.fetchall()
+
+
 def buscar_materiales(erp: pyodbc.Connection, codsar: str, buscar: str = ""):
     like = f"%{buscar}%"
     cursor = erp.cursor()
