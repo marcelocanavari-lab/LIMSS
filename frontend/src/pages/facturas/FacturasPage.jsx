@@ -83,9 +83,14 @@ export default function FacturasPage() {
     <div className="screen">
       <TopBar titulo="Facturación de Laboratorios" subtitulo="Laboratorios" onBack={() => navigate(-1)} />
       <div className="screen-content">
-        <button className="btn btn-primary" style={{ marginBottom: 'var(--sp-4)' }} onClick={() => navigate('/facturas/nueva')}>
-          + Nueva factura
-        </button>
+        <div style={{ display: 'flex', gap: 'var(--sp-3)', marginBottom: 'var(--sp-4)' }}>
+          <button className="btn btn-primary" onClick={() => navigate('/facturas/nueva')}>
+            + Nueva factura
+          </button>
+          <button className="btn btn-secondary" onClick={() => navigate('/facturas/reporte-importes')}>
+            Reporte de importes
+          </button>
+        </div>
 
         <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap', marginBottom: 'var(--sp-4)' }}>
           <div className="field" style={{ flex: 1, minWidth: 180, marginBottom: 0 }}>

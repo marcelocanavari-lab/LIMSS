@@ -32,7 +32,9 @@ class Settings(BaseSettings):
     # Sesión
     session_timeout_minutes: int = 10
 
-    # API key para que el eBR sincronice usuarios (GET /api/auth/usuarios-ebr)
+    # API key compartida para las integraciones server-to-server con el eBR:
+    # sincronización de usuarios (GET /api/auth/usuarios-ebr) y creación/
+    # consulta de muestras desde un PREL (app/api/routes/integraciones.py).
     ebr_sync_api_key: str = ""
 
     # Storage de archivos (PDFs de testigos, protocolos, etc.)

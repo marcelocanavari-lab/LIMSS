@@ -53,8 +53,8 @@ IF EXISTS (
 BEGIN
     ALTER TABLE lims_muestras ALTER COLUMN tipo_referencia VARCHAR(10) NOT NULL;
     ALTER TABLE lims_muestras
-        ADD CONSTRAINT CK_lims_muestras_tipo_referencia CHECK (tipo_referencia IN ('ir','lote'));
-    PRINT 'tipo_referencia ahora es NOT NULL con CHECK (ir|lote)';
+        ADD CONSTRAINT CK_lims_muestras_tipo_referencia CHECK (tipo_referencia IN ('ir','lote','EBR_PREL'));
+    PRINT 'tipo_referencia ahora es NOT NULL con CHECK (ir|lote|EBR_PREL)';
 END
 GO
 

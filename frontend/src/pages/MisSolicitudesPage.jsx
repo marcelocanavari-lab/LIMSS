@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import { solicitudesMuestreoApi } from '../api/solicitudesMuestreo';
-import { ApiError } from '../api/client';
+import { ApiError, abrirPdfConAuth } from '../api/client';
 
 function formatFecha(iso) {
   return new Date(iso).toLocaleDateString();
@@ -21,6 +21,22 @@ export default function MisSolicitudesPage() {
       .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo cargar el listado'))
       .finally(() => setLoading(false));
   }, []);
+
+  async function verProtocoloProveedor(s) {
+    try {
+      await abrirPdfConAuth(`/api/solicitudes-muestreo/${s.id_solicitud}/protocolo-proveedor`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo abrir el protocolo del proveedor');
+    }
+  }
+
+  async function verDocumentacionProveedor(s) {
+    try {
+      await abrirPdfConAuth(`/api/solicitudes-muestreo/${s.id_solicitud}/documentacion-proveedor`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo abrir la documentación del proveedor');
+    }
+  }
 
   return (
     <div className="screen">
@@ -44,6 +60,7 @@ export default function MisSolicitudesPage() {
                   <th>IR</th>
                   <th>Material</th>
                   <th>Fecha</th>
+                  <th></th>
                   <th>Acciones</th>
                 </tr>
               </thead>
@@ -55,6 +72,22 @@ export default function MisSolicitudesPage() {
                     <td>{s.erp_DESART} <span style={{ color: 'var(--ink-3)' }}>({s.erp_CODART.trim()})</span></td>
                     <td>{formatFecha(s.fecha_solicitud)}</td>
                     <td>
+                      {s.id_muestra && (
+                        <span
+                          className="badge badge-info"
+                          title="El envío ya se generó por adelantado -- completá el muestreo físico para cerrar el registro"
+                        >
+                          Envío ya generado
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap' }}>
+                      {s.protocolo_proveedor_nombre_original && (
+                        <button className="btn btn-ghost" onClick={() => verProtocoloProveedor(s)}>Protocolo proveedor</button>
+                      )}
+                      {s.documentacion_proveedor_nombre_original && (
+                        <button className="btn btn-ghost" onClick={() => verDocumentacionProveedor(s)}>Documentación proveedor</button>
+                      )}
                       <button
                         className="btn btn-primary"
                         onClick={() => navigate(`/solicitudes-muestreo/${s.id_solicitud}/orden-trabajo-digital`)}

@@ -503,6 +503,29 @@
   font-size: var(--fs-xs);
 }
 
+/* Columna de Acciones con varios botones por fila (ej. Solicitudes de
+   Muestreo: Etiquetas / Protocolo proveedor / Documentación proveedor /
+   Generar envío / Ejecutar muestreo / Anular, hasta 6 según el estado) --
+   mismo criterio de achique que .data-table-catalogo de arriba (el problema
+   es el mismo: .btn trae min-height 56px de uso táctil, que a esta densidad
+   de fila fuerza el wrap a una segunda línea). flex-wrap: nowrap fuerza una
+   sola línea; si en la fila con más botones no entran en el ancho visible,
+   el contenedor de la tabla scrollea horizontal en vez de partir la fila. */
+.acciones-compactas {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.acciones-compactas .btn {
+  min-height: 26px;
+  height: 26px;
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+
 .num { font-variant-numeric: tabular-nums; text-align: right; }
 
 /* --- Alertas inline --- */
@@ -577,7 +600,7 @@
   cursor: pointer;
 }
 .acordeon-toggle { font-size: var(--fs-lg); color: var(--ink-2); }
-.acordeon-body { margin-top: var(--sp-3); }
+.acordeon-body { margin-top: var(--sp-2); }
 .acordeon-body.cerrado { display: none; }
 @media print {
   .acordeon-body.cerrado { display: block !important; }

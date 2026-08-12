@@ -24,6 +24,11 @@ export default function MuestraDetallePage() {
   const [muestra, setMuestra] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  // Si ya existe una etiqueta impresa para esta muestra, la próxima
+  // impresión queda registrada como reimpresión (lims_etiquetas.reimpresion,
+  // ver generar_etiqueta) -- se refleja acá para que el botón lo diga
+  // explícitamente en vez de imprimir/reimprimir en silencio.
+  const [tieneEtiqueta, setTieneEtiqueta] = useState(false);
 
   const [editando, setEditando] = useState(false);
   const [tipoMaterialEdit, setTipoMaterialEdit] = useState('');
@@ -39,6 +44,13 @@ export default function MuestraDetallePage() {
       .then(setMuestra)
       .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo cargar la muestra'))
       .finally(() => setLoading(false));
+  }, [id]);
+
+  useEffect(() => {
+    muestrasApi
+      .obtenerUltimaEtiqueta(id)
+      .then(() => setTieneEtiqueta(true))
+      .catch(() => setTieneEtiqueta(false));
   }, [id]);
 
   function abrirEdicion() {
@@ -106,7 +118,14 @@ export default function MuestraDetallePage() {
               </div>
               <h1 style={{ fontSize: 'var(--fs-xl)' }}>{muestra.erp_DESART}</h1>
             </div>
-            <span className={`badge ${BADGE_POR_ESTADO[muestra.estado] || 'badge-neutral'}`}>{muestra.estado.replace(/_/g, ' ')}</span>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <span className={`badge ${BADGE_POR_ESTADO[muestra.estado] || 'badge-neutral'}`}>{muestra.estado.replace(/_/g, ' ')}</span>
+              {muestra.datos_muestreo_pendientes && (
+                <span className="badge badge-warn" title="El envío se generó por adelantado -- todavía falta completar el registro físico del muestreo">
+                  Datos pendientes
+                </span>
+              )}
+            </div>
           </div>
 
           <form onSubmit={guardarEdicion}>
@@ -173,7 +192,7 @@ export default function MuestraDetallePage() {
               ) : (
                 <>
                   <button type="button" className="btn btn-primary" onClick={() => navigate(`/muestras/${id}/etiqueta`)}>
-                    Imprimir etiqueta
+                    {tieneEtiqueta ? 'Reimprimir etiqueta' : 'Imprimir etiqueta'}
                   </button>
                   {puedeEditar && (
                     <button type="button" className="btn btn-secondary" onClick={abrirEdicion}>

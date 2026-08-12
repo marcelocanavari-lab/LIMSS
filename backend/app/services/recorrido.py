@@ -52,7 +52,7 @@ def construir_recorrido(cursor, id_muestra: int) -> Optional[RecorridoResponse]:
         return None
 
     cursor.execute(
-        "SELECT id_envio, id_laboratorio, fecha_despacho, nro_remito FROM lims_envios WHERE id_muestra = ? ORDER BY id_envio",
+        "SELECT id_envio, id_laboratorio, fecha_despacho FROM lims_envios WHERE id_muestra = ? ORDER BY id_envio",
         id_muestra,
     )
     envios_rows = cursor.fetchall()
@@ -135,11 +135,22 @@ def construir_recorrido(cursor, id_muestra: int) -> Optional[RecorridoResponse]:
             else None
         )
 
+        # El número real de remito lo genera el sistema (lims_remitos,
+        # nro_remito_interno) -- ebr_envios.nro_remito es un campo manual
+        # que casi siempre queda vacío (mismo bug ya visto en Facturación).
+        # Un envío puede tener más de una fila en lims_remitos (sin UNIQUE
+        # sobre id_envio); se toma la más reciente, igual que el protocolo.
+        cursor.execute(
+            "SELECT TOP 1 nro_remito_interno FROM lims_remitos WHERE id_envio = ? ORDER BY fecha_generacion DESC",
+            e.id_envio,
+        )
+        rem = cursor.fetchone()
+
         envios.append(EnvioDetalleInfo(
             id_envio=e.id_envio,
             laboratorio_nombre=lab.nombre if lab else "—",
             fecha_despacho=e.fecha_despacho,
-            nro_remito=e.nro_remito,
+            nro_remito=rem.nro_remito_interno if rem else None,
             testigos=testigos,
             protocolo=protocolo,
             ensayos=ensayos,
@@ -151,14 +162,15 @@ def construir_recorrido(cursor, id_muestra: int) -> Optional[RecorridoResponse]:
     # Filtrados por el laboratorio elegido al crear la solicitud (mismo
     # criterio que ensayos-para-orden). Una muestra normalmente tiene a lo
     # sumo una solicitud vinculada, pero se recorre por si hubiera más de una.
+    # SELECT s.* (no una lista a mano) porque _g() más abajo necesita poder
+    # leer las columnas de la migración v2 (identificacion_contenedor,
+    # fecha_vencimiento_real, fecha_reanalisis_real, aspecto_mp) cuando
+    # existen -- con una lista explícita que no las incluyera, _g() las iba a
+    # ver siempre ausentes (columna nunca seleccionada) y no "ausente en este
+    # entorno", que es la única razón por la que debería devolver None.
     cursor.execute(
         """
-        SELECT s.id_solicitud, s.id_especificacion, s.id_laboratorio, s.nro_solicitud,
-               s.fecha_solicitud, s.proveedor_codigo, s.proveedor_nombre,
-               s.aspecto_externo, s.cierre, s.aspecto_interno, s.precintos,
-               s.materias_extranas, s.olor, s.color, s.observaciones_muestreo,
-               s.nro_bultos_muestreados,
-               u.nombre + ' ' + u.apellido AS usuario_qa_nombre
+        SELECT s.*, u.nombre + ' ' + u.apellido AS usuario_qa_nombre
         FROM lims_solicitudes_muestreo s
         INNER JOIN lims_usuarios u ON u.id_usuario = s.id_usuario_qa
         WHERE s.id_muestra = ? AND s.id_especificacion IS NOT NULL
@@ -180,6 +192,9 @@ def construir_recorrido(cursor, id_muestra: int) -> Optional[RecorridoResponse]:
             fecha_solicitud=s0.fecha_solicitud,
             proveedor_codigo=s0.proveedor_codigo,
             proveedor_nombre=s0.proveedor_nombre,
+            lote_proveedor=s0.lote_proveedor,
+            fecha_vencimiento=_a_fecha(s0.fecha_vencimiento),
+            fecha_reanalisis=_a_fecha(s0.fecha_reanalisis),
             datos_fisicos=DatosFisicosMuestreo(
                 aspecto_externo=s0.aspecto_externo,
                 cierre=s0.cierre,
@@ -272,4 +287,5 @@ def construir_recorrido(cursor, id_muestra: int) -> Optional[RecorridoResponse]:
         envios=envios,
         dictamen=dictamen,
         hay_oos=hay_oos,
+        datos_muestreo_pendientes=bool(muestra.datos_muestreo_pendientes),
     )

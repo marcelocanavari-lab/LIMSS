@@ -126,6 +126,10 @@ export default function FacturaDetallePage() {
     );
   }
 
+  const totalDesglosado = factura.envios
+    .flatMap((en) => en.ensayos || [])
+    .reduce((acc, ens) => acc + (ens.importe != null ? Number(ens.importe) : 0), 0);
+
   return (
     <div className="screen">
       <TopBar titulo={factura.nro_factura} subtitulo={factura.laboratorio_nombre} onBack={() => navigate(-1)} />
@@ -181,30 +185,62 @@ export default function FacturaDetallePage() {
         {factura.envios.length === 0 ? (
           <div className="state-block"><span>Esta factura no tiene envíos vinculados</span></div>
         ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>N° Remito</th>
-                <th>Muestra</th>
-                <th>IR</th>
-                <th>Material</th>
-                <th>Fecha</th>
-                <th>Ensayos</th>
-              </tr>
-            </thead>
-            <tbody>
-              {factura.envios.map((en) => (
-                <tr key={en.id_envio}>
-                  <td style={{ fontFamily: 'var(--font-mono)' }}>{en.nro_remito || '—'}</td>
-                  <td>{en.codigo_muestra || '—'}</td>
-                  <td>{en.erp_nro_ir || '—'}</td>
-                  <td>{en.erp_DESART ? `${en.erp_DESART}${en.erp_CODART ? ` (${en.erp_CODART})` : ''}` : '—'}</td>
-                  <td>{new Date(en.fecha_despacho).toLocaleDateString()}</td>
-                  <td className="num">{en.cantidad_ensayos}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <>
+            {factura.envios.map((en) => (
+              <div key={en.id_envio} className="card" style={{ marginBottom: 'var(--sp-3)' }}>
+                <table className="data-table" style={{ marginBottom: (en.ensayos || []).length > 0 ? 'var(--sp-3)' : 0 }}>
+                  <thead>
+                    <tr>
+                      <th>N° Remito</th>
+                      <th>Muestra</th>
+                      <th>IR</th>
+                      <th>Lote</th>
+                      <th>Material</th>
+                      <th>Fecha</th>
+                      <th>Ensayos</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td style={{ fontFamily: 'var(--font-mono)' }}>{en.nro_remito || '—'}</td>
+                      <td>{en.codigo_muestra || '—'}</td>
+                      <td>{en.erp_nro_ir || '—'}</td>
+                      <td>{en.lote_proveedor || '—'}</td>
+                      <td>{en.erp_DESART ? `${en.erp_DESART}${en.erp_CODART ? ` (${en.erp_CODART})` : ''}` : '—'}</td>
+                      <td>{new Date(en.fecha_despacho).toLocaleDateString()}</td>
+                      <td className="num">{en.cantidad_ensayos}</td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                {(en.ensayos || []).length > 0 && (
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Ensayo</th>
+                        <th style={{ width: 160 }} className="num">Importe</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {en.ensayos.map((ens) => (
+                        <tr key={ens.id_envio_ensayo}>
+                          <td>{ens.analito ? `${ens.nombre_ensayo} — ${ens.analito}` : ens.nombre_ensayo}</td>
+                          <td className="num">{ens.importe != null ? `${factura.moneda} ${Number(ens.importe).toFixed(2)}` : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            ))}
+
+            {totalDesglosado > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--sp-2)', marginBottom: 'var(--sp-4)', fontSize: 'var(--fs-sm)' }}>
+                <span style={{ color: 'var(--ink-2)' }}>Total desglosado:</span>
+                <strong>{factura.moneda} {totalDesglosado.toFixed(2)}</strong>
+              </div>
+            )}
+          </>
         )}
       </div>
 

@@ -21,8 +21,8 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 from reportlab.platypus import Paragraph
 
-_ESTILO_ESPECIFICACION = ParagraphStyle(
-    "especificacion", fontName="Helvetica", fontSize=8, leading=9.5,
+_ESTILO_CELDA = ParagraphStyle(
+    "celda_tabla_ensayos", fontName="Helvetica", fontSize=8, leading=9.5,
 )
 
 
@@ -151,7 +151,7 @@ def _dibujar_copia(
     campo("Vencimiento del lote", _fmt_vencimiento_lote(vencimiento_lote))
     campo("Muestreador", _texto(datos.usuario_muestreo_nombre))
     if datos.cantidad_enviada is not None:
-        campo("Cantidad de muestra enviada", f"{datos.cantidad_enviada} {datos.unidad_enviada or ''}".strip())
+        campo("Cantidad de muestra enviada", f"{float(datos.cantidad_enviada)} {datos.unidad_enviada or ''}".strip())
     if principios_activos:
         campo_multilinea(
             "Principio/s activo/s",
@@ -184,26 +184,56 @@ def _dibujar_copia(
             else:
                 especificacion = e.valor_requerido or e.especificacion_texto or "—"
 
-            # Especificación/Límites puede ser texto largo -- Paragraph lo
-            # divide en varias líneas dentro del ancho de la columna; el resto
-            # de las columnas son de una sola línea, así que la altura de la
-            # fila la termina marcando esta celda.
-            parrafo = Paragraph(_escapar_html(str(especificacion)), _ESTILO_ESPECIFICACION)
-            _, alto_parrafo = parrafo.wrap(col_espec_w - 0.2 * cm, 1000)
+            # Ensayo/Metodología/Especificación pueden ser texto largo -- las
+            # tres usan Paragraph para hacer salto de línea dentro del ancho
+            # de su columna en vez de desbordar sobre la columna siguiente
+            # (con drawString un nombre largo se dibuja en una sola línea y
+            # se superpone al texto de al lado). "Tipo" siempre es corto
+            # ("Numérico"/"Cualitativo") y no lo necesita. La altura de la
+            # fila la marca la columna que más líneas ocupe.
+            parrafo_ensayo = Paragraph(_escapar_html(e.nombre_ensayo), _ESTILO_CELDA)
+            parrafo_metodo = Paragraph(_escapar_html(_texto(e.metodologia)), _ESTILO_CELDA)
+            parrafo_espec = Paragraph(_escapar_html(str(especificacion)), _ESTILO_CELDA)
+            _, alto_ensayo = parrafo_ensayo.wrap(col_ensayo[1] - 0.2 * cm, 1000)
+            _, alto_metodo = parrafo_metodo.wrap(col_metodo[1] - 0.2 * cm, 1000)
+            _, alto_espec = parrafo_espec.wrap(col_espec_w - 0.2 * cm, 1000)
+            alto_parrafo = max(alto_ensayo, alto_metodo, alto_espec)
             alto_fila = max(0.45 * cm, alto_parrafo + 0.15 * cm)
 
             salto_pagina_si_hace_falta(alto_fila)
 
             c.setFont("Helvetica", 8)
-            c.drawString(col_ensayo[0], y, e.nombre_ensayo[: int(col_ensayo[1] / 0.17)])
-            c.drawString(col_metodo[0], y, _texto(e.metodologia)[: int(col_metodo[1] / 0.17)])
-            c.drawString(col_tipo[0], y, tipo_legible)
             # drawOn ubica (x,y) como la esquina inferior izquierda del bloque;
             # sin el +fontSize la primera línea del párrafo queda ~8pt más
             # abajo que la línea base de las demás columnas de la fila.
-            parrafo.drawOn(c, col_espec_x, y - alto_parrafo + _ESTILO_ESPECIFICACION.fontSize)
+            parrafo_ensayo.drawOn(c, col_ensayo[0], y - alto_ensayo + _ESTILO_CELDA.fontSize)
+            parrafo_metodo.drawOn(c, col_metodo[0], y - alto_metodo + _ESTILO_CELDA.fontSize)
+            c.drawString(col_tipo[0], y, tipo_legible)
+            parrafo_espec.drawOn(c, col_espec_x, y - alto_espec + _ESTILO_CELDA.fontSize)
 
             y -= alto_fila
+
+        observaciones = [
+            (e.nombre_ensayo, str(e.especificacion_texto).strip())
+            for e in ensayos
+            if e.especificacion_texto and str(e.especificacion_texto).strip()
+        ]
+        if observaciones:
+            subtitulo("Observaciones")
+            for nombre_ensayo, texto in observaciones:
+                # especificacion_texto es nvarchar(4000) -- puede ser largo,
+                # así que se mide el alto del párrafo ANTES de dibujar nada
+                # (nombre + texto) para no partir un ítem entre el nombre en
+                # una página y el texto en la siguiente.
+                parrafo_obs = Paragraph(_escapar_html(texto), _ESTILO_CELDA)
+                _, alto_obs = parrafo_obs.wrap(17 * cm, 1000)
+                salto_pagina_si_hace_falta(0.35 * cm + alto_obs + 0.3 * cm)
+
+                c.setFont("Helvetica-Bold", 8)
+                c.drawString(x, y, f"{nombre_ensayo}:")
+                y -= 0.35 * cm
+                parrafo_obs.drawOn(c, x, y - alto_obs)
+                y -= alto_obs + 0.3 * cm
 
     if testigos:
         subtitulo("Testigos a utilizar")

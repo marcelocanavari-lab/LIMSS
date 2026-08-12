@@ -16,7 +16,6 @@ const QUICK_LINKS = [
   { label: 'Nueva Muestra', ruta: '/muestras/nueva', roles: TODOS },
   { label: 'Mis Muestras', ruta: '/muestras', roles: ['muestreador'] },
   { label: 'Consulta de Muestras', ruta: '/consulta-muestras', roles: GESTION },
-  { label: 'Recorrido de Muestra', ruta: '/consulta-muestras', roles: GESTION },
   { label: 'Envío de Muestras', ruta: '/envios', roles: GESTION },
   { label: 'Carga de Resultados', ruta: '/carga-resultados', roles: GESTION },
   { label: 'Especificaciones', ruta: '/maestros/especificaciones', roles: GESTION },

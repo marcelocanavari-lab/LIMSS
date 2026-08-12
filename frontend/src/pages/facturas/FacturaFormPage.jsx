@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import TopBar from '../../components/TopBar';
 import { facturasApi } from '../../api/facturas';
@@ -24,6 +24,7 @@ export default function FacturaFormPage({ modo }) {
   const [enviosDisponibles, setEnviosDisponibles] = useState([]);
   const [idsSeleccionados, setIdsSeleccionados] = useState([]);
   const [cargandoEnvios, setCargandoEnvios] = useState(false);
+  const [importes, setImportes] = useState({});
 
   const [loading, setLoading] = useState(esEdicion);
   const [guardando, setGuardando] = useState(false);
@@ -72,7 +73,8 @@ export default function FacturaFormPage({ modo }) {
               fecha_despacho: e.fecha_despacho, id_laboratorio: facturaActual.id_laboratorio,
               laboratorio_nombre: facturaActual.laboratorio_nombre,
               erp_CODART: e.erp_CODART, erp_DESART: e.erp_DESART, erp_nro_ir: e.erp_nro_ir,
-              cantidad_ensayos: e.cantidad_ensayos,
+              lote_proveedor: e.lote_proveedor,
+              cantidad_ensayos: e.cantidad_ensayos, ensayos: e.ensayos || [],
             }))
           : [];
         const combinados = [...vinculadosActuales];
@@ -80,6 +82,18 @@ export default function FacturaFormPage({ modo }) {
           if (!combinados.some((e) => e.id_envio === env.id_envio)) combinados.push(env);
         }
         setEnviosDisponibles(combinados);
+
+        // Los importes ya guardados (edición) se precargan para poder
+        // modificarlos; los envíos nuevos arrancan sin importe cargado.
+        const seed = {};
+        for (const env of vinculadosActuales) {
+          for (const ens of env.ensayos || []) {
+            if (ens.importe != null) seed[ens.id_envio_ensayo] = String(ens.importe);
+          }
+        }
+        if (Object.keys(seed).length > 0) {
+          setImportes((prev) => ({ ...seed, ...prev }));
+        }
       })
       .catch(() => setEnviosDisponibles([]))
       .finally(() => setCargandoEnvios(false));
@@ -90,6 +104,23 @@ export default function FacturaFormPage({ modo }) {
       prev.includes(idEnvio) ? prev.filter((i) => i !== idEnvio) : [...prev, idEnvio]
     );
   }
+
+  function handleImporteChange(idEnvioEnsayo, valor) {
+    setImportes((prev) => ({ ...prev, [idEnvioEnsayo]: valor }));
+  }
+
+  // Ensayos de los envíos actualmente elegidos -- determina qué se manda al
+  // guardar y qué se suma en el total desglosado (los importes cargados para
+  // un envío que se desmarcó después no se incluyen).
+  const ensayosSeleccionados = enviosDisponibles
+    .filter((en) => idsSeleccionados.includes(en.id_envio))
+    .flatMap((en) => en.ensayos || []);
+
+  const totalDesglosado = ensayosSeleccionados.reduce(
+    (acc, ens) => acc + (Number(importes[ens.id_envio_ensayo]) || 0), 0
+  );
+
+  const totalNoCoincide = monto !== '' && Math.abs(totalDesglosado - Number(monto)) > 0.01;
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -112,6 +143,9 @@ export default function FacturaFormPage({ modo }) {
       moneda,
       descripcion: descripcion.trim() || null,
       id_envios: idsSeleccionados,
+      detalle_ensayos: ensayosSeleccionados
+        .filter((ens) => importes[ens.id_envio_ensayo] !== undefined && importes[ens.id_envio_ensayo] !== '')
+        .map((ens) => ({ id_envio_ensayo: ens.id_envio_ensayo, importe: Number(importes[ens.id_envio_ensayo]) })),
     };
 
     setGuardando(true);
@@ -162,7 +196,7 @@ export default function FacturaFormPage({ modo }) {
                   id="laboratorio"
                   className="field-input"
                   value={idLaboratorio}
-                  onChange={(e) => { setIdLaboratorio(e.target.value); setIdsSeleccionados([]); }}
+                  onChange={(e) => { setIdLaboratorio(e.target.value); setIdsSeleccionados([]); setImportes({}); }}
                   disabled={guardando}
                 >
                   <option value="">Seleccioná un laboratorio...</option>
@@ -263,6 +297,7 @@ export default function FacturaFormPage({ modo }) {
                       <th>N° Remito</th>
                       <th>Muestra</th>
                       <th>IR</th>
+                      <th>Lote</th>
                       <th>Material</th>
                       <th>Fecha</th>
                       <th>Ensayos</th>
@@ -272,21 +307,70 @@ export default function FacturaFormPage({ modo }) {
                     {enviosDisponibles.map((en) => {
                       const elegido = idsSeleccionados.includes(en.id_envio);
                       return (
-                        <tr key={en.id_envio}>
-                          <td>
-                            <input type="checkbox" checked={elegido} onChange={() => toggleEnvio(en.id_envio)} disabled={guardando} />
-                          </td>
-                          <td style={{ fontFamily: 'var(--font-mono)' }}>{en.nro_remito || '—'}</td>
-                          <td>{en.codigo_muestra || '—'}</td>
-                          <td>{en.erp_nro_ir || '—'}</td>
-                          <td>{en.erp_DESART ? `${en.erp_DESART}${en.erp_CODART ? ` (${en.erp_CODART})` : ''}` : '—'}</td>
-                          <td>{new Date(en.fecha_despacho).toLocaleDateString()}</td>
-                          <td className="num">{en.cantidad_ensayos}</td>
-                        </tr>
+                        <Fragment key={en.id_envio}>
+                          <tr>
+                            <td>
+                              <input type="checkbox" checked={elegido} onChange={() => toggleEnvio(en.id_envio)} disabled={guardando} />
+                            </td>
+                            <td style={{ fontFamily: 'var(--font-mono)' }}>{en.nro_remito || '—'}</td>
+                            <td>{en.codigo_muestra || '—'}</td>
+                            <td>{en.erp_nro_ir || '—'}</td>
+                            <td>{en.lote_proveedor || '—'}</td>
+                            <td>{en.erp_DESART ? `${en.erp_DESART}${en.erp_CODART ? ` (${en.erp_CODART})` : ''}` : '—'}</td>
+                            <td>{new Date(en.fecha_despacho).toLocaleDateString()}</td>
+                            <td className="num">{en.cantidad_ensayos}</td>
+                          </tr>
+                          {elegido && en.ensayos && en.ensayos.length > 0 && (
+                            <tr>
+                              <td></td>
+                              <td colSpan={7} style={{ paddingTop: 0 }}>
+                                <table className="data-table" style={{ marginBottom: 'var(--sp-2)' }}>
+                                  <thead>
+                                    <tr>
+                                      <th>Ensayo</th>
+                                      <th style={{ width: 160 }}>Importe</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {en.ensayos.map((ens) => (
+                                      <tr key={ens.id_envio_ensayo}>
+                                        <td>{ens.analito ? `${ens.nombre_ensayo} — ${ens.analito}` : ens.nombre_ensayo}</td>
+                                        <td>
+                                          <input
+                                            className="field-input"
+                                            type="number"
+                                            step="any"
+                                            min="0"
+                                            placeholder="0.00"
+                                            value={importes[ens.id_envio_ensayo] ?? ''}
+                                            onChange={(e) => handleImporteChange(ens.id_envio_ensayo, e.target.value)}
+                                            disabled={guardando}
+                                          />
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
                       );
                     })}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {ensayosSeleccionados.length > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--sp-2)', marginTop: 'var(--sp-3)', fontSize: 'var(--fs-sm)' }}>
+                <span style={{ color: 'var(--ink-2)' }}>Total desglosado:</span>
+                <strong>{moneda} {totalDesglosado.toFixed(2)}</strong>
+              </div>
+            )}
+            {totalNoCoincide && (
+              <div className="alert alert-warn" style={{ marginTop: 'var(--sp-3)' }}>
+                El total desglosado ({moneda} {totalDesglosado.toFixed(2)}) no coincide con el monto de la factura ({moneda} {Number(monto).toFixed(2)}).
               </div>
             )}
           </div>

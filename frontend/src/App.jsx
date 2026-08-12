@@ -3,6 +3,7 @@ import { AuthProvider } from './context/AuthContext';
 import PrivateRoute from './components/PrivateRoute';
 
 import LoginPage from './pages/LoginPage';
+import CambiarPinPage from './pages/CambiarPinPage';
 import DashboardPage from './pages/DashboardPage';
 import AdminMenuPage from './pages/AdminMenuPage';
 import UsuariosPage from './pages/UsuariosPage';
@@ -42,6 +43,7 @@ import DictamenDetallePage from './pages/dictamenes/DictamenDetallePage';
 import FacturasPage from './pages/facturas/FacturasPage';
 import FacturaFormPage from './pages/facturas/FacturaFormPage';
 import FacturaDetallePage from './pages/facturas/FacturaDetallePage';
+import ReporteImportesFacturadosPage from './pages/facturas/ReporteImportesFacturadosPage';
 
 // Roles reutilizados en varias rutas -- mismo criterio que usa el backend
 // (require_rol) y el menú v2.0, para que "lo que se ve" y "lo que se puede
@@ -59,6 +61,7 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
 
           <Route path="/menu" element={<PrivateRoute roles={TODOS}><DashboardPage /></PrivateRoute>} />
+          <Route path="/cambiar-pin" element={<PrivateRoute><CambiarPinPage /></PrivateRoute>} />
 
           {/* ── Administración (solo admin) ─────────────────────── */}
           <Route path="/admin" element={<PrivateRoute roles={ADMIN}><AdminMenuPage /></PrivateRoute>} />
@@ -118,6 +121,7 @@ export default function App() {
           {/* ── Facturación de Laboratorios (analista_qc, qa, admin) ── */}
           <Route path="/facturas" element={<PrivateRoute roles={GESTION}><FacturasPage /></PrivateRoute>} />
           <Route path="/facturas/nueva" element={<PrivateRoute roles={GESTION}><FacturaFormPage modo="crear" /></PrivateRoute>} />
+          <Route path="/facturas/reporte-importes" element={<PrivateRoute roles={GESTION}><ReporteImportesFacturadosPage /></PrivateRoute>} />
           <Route path="/facturas/:id" element={<PrivateRoute roles={GESTION}><FacturaDetallePage /></PrivateRoute>} />
           <Route path="/facturas/:id/editar" element={<PrivateRoute roles={GESTION}><FacturaFormPage modo="editar" /></PrivateRoute>} />
 

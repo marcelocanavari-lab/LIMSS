@@ -67,6 +67,9 @@ class SolicitudRecorridoInfo(BaseModel):
     fecha_solicitud: datetime
     proveedor_codigo: Optional[str] = None
     proveedor_nombre: Optional[str] = None
+    lote_proveedor: Optional[str] = None
+    fecha_vencimiento: Optional[date] = None
+    fecha_reanalisis: Optional[date] = None
     datos_fisicos: DatosFisicosMuestreo
 
 
@@ -91,3 +94,6 @@ class RecorridoResponse(BaseModel):
     resultados_orden_trabajo: list[EnsayoResultado] = []
     dictamen: Optional[DictamenInfo] = None
     hay_oos: bool = False
+    # True cuando el envío se generó por adelantado desde la solicitud, antes
+    # de ejecutar el muestreo físico (ver lims_muestras.datos_muestreo_pendientes).
+    datos_muestreo_pendientes: bool = False

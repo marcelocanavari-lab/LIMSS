@@ -1,21 +1,33 @@
 """
 Búsqueda de Informes de Recepción (IR) en el ERP GI_LX.
 
-El "IR" que conoce el operario es un número compuesto "NNN/AA" (ej. "262/20"):
-NNN es el correlativo que se completa con ceros hasta el ancho del campo
-GIN01CPB.NUMCOMO, y AA son los últimos 2 dígitos del año de GIN01CPB.FECCOM.
-El comprobante se identifica combinando:
+El "IR" que conoce el operario es un número compuesto "NNN/AA" (ej. "212/26"):
+NNN es el correlativo y AA son los últimos 2 dígitos del año. El comprobante
+se identifica combinando:
   - IdT05O = GIT05TCM.T05Id donde GIT05TCM.CODTCM = 'IR'
   - LETCOMO = 'X'
-  - NUMCOMO = NNN (zero-padded)
-  - YEAR(FECCOM) = 2000 + AA
-(regla confirmada por el usuario -- no está documentada en ningún lado del ERP).
+  - NUMCOMO = NNN zero-padded a 12 caracteres (ej. '000000000212')
+  - YEAR(FECCOR) = 2000 + AA
+
+Importante: el año se filtra por FECCOR, NO por FECCOM -- son dos columnas
+datetime distintas en GIN01CPB (no un alias). En la mayoría de los
+comprobantes coinciden, pero difieren en los de arrastre de la carga inicial
+(algunos conservan en FECCOR la fecha real del comprobante original --
+2013/2015/2018/2019 -- mientras FECCOM quedó forzado a la fecha de carga) y
+ocasionalmente en comprobantes consecutivos cerca de un cambio de mes/año.
+Se verificó directamente contra GI_LX (2026-08) que NUMCOMO sigue siendo
+zero-pad de 12 dígitos sin prefijo de año -- una versión anterior de esta
+lógica asumía que el ERP había empezado a prefijar el año en NUMCOMO a
+partir de 2026 (ej. NUMCOMO='202600000212'), pero esa regla no coincide con
+ningún comprobante real y quedó descartada; el bug real que hacía fallar la
+búsqueda de IRs de 2026 era ese formato de NUMCOMO inventado, no un cambio
+real en el ERP.
 
 El 2020-04-02 fue la fecha de puesta en marcha del ERP: ese día se cargaron
 ~430 comprobantes IR de arrastre con numeración repetida (varios NUMCOMO
 comparten número dentro del mismo año). Fuera de esa fecha la combinación
 (NUMCOMO, año) es única. Ante una colisión nos quedamos con el comprobante
-más reciente por FECCOM -- el de arrastre casi nunca es el que el operario
+más reciente por FECCOR -- el de arrastre casi nunca es el que el operario
 está buscando.
 
 El proveedor se resuelve vía GIN01CPB.IdM02O -> GIM02ANA.M02Id, filtrando
@@ -31,33 +43,17 @@ _PATRON_IR = re.compile(r"^\s*(\d{1,12})\s*/\s*(\d{2})\s*$")
 
 _FECHA_MIGRACION = "2020-04-02"
 
-# El ERP cambió el formato de GIN01CPB.NUMCOMO a partir de los comprobantes
-# de 2026, manteniendo el mismo ancho total de 12 caracteres: antes eran 12
-# dígitos zero-padded sin información de año ("000000000255"); desde 2026
-# el campo arranca con el año completo (4 dígitos) seguido del correlativo
-# zero-padded a 8 dígitos ("202600000255") -- verificado contra un
-# comprobante real en GI_LX (IR 255/26 -> NUMCOMO='202600000255'), la regla
-# original que se había propuesto (correlativo a 9 dígitos) no coincidía con
-# el dato real y quedó descartada.
-_ANIO_CAMBIO_FORMATO_NUMCOMO = 2026
 
-
-def construir_numcomo(numero: str, anio: int) -> str:
+def construir_numcomo(numero: str) -> str:
     """Arma el NUMCOMO a buscar en GIN01CPB a partir del correlativo (NNN de
-    'NNN/AA') y el año completo -- el formato depende del año, ver arriba."""
-    if anio >= _ANIO_CAMBIO_FORMATO_NUMCOMO:
-        return f"{anio}{numero.zfill(8)}"
+    'NNN/AA'): zero-pad a 12 caracteres, sin prefijo de año."""
     return numero.zfill(12)
 
 
-def _extraer_numero_de_numcomo(numcomo: str, anio: int) -> int:
+def _extraer_numero_de_numcomo(numcomo: str) -> int:
     """Inversa de construir_numcomo: recupera el correlativo NNN a partir del
-    NUMCOMO crudo que devuelve el ERP, conociendo el año del comprobante
-    (GIN01CPB.FECCOM)."""
-    numcomo = numcomo.strip()
-    if anio >= _ANIO_CAMBIO_FORMATO_NUMCOMO:
-        return int(numcomo[len(str(anio)):])
-    return int(numcomo)
+    NUMCOMO crudo que devuelve el ERP."""
+    return int(numcomo.strip())
 
 
 def _parsear_nro_ir(nro_ir: str) -> tuple[str, int]:
@@ -69,7 +65,7 @@ def _parsear_nro_ir(nro_ir: str) -> tuple[str, int]:
         )
     numero, anio_corto = m.groups()
     anio = 2000 + int(anio_corto)
-    return construir_numcomo(numero, anio), anio
+    return construir_numcomo(numero), anio
 
 
 def _tipo_comprobante_ir(erp: pyodbc.Connection) -> int:
@@ -81,12 +77,12 @@ def _tipo_comprobante_ir(erp: pyodbc.Connection) -> int:
     return fila.T05Id
 
 
-def formatear_nro_ir(numcomo: str, feccom) -> str:
+def formatear_nro_ir(numcomo: str, feccor) -> str:
     """Reconstruye el formato 'NNN/AA' que reconoce el operario a partir de
-    los campos crudos del ERP -- el año de FECCOM determina cómo leer
-    NUMCOMO (ver _ANIO_CAMBIO_FORMATO_NUMCOMO)."""
-    anio = feccom.year
-    numero = _extraer_numero_de_numcomo(numcomo, anio)
+    los campos crudos del ERP. Recibe FECCOR (no FECCOM) para que el año
+    mostrado sea el mismo que se usó para encontrar el comprobante."""
+    anio = feccor.year
+    numero = _extraer_numero_de_numcomo(numcomo)
     return f"{numero}/{anio % 100:02d}"
 
 
@@ -109,8 +105,8 @@ def buscar_lineas_ir(erp: pyodbc.Connection, nro_ir: str):
         """
         SELECT TOP 1 N01Id
         FROM GIN01CPB
-        WHERE IdT05O = ? AND LETCOMO = 'X' AND NUMCOMO = ? AND YEAR(FECCOM) = ?
-        ORDER BY FECCOM DESC
+        WHERE IdT05O = ? AND LETCOMO = 'X' AND NUMCOMO = ? AND YEAR(FECCOR) = ?
+        ORDER BY FECCOR DESC
         """,
         id_tipo_ir, numcomo, anio,
     )
@@ -120,7 +116,7 @@ def buscar_lineas_ir(erp: pyodbc.Connection, nro_ir: str):
 
     cursor.execute(
         """
-        SELECT cab.N01Id, cab.NUMCOMO, cab.FECCOM, cab.VENCOM,
+        SELECT cab.N01Id, cab.NUMCOMO, cab.FECCOM, cab.FECCOR, cab.VENCOM,
                its.IdM21, its.CANTID,
                art.CODART, art.DESART, umd.ABREV AS unidad,
                ana.CODANA AS proveedor_codigo, ana.DESANA AS proveedor,
@@ -150,8 +146,8 @@ def obtener_vencimiento_lote(erp: pyodbc.Connection, nro_ir: str):
         """
         SELECT TOP 1 VENCOM
         FROM GIN01CPB
-        WHERE IdT05O = ? AND LETCOMO = 'X' AND NUMCOMO = ? AND YEAR(FECCOM) = ?
-        ORDER BY FECCOM DESC
+        WHERE IdT05O = ? AND LETCOMO = 'X' AND NUMCOMO = ? AND YEAR(FECCOR) = ?
+        ORDER BY FECCOR DESC
         """,
         id_tipo_ir, numcomo, anio,
     )

@@ -12,13 +12,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.core.security import require_rol
 from app.db.connections import limss_db
 from app.schemas.facturas import (
+    EnsayoFacturaItem,
     EnvioFacturaItem,
     FacturaAnularUpdate,
     FacturaCreate,
+    FacturaDetalleEnsayoInput,
     FacturaDetalleResponse,
     FacturaPagoUpdate,
     FacturaResponse,
     FacturaUpdate,
+    ReporteImporteLinea,
+    ReporteImporteTotal,
+    ReporteImportesFacturadosResponse,
 )
 from app.services import audit
 
@@ -27,31 +32,141 @@ router = APIRouter(prefix="/api/facturas", tags=["Facturación"])
 _ROLES_GESTION = ("analista_qc", "qa", "admin")
 _ROLES_PAGO = ("qa", "admin")
 
+_MSG_FALTA_MIGRACION_FACTURA_DETALLE = (
+    "Falta ejecutar la migración del desglose de importes por ensayo "
+    "(migrations_factura_detalle_ensayos.sql)"
+)
+
+
+def _tiene_tabla_factura_detalle(cursor) -> bool:
+    """lims_factura_detalle (desglose de importe por ensayo dentro de una
+    factura) puede no existir todavía (ver
+    migrations_factura_detalle_ensayos.sql, pendiente de ejecutar en algunos
+    entornos)."""
+    cursor.execute("SELECT OBJECT_ID('lims_factura_detalle', 'U') AS id")
+    return cursor.fetchone().id is not None
+
+
+def _ensayos_de_envio(cursor, id_envio: int, id_factura: Optional[int] = None) -> list[EnsayoFacturaItem]:
+    """Ensayos solicitados en un envío, con nombre + analito (para
+    diferenciarlos si el mismo ensayo del catálogo se repite, igual que en
+    Datos Maestros). Si se pasa id_factura y la tabla de desglose ya existe,
+    trae también el importe/observaciones ya cargados para ESA factura."""
+    if id_factura is not None and _tiene_tabla_factura_detalle(cursor):
+        cursor.execute(
+            """
+            SELECT ee.id AS id_envio_ensayo, m.nombre_ensayo, se.analito,
+                   fd.importe, fd.observaciones
+            FROM lims_envio_ensayos ee
+            INNER JOIN lims_especificacion_ensayos se ON se.id_espec_ensayo = ee.id_espec_ensayo
+            INNER JOIN lims_ensayos_maestro m ON m.id_ensayo_maestro = se.id_ensayo_maestro
+            LEFT JOIN lims_factura_detalle fd ON fd.id_envio_ensayo = ee.id AND fd.id_factura = ?
+            WHERE ee.id_envio = ?
+            ORDER BY se.orden
+            """,
+            id_factura, id_envio,
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT ee.id AS id_envio_ensayo, m.nombre_ensayo, se.analito,
+                   NULL AS importe, NULL AS observaciones
+            FROM lims_envio_ensayos ee
+            INNER JOIN lims_especificacion_ensayos se ON se.id_espec_ensayo = ee.id_espec_ensayo
+            INNER JOIN lims_ensayos_maestro m ON m.id_ensayo_maestro = se.id_ensayo_maestro
+            WHERE ee.id_envio = ?
+            ORDER BY se.orden
+            """,
+            id_envio,
+        )
+    return [
+        EnsayoFacturaItem(
+            id_envio_ensayo=r.id_envio_ensayo, nombre_ensayo=r.nombre_ensayo,
+            analito=getattr(r, "analito", None),
+            importe=float(r.importe) if r.importe is not None else None,
+            observaciones=r.observaciones,
+        )
+        for r in cursor.fetchall()
+    ]
+
+
+def _guardar_detalle_ensayos(
+    cursor, id_factura: int, detalle: list[FacturaDetalleEnsayoInput], id_envios_factura: list[int]
+) -> None:
+    """Reemplaza por completo el desglose de importes por ensayo de la
+    factura. Cada id_envio_ensayo debe pertenecer a uno de los envíos
+    vinculados a ESTA factura -- no se puede cargar el importe de un ensayo
+    de un envío que no forma parte de ella. No toca lims_factura_envios ni la
+    regla de que un envío no se factura dos veces -- esto es un detalle
+    adicional dentro de la misma factura."""
+    ids_pedidos = [item.id_envio_ensayo for item in detalle]
+    if len(ids_pedidos) != len(set(ids_pedidos)):
+        raise HTTPException(status_code=400, detail="Un mismo ensayo no puede tener dos importes en la misma factura")
+
+    if not _tiene_tabla_factura_detalle(cursor):
+        if detalle:
+            raise HTTPException(status_code=503, detail=_MSG_FALTA_MIGRACION_FACTURA_DETALLE)
+        return
+
+    cursor.execute("DELETE FROM lims_factura_detalle WHERE id_factura = ?", id_factura)
+    if not detalle:
+        return
+
+    if id_envios_factura:
+        placeholders = ",".join("?" * len(id_envios_factura))
+        cursor.execute(
+            f"SELECT id FROM lims_envio_ensayos WHERE id_envio IN ({placeholders})",
+            *id_envios_factura,
+        )
+        ids_envio_ensayo_validos = {r.id for r in cursor.fetchall()}
+    else:
+        ids_envio_ensayo_validos = set()
+
+    for item in detalle:
+        if item.id_envio_ensayo not in ids_envio_ensayo_validos:
+            raise HTTPException(
+                status_code=400,
+                detail=f"El ensayo {item.id_envio_ensayo} no pertenece a ninguno de los envíos de esta factura",
+            )
+        cursor.execute(
+            "INSERT INTO lims_factura_detalle (id_factura, id_envio_ensayo, importe, observaciones) VALUES (?, ?, ?, ?)",
+            id_factura, item.id_envio_ensayo, item.importe, item.observaciones,
+        )
+
 
 def _obtener_envios_de_factura(cursor, id_factura: int) -> list[EnvioFacturaItem]:
     """Envíos vinculados a la factura, con los datos del material/muestra que
     permiten identificar el análisis (código/nombre de material, N° de IR,
-    cantidad de ensayos solicitados)."""
+    cantidad de ensayos solicitados) y el desglose de ensayos con su importe."""
     cursor.execute(
         """
-        SELECT e.id_envio, e.nro_remito, e.fecha_despacho,
-               m.codigo_muestra, m.erp_CODART, m.erp_DESART, m.erp_nro_ir,
+        SELECT e.id_envio, rem.nro_remito_interno AS nro_remito, e.fecha_despacho,
+               m.codigo_muestra, m.erp_CODART, m.erp_DESART, m.erp_nro_ir, sm.lote_proveedor,
                (SELECT COUNT(*) FROM lims_envio_ensayos ee WHERE ee.id_envio = e.id_envio) AS cant_ensayos
         FROM lims_factura_envios fe
         INNER JOIN lims_envios e ON e.id_envio = fe.id_envio
         LEFT JOIN lims_muestras m ON m.id_muestra = e.id_muestra
+        LEFT JOIN lims_solicitudes_muestreo sm ON sm.id_muestra = m.id_muestra
+        OUTER APPLY (
+            SELECT TOP 1 r.nro_remito_interno
+            FROM lims_remitos r
+            WHERE r.id_envio = e.id_envio
+            ORDER BY r.id_remito DESC
+        ) rem
         WHERE fe.id_factura = ?
         ORDER BY e.fecha_despacho
         """,
         id_factura,
     )
+    filas = cursor.fetchall()
     return [
         EnvioFacturaItem(
             id_envio=r.id_envio, nro_remito=r.nro_remito, codigo_muestra=r.codigo_muestra,
             fecha_despacho=r.fecha_despacho, erp_CODART=r.erp_CODART, erp_DESART=r.erp_DESART,
-            erp_nro_ir=r.erp_nro_ir, cantidad_ensayos=r.cant_ensayos,
+            erp_nro_ir=r.erp_nro_ir, lote_proveedor=r.lote_proveedor, cantidad_ensayos=r.cant_ensayos,
+            ensayos=_ensayos_de_envio(cursor, r.id_envio, id_factura),
         )
-        for r in cursor.fetchall()
+        for r in filas
     ]
 
 
@@ -158,6 +273,82 @@ def listar_facturas(
     return [_fila_a_factura(r, _obtener_envios_de_factura(cursor, r.id_factura)) for r in filas]
 
 
+@router.get("/reportes/importes", response_model=ReporteImportesFacturadosResponse)
+def reporte_importes_facturados(
+    id_laboratorio: Optional[int] = Query(None),
+    fecha_desde: Optional[date] = Query(None),
+    fecha_hasta: Optional[date] = Query(None),
+    nombre_ensayo: Optional[str] = Query(None, description="Busca por nombre de ensayo (parcial); trae todos los analitos de ese ensayo"),
+    user: dict = Depends(require_rol(*_ROLES_GESTION)),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Detalle línea por línea de lo facturado por ensayo, con los mismos tres
+    filtros opcionales (laboratorio, rango de fecha_factura, ensayo por
+    nombre -- sin exigir elegir el analito, que viaja como columna aparte)."""
+    cursor = conn.cursor()
+    if not _tiene_tabla_factura_detalle(cursor):
+        raise HTTPException(status_code=503, detail=_MSG_FALTA_MIGRACION_FACTURA_DETALLE)
+
+    condiciones = []
+    params: list = []
+    if id_laboratorio is not None:
+        condiciones.append("f.id_laboratorio = ?")
+        params.append(id_laboratorio)
+    if fecha_desde:
+        condiciones.append("f.fecha_factura >= ?")
+        params.append(str(fecha_desde))
+    if fecha_hasta:
+        condiciones.append("f.fecha_factura <= ?")
+        params.append(str(fecha_hasta))
+    if nombre_ensayo:
+        condiciones.append("m.nombre_ensayo LIKE ?")
+        params.append(f"%{nombre_ensayo}%")
+    where = f"WHERE {' AND '.join(condiciones)}" if condiciones else ""
+
+    cursor.execute(
+        f"""
+        SELECT f.id_factura, f.nro_factura, f.fecha_factura, f.moneda,
+               f.id_laboratorio, lab.nombre AS laboratorio_nombre,
+               e.id_envio, rem.nro_remito_interno AS nro_remito,
+               m.nombre_ensayo, se.analito,
+               fd.importe, fd.observaciones
+        FROM lims_factura_detalle fd
+        INNER JOIN lims_facturas f ON f.id_factura = fd.id_factura
+        INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = f.id_laboratorio
+        INNER JOIN lims_envio_ensayos ee ON ee.id = fd.id_envio_ensayo
+        INNER JOIN lims_envios e ON e.id_envio = ee.id_envio
+        INNER JOIN lims_especificacion_ensayos se ON se.id_espec_ensayo = ee.id_espec_ensayo
+        INNER JOIN lims_ensayos_maestro m ON m.id_ensayo_maestro = se.id_ensayo_maestro
+        OUTER APPLY (
+            SELECT TOP 1 r.nro_remito_interno
+            FROM lims_remitos r
+            WHERE r.id_envio = e.id_envio
+            ORDER BY r.id_remito DESC
+        ) rem
+        {where}
+        ORDER BY f.fecha_factura DESC, f.nro_factura, e.id_envio
+        """,
+        *params,
+    )
+    lineas = [
+        ReporteImporteLinea(
+            id_factura=r.id_factura, nro_factura=r.nro_factura, fecha_factura=r.fecha_factura, moneda=r.moneda,
+            id_laboratorio=r.id_laboratorio, laboratorio_nombre=r.laboratorio_nombre,
+            id_envio=r.id_envio, nro_remito=r.nro_remito,
+            nombre_ensayo=r.nombre_ensayo, analito=r.analito,
+            importe=float(r.importe), observaciones=r.observaciones,
+        )
+        for r in cursor.fetchall()
+    ]
+
+    totales: dict[str, float] = {}
+    for linea in lineas:
+        totales[linea.moneda] = totales.get(linea.moneda, 0.0) + linea.importe
+    totales_por_moneda = [ReporteImporteTotal(moneda=m, total=t) for m, t in sorted(totales.items())]
+
+    return ReporteImportesFacturadosResponse(lineas=lineas, totales_por_moneda=totales_por_moneda)
+
+
 @router.post("", response_model=FacturaDetalleResponse, status_code=201)
 def crear_factura(
     body: FacturaCreate,
@@ -194,6 +385,8 @@ def crear_factura(
 
     for id_envio in envios_validos:
         cursor.execute("INSERT INTO lims_factura_envios (id_factura, id_envio) VALUES (?, ?)", id_factura, id_envio)
+
+    _guardar_detalle_ensayos(cursor, id_factura, body.detalle_ensayos, envios_validos)
 
     audit.registrar(
         conn, entidad="factura", accion="crear",
@@ -269,6 +462,8 @@ def editar_factura(
     cursor.execute("DELETE FROM lims_factura_envios WHERE id_factura = ?", id_factura)
     for id_envio in envios_validos:
         cursor.execute("INSERT INTO lims_factura_envios (id_factura, id_envio) VALUES (?, ?)", id_factura, id_envio)
+
+    _guardar_detalle_ensayos(cursor, id_factura, body.detalle_ensayos, envios_validos)
 
     valor_anterior = {k: v for k, v in campos_anteriores.items() if v != campos_nuevos[k]}
     valor_nuevo = {k: v for k, v in campos_nuevos.items() if v != campos_anteriores[k]}
@@ -349,3 +544,8 @@ def anular_factura(
     )
 
     return _obtener_factura_detalle(cursor, id_factura)
+
+
+# Reexport sin prefijo para que muestras.py (envios_sin_facturar) reutilice
+# esta misma lógica de armado de ensayos por envío, sin duplicarla.
+ensayos_de_envio = _ensayos_de_envio

@@ -30,6 +30,7 @@ export function AuthProvider({ children }) {
       apellido: data.apellido,
       rol: data.rol,
       codigo,
+      debe_cambiar_pin: data.requiere_cambio_pin,
     });
     return data;
   }, []);
@@ -44,8 +45,14 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
+  // Se llama al completar Cambiar mi PIN -- libera el acceso normal sin
+  // necesitar un refresh de página ni volver a pedir /me.
+  const marcarPinCambiado = useCallback(() => {
+    setUser((prev) => (prev ? { ...prev, debe_cambiar_pin: false } : prev));
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, marcarPinCambiado }}>
       {children}
     </AuthContext.Provider>
   );

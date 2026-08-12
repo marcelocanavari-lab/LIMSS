@@ -29,6 +29,10 @@ class SolicitudMuestreoCreate(BaseModel):
     proveedor_nombre: str = Field(..., min_length=1, max_length=150)
     # Datos manuales del ingreso -- no vienen del ERP (ver P_CC002-1/2).
     lote_proveedor: str = Field(..., min_length=1, max_length=20)
+    # Se precarga en el frontend con el VENCOM del ERP al buscar el IR, pero
+    # el usuario la puede corregir antes de confirmar -- si no manda nada,
+    # se usa el valor del ERP como antes (ver crear_solicitud).
+    fecha_vencimiento: Optional[date] = None
     fecha_reanalisis: Optional[date] = None
     pais_origen: Optional[str] = Field(None, max_length=100)
     nro_bultos: Optional[int] = None
@@ -89,6 +93,17 @@ class SolicitudMuestreoResponse(BaseModel):
     fecha_vencimiento_real: Optional[date] = None
     fecha_reanalisis_real: Optional[date] = None
     aspecto_mp: Optional[str] = None
+    # Protocolo que entrega el PROVEEDOR junto con el lote (foto o PDF),
+    # adjuntado obligatoriamente por QA al crear la solicitud -- no confundir
+    # con el protocolo del laboratorio de análisis (lims_protocolos, ligado a
+    # un envío). Solo se expone el nombre original acá; el archivo se sirve
+    # por GET /{id_solicitud}/protocolo-proveedor.
+    protocolo_proveedor_nombre_original: Optional[str] = None
+    # Documentación del proveedor (remito y/o factura, un solo archivo) --
+    # a diferencia del protocolo, es OPCIONAL y se puede adjuntar en el
+    # momento de crear la solicitud o después. None = todavía pendiente.
+    # El archivo se sirve por GET /{id_solicitud}/documentacion-proveedor.
+    documentacion_proveedor_nombre_original: Optional[str] = None
 
 
 class EnsayoSolicitudMuestreo(BaseModel):
@@ -126,12 +141,11 @@ class SolicitudMuestreoAnular(BaseModel):
 
 # ── Orden de Trabajo digital (Etapa 2: el muestreador ejecuta) ────
 #
-# Sección A: datos físicos observables del muestreo. Sección B: resultados
-# de los ensayos de la especificación filtrados por el laboratorio elegido
-# al crear la solicitud (mismo criterio que la Orden de Trabajo impresa) --
-# sin distinción de "laboratorio interno/externo". Al confirmar, la muestra
-# se crea automáticamente en estado 'pendiente_envio', sin excepción; QC/QA
-# sigue el flujo normal de Envío para despachar al laboratorio.
+# Solo datos físicos observables del muestreo -- el muestreador nunca carga
+# resultados de ensayos, eso lo hace QC/QA más adelante por envío (Carga de
+# Resultados). Al confirmar, la muestra se crea automáticamente en estado
+# 'pendiente_envio', sin excepción; QC/QA sigue el flujo normal de Envío
+# para despachar al laboratorio.
 
 class DatosFisicosMuestreo(BaseModel):
     aspecto_externo: Optional[str] = Field(None, max_length=200)
@@ -155,22 +169,11 @@ class EnsayosParaOrdenResponse(BaseModel):
     erp_CODART: str
     erp_DESART: str
     estado: str
-    ensayos: list[EnsayoSolicitudMuestreo]
-    # True si todos los ensayos ya tienen resultado cargado -- el frontend
-    # pasa el formulario a solo lectura cuando esto es true.
-    resultados_completos: bool = False
     datos_fisicos: DatosFisicosMuestreo
-
-
-class ResultadoOrdenTrabajoInput(BaseModel):
-    id_espec_ensayo: int
-    valor_numerico: Optional[float] = None
-    valor_cualitativo: Optional[str] = None
 
 
 class OrdenTrabajoDigitalBody(BaseModel):
     datos_fisicos: DatosFisicosMuestreo
-    resultados: list[ResultadoOrdenTrabajoInput]
 
 
 class OrdenTrabajoDigitalResponse(BaseModel):

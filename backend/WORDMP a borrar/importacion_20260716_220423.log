@@ -1,6 +1,0 @@
-2026-07-16 22:04:23,768  INFO      Log guardado en: \\LAMARSERVER\Empresa\Lamar\LIMSS\backend\WORD\importacion_20260716_220423.log
-2026-07-16 22:04:23,789  INFO      Carpeta: \\LAMARSERVER\Empresa\Lamar\LIMSS\backend\WORD
-2026-07-16 22:04:23,790  INFO      Archivos encontrados: 37
-2026-07-16 22:04:23,790  INFO      Modo: INSERCIÓN EN BD
-2026-07-16 22:04:23,791  INFO      ============================================================
-2026-07-16 22:04:23,939  ERROR     ✗ No se pudo conectar a la BD: ('28000', "[28000] [Microsoft][ODBC SQL Server Driver][SQL Server]Error de inicio de sesión del usuario 'limss_app'. (18456) (SQLDriverConnect); [28000] [Microsoft][ODBC SQL Server Driver]Atributo de cadena de conexión no válido (0); [28000] [Microsoft][ODBC SQL Server Driver][SQL Server]Error de inicio de sesión del usuario 'limss_app'. (18456); [28000] [Microsoft][ODBC SQL Server Driver]Atributo de cadena de conexión no válido (0)")

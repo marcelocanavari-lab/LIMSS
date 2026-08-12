@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import TopBar from '../../components/TopBar';
 import { maestrosApi } from '../../api/maestros';
+import { muestrasApi } from '../../api/muestras';
 import { ApiError } from '../../api/client';
 
 const ESTADOS = [
@@ -57,6 +58,8 @@ export default function ReporteTestigosPage() {
   const [categorias, setCategorias] = useState([]);
   const [idOrigen, setIdOrigen] = useState('');
   const [origenes, setOrigenes] = useState([]);
+  const [idLaboratorio, setIdLaboratorio] = useState('');
+  const [laboratorios, setLaboratorios] = useState([]);
   const [resultados, setResultados] = useState(null);
   const [fechaGeneracion, setFechaGeneracion] = useState(null);
   const [fechaRefUsada, setFechaRefUsada] = useState(null);
@@ -66,6 +69,7 @@ export default function ReporteTestigosPage() {
   useEffect(() => {
     maestrosApi.listarCategoriasTestigo(true).then(setCategorias).catch(() => {});
     maestrosApi.listarOrigenesTestigo(true).then(setOrigenes).catch(() => {});
+    muestrasApi.listarLaboratorios(true).then(setLaboratorios).catch(() => {});
   }, []);
 
   // El origen no tiene filtro propio en el backend (igual que en TestigosPage)
@@ -85,6 +89,7 @@ export default function ReporteTestigosPage() {
         fechaRef: fechaRef || undefined,
         diasAnticipacion: diasAnticipacion !== '' ? Number(diasAnticipacion) : undefined,
         idCategoria: idCategoria || undefined,
+        idLaboratorio: idLaboratorio || undefined,
       });
       setResultados(data);
       setFechaGeneracion(new Date());
@@ -174,6 +179,16 @@ export default function ReporteTestigosPage() {
                 <option value="">Todos</option>
                 {origenes.map((o) => (
                   <option key={o.id_origen} value={o.id_origen}>{o.nombre}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="field" style={{ flex: 1, minWidth: 180 }}>
+              <label className="field-label" htmlFor="idLaboratorio">Laboratorio</label>
+              <select id="idLaboratorio" className="field-input" value={idLaboratorio} onChange={(e) => setIdLaboratorio(e.target.value)}>
+                <option value="">Todos</option>
+                {laboratorios.map((l) => (
+                  <option key={l.id_laboratorio} value={l.id_laboratorio}>{l.nombre}</option>
                 ))}
               </select>
             </div>

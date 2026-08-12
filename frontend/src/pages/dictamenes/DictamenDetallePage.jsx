@@ -161,7 +161,7 @@ export default function DictamenDetallePage() {
             <table className="data-table" style={{ marginBottom: 'var(--sp-3)' }}>
               <tbody>
                 <tr><td>Fecha de despacho</td><td style={{ textAlign: 'left' }}>{new Date(en.fecha_despacho).toLocaleString()}</td></tr>
-                <tr><td>N° remito</td><td style={{ textAlign: 'left' }}>{en.nro_remito || '—'}</td></tr>
+                <tr><td>N° remito</td><td style={{ textAlign: 'left' }}>{en.nro_remito || 'Sin remito generado'}</td></tr>
                 {en.testigos.length > 0 && (
                   <tr><td>Testigo(s)</td><td style={{ textAlign: 'left' }}>{en.testigos.map((t) => `${t.codigo} — ${t.nombre}`).join(', ')}</td></tr>
                 )}

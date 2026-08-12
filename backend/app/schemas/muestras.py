@@ -81,6 +81,10 @@ class MuestraResponse(BaseModel):
     usuario_muestreo_nombre: str
     fecha_muestreo: datetime
     observaciones: Optional[str] = None
+    # True cuando el envío se generó por adelantado desde la solicitud, antes
+    # de que el muestreador ejecute el muestreo físico -- fecha_muestreo es
+    # un placeholder hasta ese momento (ver POST .../orden-trabajo-digital).
+    datos_muestreo_pendientes: bool = False
 
 
 # ── Laboratorios ───────────────────────────────────────────────

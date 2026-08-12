@@ -16,6 +16,18 @@ class LoginResponse(BaseModel):
     apellido: str
     rol: str
     expira_en_minutos: int
+    # True si el admin marcó "forzar cambio de PIN" al crear el usuario o al
+    # resetearle el PIN -- el frontend debe redirigir obligatoriamente a
+    # Cambiar mi PIN y no permitir navegar a otra pantalla hasta completarlo.
+    requiere_cambio_pin: bool = False
+
+
+class CambiarPinRequest(BaseModel):
+    """Cambio de PIN voluntario (o forzado) del propio usuario logueado --
+    el usuario a modificar sale de la sesión (get_current_user), nunca de un
+    id recibido del cliente."""
+    pin_actual: str = Field(..., min_length=4, max_length=6)
+    pin_nuevo: str = Field(..., min_length=4, max_length=6, pattern=r"^\d+$")
 
 
 class UsuarioCreate(BaseModel):
@@ -26,6 +38,8 @@ class UsuarioCreate(BaseModel):
     rol: str = Field(..., pattern=r"^(muestreador|analista_qc|qa|admin)$")
     rol_ebr: Optional[str] = Field(None, pattern=r"^(operario|supervisor|qa|admin)$")
     activo_ebr: bool = True
+    # Tildado por defecto -- recomendación del manual del Administrador.
+    forzar_cambio_pin: bool = True
 
 
 class UsuarioUpdate(BaseModel):
@@ -38,6 +52,8 @@ class UsuarioUpdate(BaseModel):
 
 class UsuarioPinReset(BaseModel):
     pin: str = Field(..., min_length=4, max_length=6, pattern=r"^\d+$")
+    # Tildado por defecto -- recomendación del manual del Administrador.
+    forzar_cambio_pin: bool = True
 
 
 class UsuarioResponse(BaseModel):

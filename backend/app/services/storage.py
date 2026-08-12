@@ -63,6 +63,61 @@ def guardar_pdf_protocolo(upload_file: UploadFile, codigo_muestra: str) -> str:
     return _guardar_pdf(upload_file, "protocolos", nombre_archivo)
 
 
+_EXTENSIONES_PROTOCOLO_PROVEEDOR = {
+    "application/pdf": "pdf",
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/png": "png",
+}
+
+
+def guardar_protocolo_proveedor(upload_file: UploadFile, nro_solicitud: str) -> str:
+    """Protocolo que entrega el PROVEEDOR junto con el lote (foto o PDF),
+    adjuntado por QA al generar la solicitud de muestreo -- antes de que
+    exista ningún envío. No confundir con guardar_pdf_protocolo (protocolo
+    del laboratorio de análisis, ligado a un envío, solo PDF)."""
+    extension = _EXTENSIONES_PROTOCOLO_PROVEEDOR.get(upload_file.content_type)
+    if extension is None:
+        raise HTTPException(
+            status_code=400,
+            detail="El protocolo del proveedor debe ser una imagen (JPG/PNG) o un PDF",
+        )
+
+    contenido = upload_file.file.read()
+    if not contenido:
+        raise HTTPException(status_code=400, detail="El archivo está vacío")
+    if len(contenido) > MAX_PDF_SIZE_BYTES:
+        raise HTTPException(status_code=400, detail="El archivo no puede superar los 10 MB")
+
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    nombre_archivo = f"LIMS_{_sanitizar(nro_solicitud)}_PROTPROV_{timestamp}.{extension}"
+    return _guardar_bytes(contenido, "protocolos_proveedor", nombre_archivo)
+
+
+def guardar_documentacion_proveedor(upload_file: UploadFile, nro_solicitud: str) -> str:
+    """Documentación del proveedor (remito y/o factura combinados en un solo
+    archivo, foto o PDF) -- a diferencia del protocolo del proveedor, es
+    OPCIONAL y se puede adjuntar en el momento de crear la solicitud o
+    después, editándola (ver POST /{id_solicitud}/documentacion-proveedor).
+    Mismo criterio de validación de formato que guardar_protocolo_proveedor."""
+    extension = _EXTENSIONES_PROTOCOLO_PROVEEDOR.get(upload_file.content_type)
+    if extension is None:
+        raise HTTPException(
+            status_code=400,
+            detail="La documentación del proveedor debe ser una imagen (JPG/PNG) o un PDF",
+        )
+
+    contenido = upload_file.file.read()
+    if not contenido:
+        raise HTTPException(status_code=400, detail="El archivo está vacío")
+    if len(contenido) > MAX_PDF_SIZE_BYTES:
+        raise HTTPException(status_code=400, detail="El archivo no puede superar los 10 MB")
+
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    nombre_archivo = f"LIMS_{_sanitizar(nro_solicitud)}_DOCPROV_{timestamp}.{extension}"
+    return _guardar_bytes(contenido, "documentacion_proveedor", nombre_archivo)
+
+
 def guardar_pdf_remito(contenido: bytes, nro_remito_interno: str) -> str:
     """Remito de envío generado por el sistema (REQ-ENV-004)."""
     nombre_archivo = f"LIMSS_{_sanitizar(nro_remito_interno)}.pdf"

@@ -78,7 +78,15 @@ const ENSAYO_FORM_VACIO = {
   obligatorio: true,
   requerido_por_defecto: true,
   id_laboratorio: '',
+  analito: '',
 };
+
+// "Valoración — Trimetoprima" cuando el mismo ensayo del catálogo se repite
+// en la especificación con distinto analito; si no tiene analito cargado,
+// se muestra tal cual (sin guion ni espacio de más).
+function nombreConAnalito(en) {
+  return en.analito ? `${en.nombre_ensayo} — ${en.analito}` : en.nombre_ensayo;
+}
 
 export default function EspecificacionDetallePage() {
   const { id } = useParams();
@@ -227,6 +235,7 @@ export default function EspecificacionDetallePage() {
       obligatorio: en.obligatorio,
       requerido_por_defecto: en.requerido_por_defecto,
       id_laboratorio: en.id_laboratorio ?? '',
+      analito: en.analito || '',
     });
     setErrorEnsayo('');
     setModalAbierto(true);
@@ -276,6 +285,7 @@ export default function EspecificacionDetallePage() {
       obligatorio: formEnsayo.obligatorio,
       requerido_por_defecto: formEnsayo.requerido_por_defecto,
       id_laboratorio: formEnsayo.id_laboratorio !== '' ? Number(formEnsayo.id_laboratorio) : null,
+      analito: formEnsayo.analito.trim() || null,
     };
 
     setGuardandoEnsayo(true);
@@ -296,7 +306,7 @@ export default function EspecificacionDetallePage() {
   }
 
   async function handleEliminarEnsayo(en) {
-    if (!window.confirm(`¿Quitar el ensayo "${en.nombre_ensayo}" de esta especificación?`)) return;
+    if (!window.confirm(`¿Quitar el ensayo "${nombreConAnalito(en)}" de esta especificación?`)) return;
     try {
       await maestrosApi.eliminarEnsayoEspecificacion(id, en.id_espec_ensayo);
       await cargarEnsayos();
@@ -561,7 +571,7 @@ export default function EspecificacionDetallePage() {
             {ensayos.map((en) => (
               <tr key={en.id_espec_ensayo}>
                 <td style={{ textAlign: 'center' }}>{en.orden}</td>
-                <td>{en.nombre_ensayo}</td>
+                <td>{nombreConAnalito(en)}</td>
                 <td>{en.metodologia || '—'}</td>
                 <td>
                   {en.tipo_dato === 'numerico' ? (
@@ -656,7 +666,7 @@ export default function EspecificacionDetallePage() {
           <form
             onSubmit={handleGuardarEnsayo}
             className="card"
-            style={{ width: '90%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto' }}
+            style={{ width: '90%', maxWidth: 640, maxHeight: '90vh', overflowY: 'auto' }}
             onClick={(e) => e.stopPropagation()}
           >
             <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>
@@ -717,41 +727,41 @@ export default function EspecificacionDetallePage() {
                   )}
                 </div>
 
-                <div className="field">
-                  <label className="field-label">Orden</label>
-                  <input
-                    className="field-input"
-                    type="number"
-                    value={formEnsayo.orden}
-                    onChange={(e) => setFormEnsayo((prev) => ({ ...prev, orden: e.target.value }))}
-                  />
-                </div>
-
-                <div className="field">
-                  <label className="field-label">Metodología</label>
-                  <input
-                    className="field-input"
-                    placeholder="Ej. USP, PE, Interna M-04"
-                    value={formEnsayo.metodologia}
-                    onChange={(e) => setFormEnsayo((prev) => ({ ...prev, metodologia: e.target.value }))}
-                  />
-                </div>
-
-                <div className="field">
-                  <label className="field-label">Tipo de dato</label>
-                  <select
-                    className="field-input"
-                    value={formEnsayo.tipo_dato}
-                    onChange={(e) => setFormEnsayo((prev) => ({ ...prev, tipo_dato: e.target.value }))}
-                  >
-                    <option value="numerico">Numérico</option>
-                    <option value="cualitativo">Cualitativo</option>
-                  </select>
+                <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
+                  <div className="field" style={{ flex: '2 1 220px' }}>
+                    <label className="field-label">Analito (opcional)</label>
+                    <input
+                      className="field-input"
+                      placeholder='Ej. "Trimetoprima" -- para diferenciar si este ensayo se repite'
+                      value={formEnsayo.analito}
+                      onChange={(e) => setFormEnsayo((prev) => ({ ...prev, analito: e.target.value }))}
+                    />
+                  </div>
+                  <div className="field" style={{ flex: '1 1 100px' }}>
+                    <label className="field-label">Orden</label>
+                    <input
+                      className="field-input"
+                      type="number"
+                      value={formEnsayo.orden}
+                      onChange={(e) => setFormEnsayo((prev) => ({ ...prev, orden: e.target.value }))}
+                    />
+                  </div>
+                  <div className="field" style={{ flex: '1 1 160px' }}>
+                    <label className="field-label">Tipo de dato</label>
+                    <select
+                      className="field-input"
+                      value={formEnsayo.tipo_dato}
+                      onChange={(e) => setFormEnsayo((prev) => ({ ...prev, tipo_dato: e.target.value }))}
+                    >
+                      <option value="numerico">Numérico</option>
+                      <option value="cualitativo">Cualitativo</option>
+                    </select>
+                  </div>
                 </div>
 
                 {formEnsayo.tipo_dato === 'numerico' ? (
-                  <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
-                    <div className="field" style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
+                    <div className="field" style={{ flex: '1 1 160px' }}>
                       <label className="field-label">Límite inferior</label>
                       <input
                         className="field-input"
@@ -761,7 +771,7 @@ export default function EspecificacionDetallePage() {
                         onChange={(e) => setFormEnsayo((prev) => ({ ...prev, limite_inferior: e.target.value }))}
                       />
                     </div>
-                    <div className="field" style={{ flex: 1 }}>
+                    <div className="field" style={{ flex: '1 1 160px' }}>
                       <label className="field-label">Límite superior</label>
                       <input
                         className="field-input"
@@ -771,7 +781,7 @@ export default function EspecificacionDetallePage() {
                         onChange={(e) => setFormEnsayo((prev) => ({ ...prev, limite_superior: e.target.value }))}
                       />
                     </div>
-                    <div className="field" style={{ flex: 1 }}>
+                    <div className="field" style={{ flex: '1 1 160px' }}>
                       <label className="field-label">Unidad</label>
                       <input
                         className="field-input"
@@ -792,6 +802,16 @@ export default function EspecificacionDetallePage() {
                     />
                   </div>
                 )}
+
+                <div className="field">
+                  <label className="field-label">Metodología</label>
+                  <input
+                    className="field-input"
+                    placeholder="Ej. USP, PE, Interna M-04"
+                    value={formEnsayo.metodologia}
+                    onChange={(e) => setFormEnsayo((prev) => ({ ...prev, metodologia: e.target.value }))}
+                  />
+                </div>
 
                 <div className="field">
                   <label className="field-label">Especificación (texto libre, opcional)</label>
@@ -817,14 +837,24 @@ export default function EspecificacionDetallePage() {
                   </select>
                 </div>
 
-                <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', marginTop: 'var(--sp-2)', marginBottom: 'var(--sp-3)' }}>
-                  <input
-                    type="checkbox"
-                    checked={formEnsayo.requerido_por_defecto}
-                    onChange={(e) => setFormEnsayo((prev) => ({ ...prev, requerido_por_defecto: e.target.checked }))}
-                  />
-                  Requerido por defecto al confirmar el envío
-                </label>
+                <div style={{ display: 'flex', gap: 'var(--sp-4)', flexWrap: 'wrap', marginTop: 'var(--sp-2)', marginBottom: 'var(--sp-3)' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}>
+                    <input
+                      type="checkbox"
+                      checked={formEnsayo.obligatorio}
+                      onChange={(e) => setFormEnsayo((prev) => ({ ...prev, obligatorio: e.target.checked }))}
+                    />
+                    Obligatorio
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}>
+                    <input
+                      type="checkbox"
+                      checked={formEnsayo.requerido_por_defecto}
+                      onChange={(e) => setFormEnsayo((prev) => ({ ...prev, requerido_por_defecto: e.target.checked }))}
+                    />
+                    Requerido por defecto al confirmar el envío
+                  </label>
+                </div>
               </>
             )}
 

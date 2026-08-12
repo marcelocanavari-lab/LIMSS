@@ -14,8 +14,8 @@ from app.core.security import (
 )
 from app.db.connections import limss_db
 from app.schemas.auth import (
-    LoginRequest, LoginResponse, UsuarioCreate, UsuarioEbrResponse, UsuarioPinReset,
-    UsuarioResponse, UsuarioUpdate,
+    CambiarPinRequest, LoginRequest, LoginResponse, UsuarioCreate, UsuarioEbrResponse,
+    UsuarioPinReset, UsuarioResponse, UsuarioUpdate,
 )
 from app.services import audit
 
@@ -43,7 +43,7 @@ def login(body: LoginRequest, request: Request, conn: pyodbc.Connection = Depend
     cursor = conn.cursor()
     cursor.execute(
         """
-        SELECT id_usuario, codigo, nombre, apellido, pin_hash, rol, activo
+        SELECT id_usuario, codigo, nombre, apellido, pin_hash, rol, activo, debe_cambiar_pin
         FROM lims_usuarios
         WHERE codigo = ? AND activo = 1
         """,
@@ -116,6 +116,7 @@ def login(body: LoginRequest, request: Request, conn: pyodbc.Connection = Depend
         apellido=row.apellido,
         rol=row.rol,
         expira_en_minutos=expire_minutes,
+        requiere_cambio_pin=bool(row.debe_cambiar_pin),
     )
 
 
@@ -152,7 +153,44 @@ def me(user: dict = Depends(get_current_user)):
         "nombre": user["nombre"],
         "apellido": user["apellido"],
         "rol": user["rol"],
+        "debe_cambiar_pin": user["debe_cambiar_pin"],
     }
+
+
+@router.post("/cambiar-pin", status_code=204)
+def cambiar_pin(
+    body: CambiarPinRequest,
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Cambio de PIN del propio usuario logueado -- voluntario en cualquier
+    momento, u obligatorio si debe_cambiar_pin quedó en 1 (el frontend lo
+    fuerza redirigiendo a esta pantalla y bloqueando el resto de la app
+    hasta que se complete). El usuario a modificar sale de la sesión, nunca
+    de un id que mande el cliente."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT pin_hash FROM lims_usuarios WHERE id_usuario = ?", user["id_usuario"])
+    row = cursor.fetchone()
+    if not row or not verify_pin(body.pin_actual, row.pin_hash):
+        # 400, no 401: acá el usuario ya está autenticado (token de sesión
+        # válido) -- un 401 dispararía el manejo global del cliente que
+        # limpia el token y fuerza un nuevo login, tratando esto como si la
+        # sesión hubiera expirado en vez de un dato mal ingresado.
+        raise HTTPException(status_code=400, detail="El PIN actual no es correcto")
+
+    pin_hash = hash_pin(body.pin_nuevo)
+    cursor.execute(
+        "UPDATE lims_usuarios SET pin_hash = ?, debe_cambiar_pin = 0 WHERE id_usuario = ?",
+        pin_hash, user["id_usuario"],
+    )
+
+    audit.registrar(
+        conn,
+        entidad="usuario",
+        accion="cambiar_pin_propio",
+        id_usuario=user["id_usuario"],
+        id_entidad=user["id_usuario"],
+    )
 
 
 @router.post("/usuarios", response_model=UsuarioResponse, status_code=201)
@@ -179,8 +217,8 @@ def crear_usuario(
     cursor.execute(
         """
         INSERT INTO lims_usuarios
-            (codigo, nombre, apellido, pin_hash, rol, rol_ebr, activo_ebr)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+            (codigo, nombre, apellido, pin_hash, rol, rol_ebr, activo_ebr, debe_cambiar_pin)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         body.codigo,
         body.nombre,
@@ -189,6 +227,7 @@ def crear_usuario(
         body.rol,
         body.rol_ebr,
         activo_ebr,
+        1 if body.forzar_cambio_pin else 0,
     )
     cursor.execute("SELECT @@IDENTITY AS id")
     id_nuevo = int(cursor.fetchone().id)
@@ -359,8 +398,8 @@ def resetear_pin_usuario(
 
     pin_hash = hash_pin(body.pin)
     cursor.execute(
-        "UPDATE lims_usuarios SET pin_hash = ? WHERE id_usuario = ?",
-        pin_hash, id_usuario,
+        "UPDATE lims_usuarios SET pin_hash = ?, debe_cambiar_pin = ? WHERE id_usuario = ?",
+        pin_hash, 1 if body.forzar_cambio_pin else 0, id_usuario,
     )
 
     audit.registrar(
@@ -369,4 +408,5 @@ def resetear_pin_usuario(
         accion="resetear_pin",
         id_usuario=user["id_usuario"],
         id_entidad=id_usuario,
+        valor_nuevo={"forzar_cambio_pin": body.forzar_cambio_pin},
     )

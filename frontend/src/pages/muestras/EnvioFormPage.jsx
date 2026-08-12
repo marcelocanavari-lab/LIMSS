@@ -31,6 +31,9 @@ export default function EnvioFormPage() {
   const [transportista, setTransportista] = useState('');
   const [guardando, setGuardando] = useState(false);
 
+  const [advertenciasStock, setAdvertenciasStock] = useState([]);
+  const [mostrarAdvertencias, setMostrarAdvertencias] = useState(false);
+
   useEffect(() => {
     Promise.all([muestrasApi.listarLaboratorios(true), maestrosApi.listarTestigos({ activo: true }), muestrasApi.obtenerMuestra(id)])
       .then(([labs, tests, muestra]) => {
@@ -106,7 +109,33 @@ export default function EnvioFormPage() {
 
   const sinEnsayosLab = !!idLaboratorio && !cargandoEnsayos && ensayosEspec.length === 0;
 
-  async function handleSubmit(e) {
+  // Advertencias no bloqueantes sobre el stock de los testigos elegidos --
+  // se calculan con los datos ya cargados en pantalla (laboratorios[] y
+  // stock_bajo ya vienen en la lista de testigos), sin pegarle de nuevo al
+  // backend.
+  function calcularAdvertenciasStock() {
+    const laboratorioNombre = laboratorios.find((l) => l.id_laboratorio === Number(idLaboratorio))?.nombre || 'este laboratorio';
+    const advertencias = [];
+    for (const idTestigo of idsTestigoElegidos) {
+      const t = detalleTestigo(idTestigo);
+      if (!t) continue;
+
+      const asignacion = (t.laboratorios || []).find((l) => l.id_laboratorio === Number(idLaboratorio));
+      if (!asignacion || asignacion.consumo_estimado == null) {
+        advertencias.push(
+          `El testigo ${t.nombre} no tiene consumo estimado configurado para ${laboratorioNombre} — el stock no se descontará automáticamente al confirmar este envío.`
+        );
+      }
+      if (t.stock_bajo) {
+        advertencias.push(
+          `El testigo ${t.nombre} está en stock crítico (${t.stock_actual} ${t.unidad_medida || ''}, mínimo ${t.stock_minimo}).`
+        );
+      }
+    }
+    return advertencias;
+  }
+
+  function handleSubmit(e) {
     e.preventDefault();
     setError('');
 
@@ -127,6 +156,18 @@ export default function EnvioFormPage() {
       return;
     }
 
+    const advertencias = calcularAdvertenciasStock();
+    if (advertencias.length > 0) {
+      setAdvertenciasStock(advertencias);
+      setMostrarAdvertencias(true);
+      return;
+    }
+
+    confirmarEnvioReal();
+  }
+
+  async function confirmarEnvioReal() {
+    setMostrarAdvertencias(false);
     setGuardando(true);
     try {
       const resultado = await muestrasApi.confirmarEnvio(id, {
@@ -289,6 +330,37 @@ export default function EnvioFormPage() {
           </button>
         </form>
       </div>
+
+      {mostrarAdvertencias && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 'var(--sp-4)',
+          }}
+          onClick={() => setMostrarAdvertencias(false)}
+        >
+          <div className="card" style={{ width: '90%', maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Antes de confirmar</h2>
+
+            {advertenciasStock.map((texto, i) => (
+              <div key={i} className="alert alert-warn" style={{ marginBottom: 'var(--sp-3)' }}>{texto}</div>
+            ))}
+
+            <p style={{ color: 'var(--ink-2)', fontSize: 'var(--fs-sm)', marginBottom: 'var(--sp-4)' }}>
+              Podés continuar igual y generar el remito, o volver y revisar los testigos.
+            </p>
+
+            <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+              <button type="button" className="btn btn-ghost" onClick={() => setMostrarAdvertencias(false)} disabled={guardando}>
+                Volver
+              </button>
+              <button type="button" className="btn btn-primary" onClick={confirmarEnvioReal} disabled={guardando}>
+                {guardando ? <span className="spinner" /> : 'Continuar y confirmar envío'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

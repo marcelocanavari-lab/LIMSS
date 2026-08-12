@@ -44,6 +44,13 @@ export default function TopBar({ titulo, subtitulo, onBack }) {
         <button
           className="btn btn-ghost"
           style={{ padding: '0 var(--sp-3)', minHeight: 40 }}
+          onClick={() => navigate('/cambiar-pin')}
+        >
+          Cambiar PIN
+        </button>
+        <button
+          className="btn btn-ghost"
+          style={{ padding: '0 var(--sp-3)', minHeight: 40 }}
           onClick={handleLogout}
         >
           Salir

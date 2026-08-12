@@ -55,6 +55,10 @@ export default function SolicitudesMuestreoPage() {
   const [searchParams] = useSearchParams();
   const puedeCrear = ['qa', 'admin'].includes(user?.rol);
   const puedeAnular = ['qa', 'admin'].includes(user?.rol);
+  // Generar envío por adelantado es tarea de quien gestiona envíos (mismo
+  // criterio que EnvioFormPage/confirmar_envio), no solo de quien crea/anula
+  // solicitudes -- analista_qc también puede.
+  const puedeGenerarEnvio = ['analista_qc', 'qa', 'admin'].includes(user?.rol);
 
   const estadoInicial = searchParams.get('estado');
   const [estado, setEstado] = useState(
@@ -65,6 +69,7 @@ export default function SolicitudesMuestreoPage() {
   const [solicitudes, setSolicitudes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [generandoEnvioId, setGenerandoEnvioId] = useState(null);
 
   const [modalAbierto, setModalAbierto] = useState(false);
 
@@ -86,6 +91,11 @@ export default function SolicitudesMuestreoPage() {
   const [errorForm, setErrorForm] = useState('');
   const [guardando, setGuardando] = useState(false);
 
+  // Fecha de vencimiento: se precarga con el valor del ERP (VENCOM) al
+  // buscar el IR, pero queda editable -- el dato del ERP puede estar mal o
+  // desactualizado.
+  const [fechaVencimiento, setFechaVencimiento] = useState('');
+
   // Datos manuales del ingreso (no vienen del ERP -- ver P_CC002-1/2)
   const [loteProveedor, setLoteProveedor] = useState('');
   const [fechaReanalisis, setFechaReanalisis] = useState('');
@@ -93,12 +103,22 @@ export default function SolicitudesMuestreoPage() {
   const [nroBultos, setNroBultos] = useState('');
   const [metodologiaAnalisis, setMetodologiaAnalisis] = useState('');
   const [fabricante, setFabricante] = useState('');
+  const [protocoloProveedor, setProtocoloProveedor] = useState(null);
+  // A diferencia del protocolo, es opcional -- se puede omitir acá y
+  // adjuntar después desde el listado (ver abrirAdjuntarDocumentacion).
+  const [documentacionProveedor, setDocumentacionProveedor] = useState(null);
 
   // ── Modal: anular ────────────────────────────────────────────────
   const [anulandoId, setAnulandoId] = useState(null);
   const [motivoAnular, setMotivoAnular] = useState('');
   const [errorAnular, setErrorAnular] = useState('');
   const [guardandoAnular, setGuardandoAnular] = useState(false);
+
+  // ── Modal: adjuntar documentación del proveedor (post-creación) ──
+  const [adjuntandoDocId, setAdjuntandoDocId] = useState(null);
+  const [archivoDocumentacion, setArchivoDocumentacion] = useState(null);
+  const [errorDoc, setErrorDoc] = useState('');
+  const [guardandoDoc, setGuardandoDoc] = useState(false);
 
   function cargar() {
     setLoading(true);
@@ -134,12 +154,15 @@ export default function SolicitudesMuestreoPage() {
     setAdvertenciaEspec('');
     setAdvertenciaLink(null);
     setErrorForm('');
+    setFechaVencimiento('');
     setLoteProveedor('');
     setFechaReanalisis('');
     setPaisOrigen('');
     setNroBultos('');
     setMetodologiaAnalisis('');
     setFabricante('');
+    setProtocoloProveedor(null);
+    setDocumentacionProveedor(null);
   }
 
   function abrirModal() {
@@ -209,6 +232,14 @@ export default function SolicitudesMuestreoPage() {
       confirmadasIniciales[m.id] = { confirmada: m.genera_etiqueta, cantidad_real: String(m.cantidad) };
     });
     setMuestrasConfirmadas(confirmadasIniciales);
+
+    // Preselecciona el laboratorio de análisis con el que ya está configurado
+    // en la especificación (lims_especificacion_muestras, tipo_muestra =
+    // 'analisis') -- el usuario lo puede cambiar igual, es solo un default.
+    const muestraAnalisis = muestrasEspec.find((m) => m.tipo_muestra === 'analisis');
+    if (muestraAnalisis?.id_laboratorio) {
+      setIdLaboratorio(String(muestraAnalisis.id_laboratorio));
+    }
   }
 
   function toggleMuestraConfirmada(idMuestra) {
@@ -240,6 +271,7 @@ export default function SolicitudesMuestreoPage() {
       const data = await muestrasApi.buscarMaterial('materia_prima', nroIr.trim());
       if (data.length === 1) {
         setMaterial(data[0]);
+        setFechaVencimiento(data[0].fecha_vencimiento || '');
         await cargarEspecificacionDeMaterial(data[0]);
       } else {
         setLineasMaterial(data);
@@ -253,6 +285,7 @@ export default function SolicitudesMuestreoPage() {
 
   async function elegirLinea(linea) {
     setMaterial(linea);
+    setFechaVencimiento(linea.fecha_vencimiento || '');
     setLineasMaterial(null);
     await cargarEspecificacionDeMaterial(linea);
   }
@@ -275,6 +308,19 @@ export default function SolicitudesMuestreoPage() {
       setErrorForm('El lote del proveedor es obligatorio');
       return;
     }
+    if (!protocoloProveedor) {
+      setErrorForm('Adjuntá el protocolo del proveedor (foto o PDF) para generar la solicitud');
+      return;
+    }
+    const tiposValidos = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+    if (!tiposValidos.includes(protocoloProveedor.type)) {
+      setErrorForm('El protocolo del proveedor debe ser una imagen (JPG/PNG) o un PDF');
+      return;
+    }
+    if (documentacionProveedor && !tiposValidos.includes(documentacionProveedor.type)) {
+      setErrorForm('La documentación del proveedor debe ser una imagen (JPG/PNG) o un PDF');
+      return;
+    }
     setErrorForm('');
     setGuardando(true);
     try {
@@ -286,6 +332,7 @@ export default function SolicitudesMuestreoPage() {
         proveedor_codigo: material.proveedor_codigo,
         proveedor_nombre: material.proveedor,
         lote_proveedor: loteProveedor.trim(),
+        fecha_vencimiento: fechaVencimiento || null,
         fecha_reanalisis: fechaReanalisis || null,
         pais_origen: paisOrigen.trim() || null,
         nro_bultos: nroBultos !== '' ? Number(nroBultos) : null,
@@ -296,7 +343,7 @@ export default function SolicitudesMuestreoPage() {
           cantidad_real: Number(muestrasConfirmadas[m.id]?.cantidad_real || m.cantidad),
           confirmada: !!muestrasConfirmadas[m.id]?.confirmada,
         })),
-      });
+      }, protocoloProveedor, documentacionProveedor);
       cerrarModal();
       cargar();
       try {
@@ -316,6 +363,70 @@ export default function SolicitudesMuestreoPage() {
       await abrirPdfConAuth(`/api/solicitudes-muestreo/${s.id_solicitud}/etiquetas`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudieron descargar las etiquetas');
+    }
+  }
+
+  async function generarEnvio(s) {
+    setError('');
+    setGenerandoEnvioId(s.id_solicitud);
+    try {
+      const resp = await solicitudesMuestreoApi.generarEnvioAnticipado(s.id_solicitud);
+      // La muestra se crea con datos_muestreo_pendientes=true -- se sigue con
+      // el flujo normal de Envío de Muestras sobre esa muestra recién creada.
+      navigate(`/muestras/${resp.id_muestra}/envio`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo generar el envío');
+      setGenerandoEnvioId(null);
+    }
+  }
+
+  async function verProtocoloProveedor(s) {
+    try {
+      await abrirPdfConAuth(`/api/solicitudes-muestreo/${s.id_solicitud}/protocolo-proveedor`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo abrir el protocolo del proveedor');
+    }
+  }
+
+  async function verDocumentacionProveedor(s) {
+    try {
+      await abrirPdfConAuth(`/api/solicitudes-muestreo/${s.id_solicitud}/documentacion-proveedor`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo abrir la documentación del proveedor');
+    }
+  }
+
+  function abrirAdjuntarDocumentacion(s) {
+    setAdjuntandoDocId(s.id_solicitud);
+    setArchivoDocumentacion(null);
+    setErrorDoc('');
+  }
+
+  function cerrarAdjuntarDocumentacion() {
+    setAdjuntandoDocId(null);
+  }
+
+  async function handleAdjuntarDocumentacion(e) {
+    e.preventDefault();
+    if (!archivoDocumentacion) {
+      setErrorDoc('Elegí un archivo (foto o PDF)');
+      return;
+    }
+    const tiposValidos = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+    if (!tiposValidos.includes(archivoDocumentacion.type)) {
+      setErrorDoc('El archivo debe ser una imagen (JPG/PNG) o un PDF');
+      return;
+    }
+    setErrorDoc('');
+    setGuardandoDoc(true);
+    try {
+      await solicitudesMuestreoApi.subirDocumentacionProveedor(adjuntandoDocId, archivoDocumentacion);
+      cerrarAdjuntarDocumentacion();
+      cargar();
+    } catch (err) {
+      setErrorDoc(err instanceof ApiError ? err.message : 'No se pudo adjuntar el archivo');
+    } finally {
+      setGuardandoDoc(false);
     }
   }
 
@@ -387,7 +498,12 @@ export default function SolicitudesMuestreoPage() {
             <span>No hay solicitudes de muestreo con estos filtros</span>
           </div>
         ) : (
-          <div className="table-scroll">
+          // overflowX: 'auto' además del scroll vertical propio de .table-scroll --
+          // red de seguridad para la fila con más botones de Acciones (hasta 6
+          // según el estado): ya achicados y en una sola línea, si aun así no
+          // entran en el ancho visible, la tabla scrollea horizontal en vez de
+          // partir la fila a una segunda línea.
+          <div className="table-scroll" style={{ overflowX: 'auto' }}>
             <table className="data-table data-table-compact">
               <thead>
                 <tr>
@@ -409,10 +525,47 @@ export default function SolicitudesMuestreoPage() {
                     <td>{s.erp_DESART} <span style={{ color: 'var(--ink-3)' }}>({s.erp_CODART.trim()})</span></td>
                     <td>{s.laboratorio_nombre}</td>
                     <td>{s.muestreador_nombre || '—'}</td>
-                    <td><span className={`badge ${BADGE_ESTADO[s.estado] || 'badge-neutral'}`}>{labelEstado(s.estado)}</span></td>
+                    <td>
+                      <span className={`badge ${BADGE_ESTADO[s.estado] || 'badge-neutral'}`}>{labelEstado(s.estado)}</span>
+                      {s.estado === 'pendiente' && s.id_muestra && (
+                        <span
+                          className="badge badge-info"
+                          style={{ marginLeft: 4 }}
+                          title="El envío ya se generó por adelantado -- todavía falta ejecutar el muestreo físico"
+                        >
+                          Envío generado
+                        </span>
+                      )}
+                    </td>
                     <td>{formatFecha(s.fecha_solicitud)}</td>
-                    <td style={{ display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap' }}>
+                    <td className="acciones-compactas">
                       <button className="btn btn-ghost" onClick={() => verEtiquetas(s)}>Etiquetas</button>
+                      {s.protocolo_proveedor_nombre_original && (
+                        <button className="btn btn-ghost" onClick={() => verProtocoloProveedor(s)}>Protocolo proveedor</button>
+                      )}
+                      {s.documentacion_proveedor_nombre_original ? (
+                        <button className="btn btn-ghost" onClick={() => verDocumentacionProveedor(s)}>Documentación proveedor</button>
+                      ) : (
+                        puedeCrear && (
+                          <button
+                            className="btn btn-ghost"
+                            style={{ color: 'var(--ink-3)' }}
+                            title="Documentación del proveedor (remito y/o factura) todavía no adjuntada"
+                            onClick={() => abrirAdjuntarDocumentacion(s)}
+                          >
+                            + Documentación proveedor
+                          </button>
+                        )
+                      )}
+                      {s.estado === 'pendiente' && !s.id_muestra && puedeGenerarEnvio && (
+                        <button
+                          className="btn btn-ghost"
+                          onClick={() => generarEnvio(s)}
+                          disabled={generandoEnvioId === s.id_solicitud}
+                        >
+                          {generandoEnvioId === s.id_solicitud ? <span className="spinner" /> : 'Generar envío'}
+                        </button>
+                      )}
                       {s.estado === 'pendiente' && (
                         <button
                           className="btn btn-ghost"
@@ -501,11 +654,21 @@ export default function SolicitudesMuestreoPage() {
                 </div>
 
                 <div className="card" style={{ background: 'var(--surf-2)', marginBottom: 'var(--sp-3)' }}>
-                  <div style={{ fontSize: 'var(--fs-sm)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--sp-2)' }}>
+                  <div style={{ fontSize: 'var(--fs-sm)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--sp-2)', alignItems: 'center' }}>
                     <span>Proveedor según ERP (IR): <strong>{material.proveedor_codigo ? `${material.proveedor_codigo} - ${material.proveedor}` : '—'}</strong></span>
                     <span>Cantidad ingresada: <strong>{material.cantidad_ingresada != null ? `${material.cantidad_ingresada} ${material.unidad || ''}` : '—'}</strong></span>
                     <span>Fecha de ingreso: <strong>{formatFechaSimple(material.fecha_ingreso)}</strong></span>
-                    <span>Fecha de vencimiento: <strong>{formatFechaSimple(material.fecha_vencimiento)}</strong></span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}>
+                      Fecha de vencimiento:
+                      <input
+                        className="field-input"
+                        type="date"
+                        style={{ maxWidth: 160 }}
+                        value={fechaVencimiento}
+                        onChange={(e) => setFechaVencimiento(e.target.value)}
+                        title="Precargada desde el ERP -- se puede corregir si el dato está mal o desactualizado"
+                      />
+                    </span>
                   </div>
                 </div>
               </>
@@ -635,6 +798,36 @@ export default function SolicitudesMuestreoPage() {
                   </div>
                 </div>
 
+                <div className="field">
+                  <label className="field-label">Protocolo del proveedor (foto o PDF) *</label>
+                  <input
+                    className="field-input"
+                    type="file"
+                    accept="image/*,application/pdf"
+                    capture="environment"
+                    onChange={(e) => setProtocoloProveedor(e.target.files?.[0] || null)}
+                    disabled={guardando}
+                  />
+                  {protocoloProveedor && (
+                    <span style={{ fontSize: 'var(--fs-sm)', color: 'var(--ink-3)' }}>{protocoloProveedor.name}</span>
+                  )}
+                </div>
+
+                <div className="field">
+                  <label className="field-label">Documentación del proveedor -- remito y/o factura (opcional)</label>
+                  <input
+                    className="field-input"
+                    type="file"
+                    accept="image/*,application/pdf"
+                    capture="environment"
+                    onChange={(e) => setDocumentacionProveedor(e.target.files?.[0] || null)}
+                    disabled={guardando}
+                  />
+                  <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--ink-3)' }}>
+                    {documentacionProveedor ? documentacionProveedor.name : 'Se puede adjuntar ahora o más tarde desde el listado.'}
+                  </span>
+                </div>
+
                 <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
                   <div className="field" style={{ flex: 1 }}>
                     <label className="field-label">País de origen (opcional)</label>
@@ -697,6 +890,7 @@ export default function SolicitudesMuestreoPage() {
                 disabled={
                   guardando || !especificacion
                   || !idLaboratorio || !idMuestreador || !material?.proveedor_codigo || !loteProveedor.trim()
+                  || !protocoloProveedor
                 }
               >
                 {guardando ? <span className="spinner" /> : 'Generar solicitud'}
@@ -736,6 +930,47 @@ export default function SolicitudesMuestreoPage() {
               <button type="button" className="btn btn-ghost" onClick={cerrarAnular} disabled={guardandoAnular}>Cancelar</button>
               <button type="submit" className="btn btn-primary" disabled={guardandoAnular}>
                 {guardandoAnular ? <span className="spinner" /> : 'Anular'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {adjuntandoDocId && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 'var(--sp-4)',
+          }}
+          onClick={cerrarAdjuntarDocumentacion}
+        >
+          <form
+            onSubmit={handleAdjuntarDocumentacion}
+            className="card"
+            style={{ width: '90%', maxWidth: 400 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Documentación del proveedor</h2>
+            <p style={{ color: 'var(--ink-2)', fontSize: 'var(--fs-sm)', marginBottom: 'var(--sp-3)' }}>
+              Remito y/o factura del proveedor (un solo archivo, foto o PDF).
+            </p>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label className="field-label">Archivo</label>
+              <input
+                className="field-input"
+                type="file"
+                accept="image/*,application/pdf"
+                capture="environment"
+                onChange={(e) => setArchivoDocumentacion(e.target.files?.[0] || null)}
+                disabled={guardandoDoc}
+                autoFocus
+              />
+            </div>
+            {errorDoc && <div className="alert alert-danger" style={{ marginTop: 'var(--sp-3)' }}>{errorDoc}</div>}
+            <div style={{ display: 'flex', gap: 'var(--sp-3)', marginTop: 'var(--sp-4)' }}>
+              <button type="button" className="btn btn-ghost" onClick={cerrarAdjuntarDocumentacion} disabled={guardandoDoc}>Cancelar</button>
+              <button type="submit" className="btn btn-primary" disabled={guardandoDoc}>
+                {guardandoDoc ? <span className="spinner" /> : 'Adjuntar'}
               </button>
             </div>
           </form>

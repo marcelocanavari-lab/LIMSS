@@ -12,13 +12,46 @@ const CAMPO_FISICO_VACIO = {
   observaciones_muestreo: '', nro_bultos_muestreados: '',
 };
 
+// Inspección visual del contenedor al tomar la muestra -- Cumple/No cumple
+// en vez de texto libre. El valor que viaja al backend sigue siendo el
+// string "Cumple" / "No cumple" en el mismo campo VARCHAR de siempre (sin
+// cambio de modelo de datos), así que un muestreo viejo con texto libre
+// cargado (ej. "Correcto") se sigue mostrando tal cual, solo que ningún
+// botón queda marcado como seleccionado para ese valor.
+function CampoCumple({ label, valor, onChange, disabled }) {
+  return (
+    <div className="field" style={{ flex: '1 1 200px' }}>
+      <label className="field-label">{label}</label>
+      <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          style={valor === 'Cumple' ? { background: 'var(--ok)', borderColor: 'var(--ok)', color: '#fff' } : undefined}
+          onClick={() => onChange('Cumple')}
+          disabled={disabled}
+        >
+          Cumple
+        </button>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          style={valor === 'No cumple' ? { background: 'var(--danger)', borderColor: 'var(--danger)', color: '#fff' } : undefined}
+          onClick={() => onChange('No cumple')}
+          disabled={disabled}
+        >
+          No cumple
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function CargaResultadosOrdenTrabajoPage() {
   const { idSolicitud } = useParams();
   const navigate = useNavigate();
 
   const [datos, setDatos] = useState(null);
   const [camposFisicos, setCamposFisicos] = useState(CAMPO_FISICO_VACIO);
-  const [valoresEnsayo, setValoresEnsayo] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
@@ -47,14 +80,6 @@ export default function CargaResultadosOrdenTrabajoPage() {
           observaciones_muestreo: df.observaciones_muestreo || '',
           nro_bultos_muestreados: df.nro_bultos_muestreados ?? '',
         });
-        const iniciales = {};
-        data.ensayos.forEach((e) => {
-          iniciales[e.id_espec_ensayo] = {
-            valor_numerico: e.valor_numerico ?? '',
-            valor_cualitativo: e.valor_cualitativo ?? '',
-          };
-        });
-        setValoresEnsayo(iniciales);
 
         if (data.estado !== 'pendiente') {
           try {
@@ -78,36 +103,9 @@ export default function CargaResultadosOrdenTrabajoPage() {
     setCamposFisicos((prev) => ({ ...prev, [campo]: valor }));
   }
 
-  function actualizarValorEnsayo(idEnsayo, campo, valor) {
-    setValoresEnsayo((prev) => ({ ...prev, [idEnsayo]: { ...prev[idEnsayo], [campo]: valor } }));
-  }
-
-  function faltanResultados() {
-    if (!datos) return true;
-    return datos.ensayos.some((e) => {
-      const v = valoresEnsayo[e.id_espec_ensayo];
-      if (e.tipo_dato === 'numerico') return !v || v.valor_numerico === '';
-      return !v || !v.valor_cualitativo?.trim();
-    });
-  }
-
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
-
-    if (faltanResultados()) {
-      setError('Completá los resultados de todos los ensayos solicitados');
-      return;
-    }
-
-    const resultados = datos.ensayos.map((en) => {
-      const v = valoresEnsayo[en.id_espec_ensayo] || {};
-      return {
-        id_espec_ensayo: en.id_espec_ensayo,
-        valor_numerico: en.tipo_dato === 'numerico' && v.valor_numerico !== '' ? Number(v.valor_numerico) : null,
-        valor_cualitativo: en.tipo_dato === 'cualitativo' ? (v.valor_cualitativo || null) : null,
-      };
-    });
 
     setGuardando(true);
     try {
@@ -127,7 +125,6 @@ export default function CargaResultadosOrdenTrabajoPage() {
           observaciones_muestreo: camposFisicos.observaciones_muestreo.trim() || null,
           nro_bultos_muestreados: camposFisicos.nro_bultos_muestreados !== '' ? Number(camposFisicos.nro_bultos_muestreados) : null,
         },
-        resultados,
       });
       setResultado(resp);
     } catch (err) {
@@ -229,22 +226,30 @@ export default function CargaResultadosOrdenTrabajoPage() {
           <div className="card" style={{ marginBottom: 'var(--sp-4)' }}>
             <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Datos físicos del muestreo</h2>
             <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
-              <div className="field" style={{ flex: '1 1 200px' }}>
-                <label className="field-label">Aspecto externo del contenedor</label>
-                <input className="field-input" value={camposFisicos.aspecto_externo} onChange={(e) => actualizarCampoFisico('aspecto_externo', e.target.value)} disabled={guardando || soloLectura} />
-              </div>
-              <div className="field" style={{ flex: '1 1 200px' }}>
-                <label className="field-label">Cierre</label>
-                <input className="field-input" value={camposFisicos.cierre} onChange={(e) => actualizarCampoFisico('cierre', e.target.value)} disabled={guardando || soloLectura} />
-              </div>
-              <div className="field" style={{ flex: '1 1 200px' }}>
-                <label className="field-label">Aspecto interno</label>
-                <input className="field-input" value={camposFisicos.aspecto_interno} onChange={(e) => actualizarCampoFisico('aspecto_interno', e.target.value)} disabled={guardando || soloLectura} />
-              </div>
-              <div className="field" style={{ flex: '1 1 200px' }}>
-                <label className="field-label">Precintos</label>
-                <input className="field-input" value={camposFisicos.precintos} onChange={(e) => actualizarCampoFisico('precintos', e.target.value)} disabled={guardando || soloLectura} />
-              </div>
+              <CampoCumple
+                label="Aspecto externo del contenedor"
+                valor={camposFisicos.aspecto_externo}
+                onChange={(v) => actualizarCampoFisico('aspecto_externo', v)}
+                disabled={guardando || soloLectura}
+              />
+              <CampoCumple
+                label="Cierre"
+                valor={camposFisicos.cierre}
+                onChange={(v) => actualizarCampoFisico('cierre', v)}
+                disabled={guardando || soloLectura}
+              />
+              <CampoCumple
+                label="Aspecto interno"
+                valor={camposFisicos.aspecto_interno}
+                onChange={(v) => actualizarCampoFisico('aspecto_interno', v)}
+                disabled={guardando || soloLectura}
+              />
+              <CampoCumple
+                label="Precintos"
+                valor={camposFisicos.precintos}
+                onChange={(v) => actualizarCampoFisico('precintos', v)}
+                disabled={guardando || soloLectura}
+              />
               <div className="field" style={{ flex: '1 1 200px' }}>
                 <label className="field-label">Identificación del contenedor</label>
                 <input className="field-input" value={camposFisicos.identificacion_contenedor} onChange={(e) => actualizarCampoFisico('identificacion_contenedor', e.target.value)} disabled={guardando || soloLectura} />
@@ -288,63 +293,6 @@ export default function CargaResultadosOrdenTrabajoPage() {
                 disabled={guardando || soloLectura}
               />
             </div>
-          </div>
-
-          <div className="card" style={{ marginBottom: 'var(--sp-4)' }}>
-            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Resultados de ensayos solicitados</h2>
-            {datos.ensayos.length === 0 ? (
-              <div className="alert alert-info">No hay ensayos asignados a este laboratorio para esta especificación.</div>
-            ) : (
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Ensayo</th>
-                    <th>Metodología</th>
-                    <th>Especificación</th>
-                    <th>Resultado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {datos.ensayos.map((en) => {
-                    const v = valoresEnsayo[en.id_espec_ensayo] || {};
-                    return (
-                      <tr key={en.id_espec_ensayo}>
-                        <td>{en.nombre_ensayo}</td>
-                        <td>{en.metodologia || '—'}</td>
-                        <td>
-                          {en.tipo_dato === 'numerico'
-                            ? `${en.limite_inferior ?? '—'} a ${en.limite_superior ?? '—'} ${en.unidad_medida || ''}`
-                            : en.valor_requerido || en.especificacion_texto || '—'}
-                        </td>
-                        <td>
-                          {en.tipo_dato === 'numerico' ? (
-                            <input
-                              className="field-input"
-                              type="number"
-                              step="any"
-                              value={v.valor_numerico}
-                              onChange={(e) => actualizarValorEnsayo(en.id_espec_ensayo, 'valor_numerico', e.target.value)}
-                              disabled={guardando || soloLectura}
-                            />
-                          ) : (
-                            <select
-                              className="field-input"
-                              value={v.valor_cualitativo}
-                              onChange={(e) => actualizarValorEnsayo(en.id_espec_ensayo, 'valor_cualitativo', e.target.value)}
-                              disabled={guardando || soloLectura}
-                            >
-                              <option value="">Seleccioná...</option>
-                              <option value="Cumple">Cumple</option>
-                              <option value="No cumple">No cumple</option>
-                            </select>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
           </div>
 
           {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}

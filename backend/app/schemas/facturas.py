@@ -4,6 +4,12 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 
+class FacturaDetalleEnsayoInput(BaseModel):
+    id_envio_ensayo: int
+    importe: float = Field(..., ge=0)
+    observaciones: Optional[str] = Field(None, max_length=200)
+
+
 class FacturaCreate(BaseModel):
     id_laboratorio: int
     nro_factura: str = Field(..., min_length=1, max_length=50)
@@ -13,6 +19,7 @@ class FacturaCreate(BaseModel):
     moneda: Literal["ARS", "USD", "EUR"] = "ARS"
     descripcion: Optional[str] = Field(None, max_length=500)
     id_envios: list[int] = []
+    detalle_ensayos: list[FacturaDetalleEnsayoInput] = []
 
 
 class FacturaUpdate(BaseModel):
@@ -23,6 +30,7 @@ class FacturaUpdate(BaseModel):
     moneda: Literal["ARS", "USD", "EUR"] = "ARS"
     descripcion: Optional[str] = Field(None, max_length=500)
     id_envios: list[int] = []
+    detalle_ensayos: list[FacturaDetalleEnsayoInput] = []
 
 
 class FacturaPagoUpdate(BaseModel):
@@ -35,6 +43,14 @@ class FacturaAnularUpdate(BaseModel):
     observaciones: Optional[str] = Field(None, max_length=500)
 
 
+class EnsayoFacturaItem(BaseModel):
+    id_envio_ensayo: int
+    nombre_ensayo: str
+    analito: Optional[str] = None
+    importe: Optional[float] = None
+    observaciones: Optional[str] = None
+
+
 class EnvioFacturaItem(BaseModel):
     id_envio: int
     nro_remito: Optional[str] = None
@@ -43,7 +59,9 @@ class EnvioFacturaItem(BaseModel):
     erp_CODART: Optional[str] = None
     erp_DESART: Optional[str] = None
     erp_nro_ir: Optional[str] = None
+    lote_proveedor: Optional[str] = None
     cantidad_ensayos: int = 0
+    ensayos: list[EnsayoFacturaItem] = []
 
 
 class FacturaResponse(BaseModel):
@@ -80,4 +98,31 @@ class EnvioSinFacturar(BaseModel):
     erp_CODART: Optional[str] = None
     erp_DESART: Optional[str] = None
     erp_nro_ir: Optional[str] = None
+    lote_proveedor: Optional[str] = None
     cantidad_ensayos: int = 0
+    ensayos: list[EnsayoFacturaItem] = []
+
+
+class ReporteImporteLinea(BaseModel):
+    id_factura: int
+    nro_factura: str
+    fecha_factura: date
+    moneda: str
+    id_laboratorio: int
+    laboratorio_nombre: str
+    id_envio: int
+    nro_remito: Optional[str] = None
+    nombre_ensayo: str
+    analito: Optional[str] = None
+    importe: float
+    observaciones: Optional[str] = None
+
+
+class ReporteImporteTotal(BaseModel):
+    moneda: str
+    total: float
+
+
+class ReporteImportesFacturadosResponse(BaseModel):
+    lineas: list[ReporteImporteLinea] = []
+    totales_por_moneda: list[ReporteImporteTotal] = []

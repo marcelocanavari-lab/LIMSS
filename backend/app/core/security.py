@@ -64,7 +64,7 @@ def get_current_user(
     cursor = conn.cursor()
     cursor.execute(
         """
-        SELECT u.id_usuario, u.codigo, u.nombre, u.apellido, u.rol, u.activo,
+        SELECT u.id_usuario, u.codigo, u.nombre, u.apellido, u.rol, u.activo, u.debe_cambiar_pin,
                s.id_sesion, s.fecha_expira
         FROM lims_usuarios u
         JOIN lims_sesiones s ON s.id_usuario = u.id_usuario
@@ -93,6 +93,7 @@ def get_current_user(
         "rol": row.rol,
         "id_sesion": row.id_sesion,
         "token": credentials.credentials,
+        "debe_cambiar_pin": bool(row.debe_cambiar_pin),
     }
 
 

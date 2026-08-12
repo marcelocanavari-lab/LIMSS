@@ -9,9 +9,29 @@ export const solicitudesMuestreoApi = {
   },
   misSolicitudes: () => api.get('/api/solicitudes-muestreo/mis-solicitudes'),
   listarMuestreadores: () => api.get('/api/solicitudes-muestreo/muestreadores'),
-  crear: (data) => api.post('/api/solicitudes-muestreo', data),
+  crear: (data, protocoloProveedor, documentacionProveedor) => {
+    const formData = new FormData();
+    formData.append('datos', JSON.stringify(data));
+    formData.append('protocolo_proveedor', protocoloProveedor);
+    // Opcional -- a diferencia del protocolo, se puede omitir y adjuntar después.
+    if (documentacionProveedor) formData.append('documentacion_proveedor', documentacionProveedor);
+    return api.postForm('/api/solicitudes-muestreo', formData);
+  },
   obtener: (id) => api.get(`/api/solicitudes-muestreo/${id}`),
   anular: (id, motivo) => api.put(`/api/solicitudes-muestreo/${id}/anular`, { motivo }),
+
+  // Documentación del proveedor (remito y/o factura, un solo archivo) --
+  // opcional, se puede adjuntar en la creación (ver crear) o después.
+  subirDocumentacionProveedor: (id, archivo) => {
+    const formData = new FormData();
+    formData.append('documentacion_proveedor', archivo);
+    return api.postForm(`/api/solicitudes-muestreo/${id}/documentacion-proveedor`, formData);
+  },
+
+  // Genera el envío antes de ejecutar el muestreo físico: crea la muestra
+  // por adelantado (datos_muestreo_pendientes=true) para poder seguir con
+  // el flujo normal de Envío de Muestras sin esperar al muestreador.
+  generarEnvioAnticipado: (id) => api.post(`/api/solicitudes-muestreo/${id}/generar-envio-anticipado`),
 
   // Orden de Trabajo digital (Etapa 2: el muestreador ejecuta) -- Sección A
   // (datos físicos) + Sección B (resultados de ensayos del laboratorio de

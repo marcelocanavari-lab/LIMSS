@@ -12,6 +12,7 @@ from typing import Optional
 
 import pyodbc
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 
 from app.core.security import get_current_user, require_rol
 from app.db.connections import erp_db, limss_db
@@ -37,12 +38,15 @@ from app.schemas.muestras import (
     TestigoEnviado,
     TestigoRemito,
 )
+from app.api.routes.facturas import ensayos_de_envio
+from app.api.routes.solicitudes_muestreo import generar_pdf_etiquetas_de_solicitud, obtener_solicitud_o_404
 from app.schemas.facturas import EnvioSinFacturar
 from app.schemas.recorrido import RecorridoResponse
-from app.services import audit
+from app.services import audit, storage
 from app.services.erp_ir import buscar_lineas_ir, formatear_nro_ir, normalizar_fecha_sentinel
 from app.services.erp_lotes import buscar_lote
 from app.services.erp_materiales import obtener_codsar_por_tipo
+from app.services.pdf_legajo import AdjuntoLegajo, generar_pdf_legajo
 from app.services.recorrido import construir_recorrido
 
 router = APIRouter(prefix="/api/muestras", tags=["Muestras y Envíos"])
@@ -95,6 +99,7 @@ def _fila_a_muestra(row) -> MuestraResponse:
         usuario_muestreo_nombre=row.usuario_muestreo_nombre,
         fecha_muestreo=row.fecha_muestreo,
         observaciones=row.observaciones,
+        datos_muestreo_pendientes=bool(row.datos_muestreo_pendientes),
     )
 
 
@@ -387,27 +392,37 @@ def envios_sin_facturar(
     cursor = conn.cursor()
     cursor.execute(
         """
-        SELECT e.id_envio, e.nro_remito, e.fecha_despacho, e.id_laboratorio,
-               m.codigo_muestra, m.erp_CODART, m.erp_DESART, m.erp_nro_ir,
+        SELECT e.id_envio, rem.nro_remito_interno AS nro_remito, e.fecha_despacho, e.id_laboratorio,
+               m.codigo_muestra, m.erp_CODART, m.erp_DESART, m.erp_nro_ir, sm.lote_proveedor,
                lab.nombre AS laboratorio_nombre,
                (SELECT COUNT(*) FROM lims_envio_ensayos ee WHERE ee.id_envio = e.id_envio) AS cant_ensayos
         FROM lims_envios e
         INNER JOIN lims_muestras m ON m.id_muestra = e.id_muestra
         INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = e.id_laboratorio
+        LEFT JOIN lims_solicitudes_muestreo sm ON sm.id_muestra = m.id_muestra
+        OUTER APPLY (
+            SELECT TOP 1 r.nro_remito_interno
+            FROM lims_remitos r
+            WHERE r.id_envio = e.id_envio
+            ORDER BY r.id_remito DESC
+        ) rem
         WHERE e.id_laboratorio = ?
           AND NOT EXISTS (SELECT 1 FROM lims_factura_envios fe WHERE fe.id_envio = e.id_envio)
         ORDER BY e.fecha_despacho DESC
         """,
         id_laboratorio,
     )
+    filas = cursor.fetchall()
     return [
         EnvioSinFacturar(
             id_envio=r.id_envio, nro_remito=r.nro_remito, codigo_muestra=r.codigo_muestra,
             fecha_despacho=r.fecha_despacho, id_laboratorio=r.id_laboratorio, laboratorio_nombre=r.laboratorio_nombre,
             erp_CODART=r.erp_CODART, erp_DESART=r.erp_DESART, erp_nro_ir=r.erp_nro_ir,
+            lote_proveedor=r.lote_proveedor,
             cantidad_ensayos=r.cant_ensayos,
+            ensayos=ensayos_de_envio(cursor, r.id_envio),
         )
-        for r in cursor.fetchall()
+        for r in filas
     ]
 
 
@@ -424,7 +439,7 @@ def buscar_ir(
         raise HTTPException(status_code=404, detail=f"No se encontró el IR '{nro_ir}' en el ERP")
     return [
         LineaIR(
-            N01Id=r.N01Id, NUMCOMO=formatear_nro_ir(r.NUMCOMO, r.FECCOM), IdM21=r.IdM21,
+            N01Id=r.N01Id, NUMCOMO=formatear_nro_ir(r.NUMCOMO, r.FECCOR), IdM21=r.IdM21,
             CODART=r.CODART, DESART=r.DESART, CANTID=float(r.CANTID),
             unidad=r.unidad, proveedor=r.proveedor, proveedor_codigo=r.proveedor_codigo,
             fecha_ingreso=normalizar_fecha_sentinel(r.FECCOM),
@@ -458,7 +473,7 @@ def buscar_material(
             raise HTTPException(status_code=404, detail=f"No se encontró el IR '{referencia}' en el ERP")
         return [
             MaterialEncontrado(
-                referencia=formatear_nro_ir(r.NUMCOMO, r.FECCOM), IdM21=r.IdM21, CODART=r.CODART, DESART=r.DESART,
+                referencia=formatear_nro_ir(r.NUMCOMO, r.FECCOR), IdM21=r.IdM21, CODART=r.CODART, DESART=r.DESART,
                 cantidad=float(r.CANTID), unidad=r.unidad, proveedor=r.proveedor, proveedor_codigo=r.proveedor_codigo,
                 fecha_ingreso=normalizar_fecha_sentinel(r.FECCOM),
                 fecha_vencimiento=normalizar_fecha_sentinel(r.VENCOM),
@@ -503,7 +518,7 @@ def crear_muestra(
     codigo_muestra = f"SAMP-{anio}-{correlativo:04d}"
 
     cursor.execute(
-        "SELECT id_especificacion, cantidad_muestra, unidad_muestra FROM lims_especificaciones WHERE erp_IdM21 = ? AND vigente = 1",
+        "SELECT id_especificacion FROM lims_especificaciones WHERE erp_IdM21 = ? AND vigente = 1",
         body.erp_IdM21,
     )
     espec = cursor.fetchone()
@@ -511,9 +526,22 @@ def crear_muestra(
 
     cantidad_enviada = body.cantidad_enviada
     unidad_enviada = body.unidad_enviada
-    if cantidad_enviada is None and espec is not None:
-        cantidad_enviada = float(espec.cantidad_muestra) if espec.cantidad_muestra is not None else None
-        unidad_enviada = espec.unidad_muestra
+    if cantidad_enviada is None and id_especificacion is not None:
+        # lims_especificaciones.cantidad_muestra quedó deprecado a favor de
+        # lims_especificacion_muestras (una fila por tipo de muestra, soporta
+        # varias por especificación) y en la práctica siempre viene NULL --
+        # mismo fix que _obtener_cantidades en solicitudes_muestreo.py.
+        cursor.execute("SELECT OBJECT_ID('lims_especificacion_muestras') AS oid")
+        if cursor.fetchone().oid is not None:
+            cursor.execute(
+                "SELECT TOP 1 cantidad, unidad FROM lims_especificacion_muestras "
+                "WHERE id_especificacion = ? AND tipo_muestra = 'analisis' ORDER BY orden",
+                id_especificacion,
+            )
+            fila_cantidad = cursor.fetchone()
+            if fila_cantidad:
+                cantidad_enviada = float(fila_cantidad.cantidad)
+                unidad_enviada = fila_cantidad.unidad
 
     cursor.execute(
         """
@@ -1207,6 +1235,72 @@ def obtener_recorrido(
     return recorrido
 
 
+@router.get("/{id_muestra}/legajo-pdf")
+def descargar_legajo(
+    id_muestra: int,
+    protocolo_proveedor: bool = Query(True),
+    protocolo_laboratorio: bool = Query(True),
+    documentacion_proveedor: bool = Query(True),
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """PDF único: Recorrido de Muestra (siempre incluido) + los documentos
+    adjuntos reales que el usuario haya tildado en el selector previo de
+    Consulta de Muestras. Un adjunto tildado cuyo archivo no existe se
+    omite en silencio (ver _paginas_de_adjunto en pdf_legajo.py) -- no
+    bloquea la generación del resto."""
+    cursor = conn.cursor()
+    recorrido = construir_recorrido(cursor, id_muestra)
+    if not recorrido:
+        raise HTTPException(status_code=404, detail="Muestra no encontrada")
+
+    adjuntos: list[AdjuntoLegajo] = []
+
+    if protocolo_proveedor or documentacion_proveedor:
+        cursor.execute(
+            """
+            SELECT TOP 1 protocolo_proveedor_path, protocolo_proveedor_nombre_original,
+                   documentacion_proveedor_path, documentacion_proveedor_nombre_original
+            FROM lims_solicitudes_muestreo WHERE id_muestra = ? ORDER BY id_solicitud DESC
+            """,
+            id_muestra,
+        )
+        sol = cursor.fetchone()
+        if sol:
+            if protocolo_proveedor and sol.protocolo_proveedor_path:
+                adjuntos.append(AdjuntoLegajo(
+                    titulo="Protocolo del proveedor",
+                    ruta_absoluta=storage.ruta_absoluta(sol.protocolo_proveedor_path),
+                    nombre_original=sol.protocolo_proveedor_nombre_original,
+                ))
+            if documentacion_proveedor and sol.documentacion_proveedor_path:
+                adjuntos.append(AdjuntoLegajo(
+                    titulo="Factura/Remito del proveedor",
+                    ruta_absoluta=storage.ruta_absoluta(sol.documentacion_proveedor_path),
+                    nombre_original=sol.documentacion_proveedor_nombre_original,
+                ))
+
+    if protocolo_laboratorio:
+        for en in recorrido.envios:
+            cursor.execute(
+                "SELECT TOP 1 pdf_path, pdf_nombre_original FROM lims_protocolos WHERE id_envio = ? ORDER BY fecha_carga DESC",
+                en.id_envio,
+            )
+            prot = cursor.fetchone()
+            if prot and prot.pdf_path:
+                adjuntos.append(AdjuntoLegajo(
+                    titulo=f"Protocolo del laboratorio — {en.laboratorio_nombre} (Envío N° {en.nro_remito or en.id_envio})",
+                    ruta_absoluta=storage.ruta_absoluta(prot.pdf_path),
+                    nombre_original=prot.pdf_nombre_original,
+                ))
+
+    pdf_bytes = generar_pdf_legajo(recorrido, adjuntos)
+    return Response(
+        content=pdf_bytes, media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{recorrido.codigo_muestra}_legajo.pdf"'},
+    )
+
+
 # ── Etiquetas (REQ-ENV-003) ────────────────────────────────────────
 
 @router.post("/{id_muestra}/etiqueta", response_model=EtiquetaResponse, status_code=201)
@@ -1264,3 +1358,31 @@ def obtener_ultima_etiqueta(
     if not fila:
         raise HTTPException(status_code=404, detail="Todavía no se generó ninguna etiqueta para esta muestra")
     return _fila_a_etiqueta(fila, muestra)
+
+
+@router.get("/{id_muestra}/etiquetas-pdf")
+def descargar_etiquetas_de_muestra(
+    id_muestra: int,
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """PDF de etiquetas para reimprimir desde Consulta de Muestras -- usa la
+    misma función de armado que "Descargar etiquetas" en Solicitudes
+    (ver generar_pdf_etiquetas_de_solicitud en solicitudes_muestreo.py) para
+    que ambos caminos generen exactamente el mismo PDF, en vez de un
+    template paralelo. El registro de auditoría de la reimpresión
+    (lims_etiquetas.reimpresion) lo sigue llevando POST /{id_muestra}/etiqueta,
+    sin cambios."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT id_solicitud FROM lims_solicitudes_muestreo WHERE id_muestra = ?", id_muestra)
+    fila = cursor.fetchone()
+    if not fila:
+        raise HTTPException(status_code=404, detail="Esta muestra no tiene una solicitud de muestreo asociada")
+
+    row = obtener_solicitud_o_404(cursor, fila.id_solicitud)
+    pdf_bytes = generar_pdf_etiquetas_de_solicitud(cursor, row)
+
+    return Response(
+        content=pdf_bytes, media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{row.nro_solicitud}_etiquetas.pdf"'},
+    )

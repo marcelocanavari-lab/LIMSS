@@ -84,6 +84,7 @@ export default function MuestrasPage() {
                 <th>Material</th>
                 <th>Fecha muestreo</th>
                 <th>Muestreador</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -97,6 +98,13 @@ export default function MuestrasPage() {
                   <td>{m.erp_DESART}</td>
                   <td>{new Date(m.fecha_muestreo).toLocaleDateString()}</td>
                   <td>{m.usuario_muestreo_nombre}</td>
+                  <td>
+                    {m.datos_muestreo_pendientes && (
+                      <span className="badge badge-warn" title="El envío se generó por adelantado -- todavía falta completar el registro físico del muestreo">
+                        Datos pendientes
+                      </span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

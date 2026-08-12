@@ -132,7 +132,14 @@ export default function ConsultaMuestrasPage() {
                     <td>{TIPOS_MATERIAL.find((t) => t.value === m.tipo_material)?.label || m.tipo_material || '—'}</td>
                     <td>{new Date(m.fecha_muestreo).toLocaleDateString()}</td>
                     <td>{m.usuario_muestreo_nombre}</td>
-                    <td><span className={`badge ${BADGE_POR_ESTADO[m.estado] || 'badge-neutral'}`}>{m.estado.replace(/_/g, ' ')}</span></td>
+                    <td>
+                      <span className={`badge ${BADGE_POR_ESTADO[m.estado] || 'badge-neutral'}`}>{m.estado.replace(/_/g, ' ')}</span>
+                      {m.datos_muestreo_pendientes && (
+                        <span className="badge badge-warn" style={{ marginLeft: 4 }} title="El envío se generó por adelantado -- todavía falta completar el registro físico del muestreo">
+                          Datos pendientes
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

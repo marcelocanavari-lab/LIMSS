@@ -79,6 +79,17 @@ def _insertar_especificacion(
     return int(cursor.fetchone().id)
 
 
+def _tiene_columna_analito(cursor) -> bool:
+    """analito en lims_especificacion_ensayos puede no existir todavía (ver
+    migrations_especificacion_ensayos_analito.sql, pendiente de ejecutar en
+    algunos entornos) -- se chequea en catálogo antes de usarla en un
+    INSERT/UPDATE explícito para no romper la consulta con un error de
+    compilación SQL. En los SELECT no hace falta este chequeo porque se
+    lee con getattr(fila, 'analito', None)."""
+    cursor.execute("SELECT COL_LENGTH('lims_especificacion_ensayos', 'analito') AS c")
+    return cursor.fetchone().c is not None
+
+
 def _copiar_ensayos_especificacion(cursor, *, id_especificacion_origen: int, id_especificacion_destino: int) -> None:
     """Usado por 'revisar': la nueva versión arranca con los mismos ensayos que
     la versión anterior; el usuario los ajusta después desde la ficha de la
@@ -87,19 +98,36 @@ def _copiar_ensayos_especificacion(cursor, *, id_especificacion_origen: int, id_
         "SELECT * FROM lims_especificacion_ensayos WHERE id_especificacion = ? ORDER BY orden",
         id_especificacion_origen,
     )
-    for e in cursor.fetchall():
-        cursor.execute(
-            """
-            INSERT INTO lims_especificacion_ensayos
-                (id_especificacion, id_ensayo_maestro, orden, metodologia, tipo_dato,
-                 limite_inferior, limite_superior, unidad_medida, valor_requerido,
-                 especificacion_texto, obligatorio, requerido_por_defecto, id_laboratorio)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            id_especificacion_destino, e.id_ensayo_maestro, e.orden, e.metodologia, e.tipo_dato,
-            e.limite_inferior, e.limite_superior, e.unidad_medida, e.valor_requerido,
-            e.especificacion_texto, e.obligatorio, e.requerido_por_defecto, e.id_laboratorio,
-        )
+    filas = cursor.fetchall()
+    tiene_analito = _tiene_columna_analito(cursor)
+    for e in filas:
+        if tiene_analito:
+            cursor.execute(
+                """
+                INSERT INTO lims_especificacion_ensayos
+                    (id_especificacion, id_ensayo_maestro, orden, metodologia, tipo_dato,
+                     limite_inferior, limite_superior, unidad_medida, valor_requerido,
+                     especificacion_texto, obligatorio, requerido_por_defecto, id_laboratorio, analito)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                id_especificacion_destino, e.id_ensayo_maestro, e.orden, e.metodologia, e.tipo_dato,
+                e.limite_inferior, e.limite_superior, e.unidad_medida, e.valor_requerido,
+                e.especificacion_texto, e.obligatorio, e.requerido_por_defecto, e.id_laboratorio,
+                getattr(e, "analito", None),
+            )
+        else:
+            cursor.execute(
+                """
+                INSERT INTO lims_especificacion_ensayos
+                    (id_especificacion, id_ensayo_maestro, orden, metodologia, tipo_dato,
+                     limite_inferior, limite_superior, unidad_medida, valor_requerido,
+                     especificacion_texto, obligatorio, requerido_por_defecto, id_laboratorio)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                id_especificacion_destino, e.id_ensayo_maestro, e.orden, e.metodologia, e.tipo_dato,
+                e.limite_inferior, e.limite_superior, e.unidad_medida, e.valor_requerido,
+                e.especificacion_texto, e.obligatorio, e.requerido_por_defecto, e.id_laboratorio,
+            )
 
 
 def _fila_a_especificacion(row, tiene_muestras: bool = False, tiene_testigos: bool = False) -> EspecificacionResponse:
@@ -148,6 +176,7 @@ def _fila_a_especificacion_ensayo(e) -> EspecificacionEnsayoResponse:
         requerido_por_defecto=bool(e.requerido_por_defecto),
         id_laboratorio=e.id_laboratorio,
         laboratorio_nombre=e.laboratorio_nombre,
+        analito=getattr(e, "analito", None),
     )
 
 
@@ -156,7 +185,7 @@ def _obtener_especificacion_detalle(cursor, id_especificacion: int) -> Especific
     row = cursor.fetchone()
 
     cursor.execute(
-        _SELECT_ESPECIFICACION_ENSAYOS + " WHERE se.id_especificacion = ? ORDER BY se.orden",
+        _SELECT_ESPECIFICACION_ENSAYOS + " WHERE se.id_especificacion = ? AND se.activo = 1 ORDER BY se.orden",
         id_especificacion,
     )
     ensayos = [_fila_a_especificacion_ensayo(e) for e in cursor.fetchall()]
@@ -706,7 +735,7 @@ def listar_ensayos_especificacion(
         raise HTTPException(status_code=404, detail="Especificación no encontrada")
 
     cursor.execute(
-        _SELECT_ESPECIFICACION_ENSAYOS + " WHERE se.id_especificacion = ? ORDER BY se.orden",
+        _SELECT_ESPECIFICACION_ENSAYOS + " WHERE se.id_especificacion = ? AND se.activo = 1 ORDER BY se.orden",
         id_especificacion,
     )
     return [_fila_a_especificacion_ensayo(e) for e in cursor.fetchall()]
@@ -740,19 +769,34 @@ def agregar_ensayo_especificacion(
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="El laboratorio indicado no existe o está inactivo")
 
-    cursor.execute(
-        """
-        INSERT INTO lims_especificacion_ensayos
-            (id_especificacion, id_ensayo_maestro, orden, metodologia, tipo_dato,
-             limite_inferior, limite_superior, unidad_medida, valor_requerido,
-             especificacion_texto, obligatorio, requerido_por_defecto, id_laboratorio)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        id_especificacion, body.id_ensayo_maestro, body.orden, body.metodologia, body.tipo_dato,
-        body.limite_inferior, body.limite_superior, body.unidad_medida, body.valor_requerido,
-        body.especificacion_texto, 1 if body.obligatorio else 0, 1 if body.requerido_por_defecto else 0,
-        body.id_laboratorio,
-    )
+    if _tiene_columna_analito(cursor):
+        cursor.execute(
+            """
+            INSERT INTO lims_especificacion_ensayos
+                (id_especificacion, id_ensayo_maestro, orden, metodologia, tipo_dato,
+                 limite_inferior, limite_superior, unidad_medida, valor_requerido,
+                 especificacion_texto, obligatorio, requerido_por_defecto, id_laboratorio, analito)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            id_especificacion, body.id_ensayo_maestro, body.orden, body.metodologia, body.tipo_dato,
+            body.limite_inferior, body.limite_superior, body.unidad_medida, body.valor_requerido,
+            body.especificacion_texto, 1 if body.obligatorio else 0, 1 if body.requerido_por_defecto else 0,
+            body.id_laboratorio, body.analito,
+        )
+    else:
+        cursor.execute(
+            """
+            INSERT INTO lims_especificacion_ensayos
+                (id_especificacion, id_ensayo_maestro, orden, metodologia, tipo_dato,
+                 limite_inferior, limite_superior, unidad_medida, valor_requerido,
+                 especificacion_texto, obligatorio, requerido_por_defecto, id_laboratorio)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            id_especificacion, body.id_ensayo_maestro, body.orden, body.metodologia, body.tipo_dato,
+            body.limite_inferior, body.limite_superior, body.unidad_medida, body.valor_requerido,
+            body.especificacion_texto, 1 if body.obligatorio else 0, 1 if body.requerido_por_defecto else 0,
+            body.id_laboratorio,
+        )
     cursor.execute("SELECT @@IDENTITY AS id")
     id_espec_ensayo = int(cursor.fetchone().id)
 
@@ -793,19 +837,35 @@ def editar_ensayo_especificacion(
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="El laboratorio indicado no existe o está inactivo")
 
-    cursor.execute(
-        """
-        UPDATE lims_especificacion_ensayos
-        SET id_ensayo_maestro = ?, orden = ?, metodologia = ?, tipo_dato = ?,
-            limite_inferior = ?, limite_superior = ?, unidad_medida = ?, valor_requerido = ?,
-            especificacion_texto = ?, obligatorio = ?, requerido_por_defecto = ?, id_laboratorio = ?
-        WHERE id_espec_ensayo = ?
-        """,
-        body.id_ensayo_maestro, body.orden, body.metodologia, body.tipo_dato,
-        body.limite_inferior, body.limite_superior, body.unidad_medida, body.valor_requerido,
-        body.especificacion_texto, 1 if body.obligatorio else 0, 1 if body.requerido_por_defecto else 0,
-        body.id_laboratorio, id_espec_ensayo,
-    )
+    if _tiene_columna_analito(cursor):
+        cursor.execute(
+            """
+            UPDATE lims_especificacion_ensayos
+            SET id_ensayo_maestro = ?, orden = ?, metodologia = ?, tipo_dato = ?,
+                limite_inferior = ?, limite_superior = ?, unidad_medida = ?, valor_requerido = ?,
+                especificacion_texto = ?, obligatorio = ?, requerido_por_defecto = ?, id_laboratorio = ?,
+                analito = ?
+            WHERE id_espec_ensayo = ?
+            """,
+            body.id_ensayo_maestro, body.orden, body.metodologia, body.tipo_dato,
+            body.limite_inferior, body.limite_superior, body.unidad_medida, body.valor_requerido,
+            body.especificacion_texto, 1 if body.obligatorio else 0, 1 if body.requerido_por_defecto else 0,
+            body.id_laboratorio, body.analito, id_espec_ensayo,
+        )
+    else:
+        cursor.execute(
+            """
+            UPDATE lims_especificacion_ensayos
+            SET id_ensayo_maestro = ?, orden = ?, metodologia = ?, tipo_dato = ?,
+                limite_inferior = ?, limite_superior = ?, unidad_medida = ?, valor_requerido = ?,
+                especificacion_texto = ?, obligatorio = ?, requerido_por_defecto = ?, id_laboratorio = ?
+            WHERE id_espec_ensayo = ?
+            """,
+            body.id_ensayo_maestro, body.orden, body.metodologia, body.tipo_dato,
+            body.limite_inferior, body.limite_superior, body.unidad_medida, body.valor_requerido,
+            body.especificacion_texto, 1 if body.obligatorio else 0, 1 if body.requerido_por_defecto else 0,
+            body.id_laboratorio, id_espec_ensayo,
+        )
 
     audit.registrar(
         conn, entidad="especificacion_ensayo", accion="modificar",
@@ -828,7 +888,7 @@ def eliminar_ensayo_especificacion(
     _verificar_especificacion_vigente(cursor, id_especificacion)
 
     cursor.execute(
-        "DELETE FROM lims_especificacion_ensayos WHERE id_espec_ensayo = ? AND id_especificacion = ?",
+        "UPDATE lims_especificacion_ensayos SET activo = 0 WHERE id_espec_ensayo = ? AND id_especificacion = ?",
         id_espec_ensayo, id_especificacion,
     )
     if cursor.rowcount == 0:
@@ -1638,6 +1698,11 @@ def listar_testigos(
     fecha_ref: Optional[date] = Query(None, description="Fecha de referencia para calcular vencido/por_vencer; por defecto, hoy"),
     dias_anticipacion: int = Query(30, ge=0, description="Días de anticipación para considerar 'por vencer'"),
     id_categoria: Optional[int] = Query(None, description="Filtrar por categoría de testigo"),
+    id_laboratorio: Optional[int] = Query(
+        None,
+        description="Filtrar por laboratorio asignado -- un testigo puede tener varios "
+                    "(lims_testigo_laboratorios), matchea si el laboratorio está entre los asignados",
+    ),
     user: dict = Depends(get_current_user),
     conn: pyodbc.Connection = Depends(limss_db),
 ):
@@ -1658,6 +1723,9 @@ def listar_testigos(
 
     if id_categoria is not None:
         testigos = [t for t in testigos if t.id_categoria == id_categoria]
+
+    if id_laboratorio is not None:
+        testigos = [t for t in testigos if any(l.id_laboratorio == id_laboratorio for l in t.laboratorios)]
 
     if solo_alertas:
         testigos = [t for t in testigos if t.vencido or t.por_vencer or t.stock_bajo]

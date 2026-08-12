@@ -1,50 +1,55 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { QRCodeSVG } from 'qrcode.react';
 import TopBar from '../../components/TopBar';
 import { muestrasApi } from '../../api/muestras';
-import { ApiError } from '../../api/client';
+import { ApiError, abrirPdfConAuth } from '../../api/client';
 
+// El PDF de etiquetas se arma en el backend con la misma función que usa
+// "Descargar etiquetas" en Solicitudes de Muestreo (ver
+// generar_pdf_etiquetas_de_solicitud en solicitudes_muestreo.py), para que
+// sea idéntico sin importar desde dónde se imprima. Esta pantalla solo
+// registra la impresión/reimpresión (lims_etiquetas) y da el botón para
+// abrir ese PDF.
 export default function MuestraEtiquetaPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const [etiqueta, setEtiqueta] = useState(null);
+  const [esReimpresion, setEsReimpresion] = useState(false);
+  const [registrando, setRegistrando] = useState(true);
   const [error, setError] = useState('');
+  const [abriendo, setAbriendo] = useState(false);
 
   useEffect(() => {
     muestrasApi
       .generarEtiqueta(id)
-      .then(setEtiqueta)
-      .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo generar la etiqueta'));
+      .then((etiqueta) => setEsReimpresion(Boolean(etiqueta.es_reimpresion)))
+      .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo registrar la impresión de la etiqueta'))
+      .finally(() => setRegistrando(false));
   }, [id]);
+
+  async function abrirPdf() {
+    setAbriendo(true);
+    try {
+      await abrirPdfConAuth(`/api/muestras/${id}/etiquetas-pdf`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo generar el PDF de etiquetas');
+    } finally {
+      setAbriendo(false);
+    }
+  }
 
   return (
     <div className="screen">
-      <TopBar titulo="Etiqueta de muestra" subtitulo="Muestras" onBack={() => navigate(-1)} />
+      <TopBar titulo={esReimpresion ? 'Reimprimir etiqueta' : 'Imprimir etiqueta'} subtitulo="Muestras" onBack={() => navigate(-1)} />
       <div className="screen-content">
-        <button className="btn btn-primary no-print" style={{ marginBottom: 'var(--sp-4)' }} onClick={() => window.print()}>
-          Imprimir →
-        </button>
+        {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}
 
-        {error && <div className="alert alert-danger no-print" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}
-
-        {!etiqueta ? (
-          !error && <div className="state-block no-print"><span className="spinner" /><span>Generando etiqueta...</span></div>
+        {registrando ? (
+          <div className="state-block"><span className="spinner" /><span>Registrando impresión...</span></div>
         ) : (
-          <div className="printable-label">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <div className="label-codigo">{etiqueta.codigo_muestra}</div>
-                <div className="label-row"><span>{etiqueta.tipo_referencia === 'ir' ? 'IR' : 'Lote'}</span><span>{etiqueta.nro_referencia}</span></div>
-              </div>
-              <QRCodeSVG value={etiqueta.codigo_muestra} size={56} />
-            </div>
-            <div className="label-row"><span>Material</span><span>{etiqueta.erp_CODART}</span></div>
-            <div style={{ fontSize: '0.65rem', lineHeight: 1.3 }}>{etiqueta.erp_DESART}</div>
-            <div className="label-row"><span>Fecha de muestreo</span><span>{new Date(etiqueta.fecha_muestreo).toLocaleDateString()}</span></div>
-            <div className="label-row"><span>Muestreador</span><span>{etiqueta.usuario_muestreo_nombre}</span></div>
-          </div>
+          <button className="btn btn-primary" onClick={abrirPdf} disabled={abriendo}>
+            {abriendo ? <span className="spinner" /> : `${esReimpresion ? 'Reimprimir' : 'Imprimir'} etiquetas (PDF) →`}
+          </button>
         )}
       </div>
     </div>

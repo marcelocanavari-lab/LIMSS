@@ -49,7 +49,7 @@ export const maestrosApi = {
 
   // Testigos
   crearTestigo: (formData) => api.postForm('/api/maestros/testigos', formData),
-  listarTestigos: ({ activo, soloAlertas, buscar = '', estado, stockBajo, estados, orden, fechaRef, diasAnticipacion, idCategoria } = {}) => {
+  listarTestigos: ({ activo, soloAlertas, buscar = '', estado, stockBajo, estados, orden, fechaRef, diasAnticipacion, idCategoria, idLaboratorio } = {}) => {
     const params = new URLSearchParams();
     if (activo !== undefined && activo !== null) params.set('activo', activo);
     if (soloAlertas) params.set('solo_alertas', 'true');
@@ -61,6 +61,7 @@ export const maestrosApi = {
     if (fechaRef) params.set('fecha_ref', fechaRef);
     if (diasAnticipacion !== undefined && diasAnticipacion !== null) params.set('dias_anticipacion', diasAnticipacion);
     if (idCategoria) params.set('id_categoria', idCategoria);
+    if (idLaboratorio) params.set('id_laboratorio', idLaboratorio);
     return api.get(`/api/maestros/testigos?${params.toString()}`);
   },
   obtenerTestigo: (id) => api.get(`/api/maestros/testigos/${id}`),

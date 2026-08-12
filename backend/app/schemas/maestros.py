@@ -49,6 +49,10 @@ class EspecificacionEnsayoCreate(BaseModel):
     obligatorio: bool = True
     requerido_por_defecto: bool = True
     id_laboratorio: Optional[int] = None
+    # Para distinguir el mismo ensayo del catálogo repetido en la misma
+    # especificación (ej. "Valoración" de Trimetoprima vs. Sulfametoxazol
+    # en un combinado) -- opcional, sin validación de completitud.
+    analito: Optional[str] = Field(None, max_length=100)
 
 
 class EspecificacionEnsayoResponse(BaseModel):
@@ -68,6 +72,7 @@ class EspecificacionEnsayoResponse(BaseModel):
     requerido_por_defecto: bool
     id_laboratorio: Optional[int] = None
     laboratorio_nombre: Optional[str] = None
+    analito: Optional[str] = None
 
 
 # ── Especificaciones ───────────────────────────────────────────

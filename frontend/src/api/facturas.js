@@ -15,4 +15,12 @@ export const facturasApi = {
   registrarPago: (id, data) => api.put(`/api/facturas/${id}/pago`, data),
   anularFactura: (id, data) => api.put(`/api/facturas/${id}/anular`, data),
   enviosSinFacturar: (idLaboratorio) => api.get(`/api/muestras/laboratorios/${idLaboratorio}/envios-sin-facturar`),
+  reporteImportesFacturados: ({ idLaboratorio, fechaDesde, fechaHasta, nombreEnsayo } = {}) => {
+    const params = new URLSearchParams();
+    if (idLaboratorio) params.set('id_laboratorio', idLaboratorio);
+    if (fechaDesde) params.set('fecha_desde', fechaDesde);
+    if (fechaHasta) params.set('fecha_hasta', fechaHasta);
+    if (nombreEnsayo) params.set('nombre_ensayo', nombreEnsayo);
+    return api.get(`/api/facturas/reportes/importes?${params.toString()}`);
+  },
 };

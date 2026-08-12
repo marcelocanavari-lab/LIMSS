@@ -1,6 +1,7 @@
 """
 PDFs de la Solicitud de Muestreo para Materias Primas: formulario (2 copias,
-igual patrón que pdf_remito.py) y hoja de etiquetas (2 etiquetas 9x5cm con QR).
+igual patrón que pdf_remito.py) y hoja de etiquetas (etiquetas de 7.2x4cm con
+QR, en grilla -- ver _ESCALA_ETIQUETA).
 
 Dibujo directo con reportlab (canvas), sin Platypus/tablas -- mismos motivos
 que pdf_remito.py: documentos cortos de campos clave-valor, reportlab es
@@ -32,11 +33,20 @@ _ESTILO_ESPECIFICACION = ParagraphStyle(
 _ESTILO_INSTRUCCIONES = ParagraphStyle(
     "instrucciones_solicitud", fontName="Helvetica", fontSize=9, leading=12,
 )
+# -20% de tamaño respecto a la etiqueta original (9x5cm) -- todas las
+# dimensiones de la etiqueta (fuente, márgenes, separación entre líneas) se
+# derivan de esta única constante multiplicando el valor original, para que
+# el achique quede realmente proporcional en vez de elegir números nuevos a
+# mano campo por campo.
+_ESCALA_ETIQUETA = 0.8
+
 _ESTILO_NOMBRE_ETIQUETA_GRANDE = ParagraphStyle(
-    "nombre_etiqueta_grande", fontName="Helvetica-Bold", fontSize=14, leading=15.5,
+    "nombre_etiqueta_grande", fontName="Helvetica-Bold",
+    fontSize=14 * _ESCALA_ETIQUETA, leading=15.5 * _ESCALA_ETIQUETA,
 )
 _ESTILO_NOMBRE_ETIQUETA_CHICO = ParagraphStyle(
-    "nombre_etiqueta_chico", fontName="Helvetica-Bold", fontSize=12, leading=13.5,
+    "nombre_etiqueta_chico", fontName="Helvetica-Bold",
+    fontSize=12 * _ESCALA_ETIQUETA, leading=13.5 * _ESCALA_ETIQUETA,
 )
 
 _LABEL_X_OFFSET = 5.5 * cm
@@ -207,7 +217,7 @@ def generar_pdf_formulario(solicitud, cantidades: dict, ensayos: list) -> bytes:
     return buffer.getvalue()
 
 
-# ── Etiquetas (2 etiquetas de 9x5cm con QR) ────────────────────────
+# ── Etiquetas (7.2x4cm con QR, varias por hoja -- ver _grilla_etiquetas) ──
 
 def _dibujar_qr(c: canvas.Canvas, valor: str, x: float, y: float, tamano: float):
     """QR con esquina inferior izquierda en (x, y), tamano x tamano puntos."""
@@ -234,9 +244,9 @@ def _parrafo_nombre_articulo(nombre: str, ancho_max: float):
     """Arma el nombre del artículo como Paragraph con wordWrap, en vez de
     truncarlo con "…" -- el nombre completo es información necesaria para el
     muestreador, no algo descartable. Usa hasta 3 líneas; si el nombre es
-    largo (>30 caracteres) baja la fuente a 12pt para que entre completo, y
-    solo si aun así no entra en 3 líneas (nombre extremo) recorta el final
-    con "…" como último recurso."""
+    largo (>30 caracteres) baja de fuente (ver _ESTILO_NOMBRE_ETIQUETA_CHICO)
+    para que entre completo, y solo si aun así no entra en 3 líneas (nombre
+    extremo) recorta el final con "…" como último recurso."""
     estilo = _ESTILO_NOMBRE_ETIQUETA_CHICO if len(nombre) > 30 else _ESTILO_NOMBRE_ETIQUETA_GRANDE
     texto = nombre
     while True:
@@ -251,23 +261,28 @@ def _parrafo_nombre_articulo(nombre: str, ancho_max: float):
 def _dibujar_etiqueta(
     c: canvas.Canvas, x0: float, y0: float, ancho: float, alto: float,
     titulo_etiqueta: str, solicitud, cantidad_texto: str, laboratorio_nombre: str | None,
+    iniciales_muestreador: str | None = None,
 ):
-    margen = 0.3 * cm
-    qr_tam = 2 * cm
-    ancho_texto_max = ancho - 2 * margen - qr_tam - 0.2 * cm
+    # Todo (márgenes, fuentes, separación entre líneas) escala junto con
+    # _ESCALA_ETIQUETA -- son los mismos valores que antes multiplicados por
+    # el factor de achique, así que las proporciones internas no cambian.
+    e = _ESCALA_ETIQUETA
+    margen = 0.3 * cm * e
+    qr_tam = 2 * cm * e
+    ancho_texto_max = ancho - 2 * margen - qr_tam - 0.2 * cm * e
 
     c.rect(x0, y0, ancho, alto)
 
     x = x0 + margen
-    y = y0 + alto - margen - 0.3 * cm
+    y = y0 + alto - margen - 0.3 * cm * e
 
-    c.setFont("Helvetica-Bold", 9)
+    c.setFont("Helvetica-Bold", 9 * e)
     c.drawString(x, y, titulo_etiqueta)
-    y -= 0.42 * cm
+    y -= 0.42 * cm * e
 
-    c.setFont("Helvetica-Bold", 9)
+    c.setFont("Helvetica-Bold", 9 * e)
     c.drawString(x, y, solicitud.nro_solicitud)
-    y -= 0.52 * cm
+    y -= 0.52 * cm * e
 
     # erp_DESART / erp_CODART / N° IR / Cantidad: campos destacados, letra
     # grande -- son los que el muestreador necesita leer de un vistazo al
@@ -275,88 +290,127 @@ def _dibujar_etiqueta(
     # en hasta 3 líneas en vez de truncarlo (ver _parrafo_nombre_articulo).
     parrafo_nombre, alto_nombre = _parrafo_nombre_articulo(solicitud.erp_DESART.strip(), ancho_texto_max)
     parrafo_nombre.drawOn(c, x, y - alto_nombre + parrafo_nombre.style.fontSize)
-    y -= alto_nombre + 0.15 * cm
+    y -= alto_nombre + 0.15 * cm * e
 
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(x, y, _truncar_a_ancho(solicitud.erp_CODART.strip(), "Helvetica-Bold", 12, ancho_texto_max))
-    y -= 0.56 * cm
+    c.setFont("Helvetica-Bold", 12 * e)
+    c.drawString(x, y, _truncar_a_ancho(solicitud.erp_CODART.strip(), "Helvetica-Bold", 12 * e, ancho_texto_max))
+    y -= 0.56 * cm * e
 
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(x, y, _truncar_a_ancho(f"IR: {solicitud.erp_nro_ir}", "Helvetica-Bold", 14, ancho_texto_max))
-    y -= 0.59 * cm
+    c.setFont("Helvetica-Bold", 14 * e)
+    c.drawString(x, y, _truncar_a_ancho(f"IR: {solicitud.erp_nro_ir}", "Helvetica-Bold", 14 * e, ancho_texto_max))
+    y -= 0.59 * cm * e
 
-    c.setFont("Helvetica-Bold", 13)
-    c.drawString(x, y, _truncar_a_ancho(f"Cantidad: {cantidad_texto}", "Helvetica-Bold", 13, ancho_texto_max))
-    y -= 0.55 * cm
+    c.setFont("Helvetica-Bold", 13 * e)
+    c.drawString(x, y, _truncar_a_ancho(f"Cantidad: {cantidad_texto}", "Helvetica-Bold", 13 * e, ancho_texto_max))
+    y -= 0.55 * cm * e
 
-    c.setFont("Helvetica", 9)
+    c.setFont("Helvetica", 9 * e)
     if laboratorio_nombre:
-        c.drawString(x, y, _truncar_a_ancho(f"Lab: {laboratorio_nombre}", "Helvetica", 9, ancho_texto_max))
-        y -= 0.38 * cm
-    c.drawString(x, y, f"Fecha: {_fmt_fecha(solicitud.fecha_solicitud)}")
+        c.drawString(x, y, _truncar_a_ancho(f"Lab: {laboratorio_nombre}", "Helvetica", 9 * e, ancho_texto_max))
+        y -= 0.38 * cm * e
+    # Iniciales del muestreador en la misma línea que la fecha (no suma
+    # altura a la etiqueta, que ya tiene el espacio bastante ajustado con
+    # nombres largos + laboratorio -- ver _parrafo_nombre_articulo).
+    fecha_texto = f"Fecha: {_fmt_fecha(solicitud.fecha_solicitud)}"
+    if iniciales_muestreador:
+        fecha_texto += f"   Muestreador: {iniciales_muestreador}"
+    c.drawString(x, y, _truncar_a_ancho(fecha_texto, "Helvetica", 9 * e, ancho_texto_max))
 
     _dibujar_qr(c, solicitud.nro_solicitud, x0 + ancho - qr_tam - margen, y0 + margen, qr_tam)
 
 
-def generar_pdf_etiquetas(solicitud, cantidades: dict) -> bytes:
-    """Modelo legacy de 2 etiquetas fijas (análisis + contramuestra), usado
-    como fallback cuando la solicitud no tiene filas confirmadas en
-    lims_solicitud_muestras (solicitudes viejas, o entornos donde todavía no
-    se corrió esa migración) -- ver generar_pdf_etiquetas_v2 para el modelo
-    nuevo de N muestras."""
+# ── Grilla de etiquetas por hoja ────────────────────────────────────
+#
+# Etiqueta física a _ESCALA_ETIQUETA del tamaño original (9x5cm) -- el
+# ancho/alto de la grilla se recalculan a partir de ese tamaño en vez de
+# quedar fijos en "2 por hoja": al achicarse la etiqueta entran más por
+# página, así que la cantidad de columnas/filas se deriva del espacio
+# disponible en A4, no un número elegido a mano.
+_ETIQUETA_ANCHO = 9 * cm * _ESCALA_ETIQUETA
+_ETIQUETA_ALTO = 5 * cm * _ESCALA_ETIQUETA
+_ETIQUETA_MARGEN_PAGINA = 2 * cm
+_ETIQUETA_GAP_X = 0.4 * cm
+_ETIQUETA_GAP_Y = 0.3 * cm
+
+
+def _grilla_etiquetas() -> tuple[int, int]:
+    """Columnas x filas que entran en una hoja A4 con el tamaño de etiqueta
+    y separaciones actuales."""
+    ancho_pagina, alto_pagina = A4
+    ancho_disponible = ancho_pagina - 2 * _ETIQUETA_MARGEN_PAGINA
+    alto_disponible = alto_pagina - 2 * _ETIQUETA_MARGEN_PAGINA
+    columnas = max(1, int((ancho_disponible + _ETIQUETA_GAP_X) // (_ETIQUETA_ANCHO + _ETIQUETA_GAP_X)))
+    filas = max(1, int((alto_disponible + _ETIQUETA_GAP_Y) // (_ETIQUETA_ALTO + _ETIQUETA_GAP_Y)))
+    return columnas, filas
+
+
+def _posicion_etiqueta(indice_en_pagina: int, columnas: int) -> tuple[float, float]:
+    """Esquina inferior izquierda (x0, y0) de la etiqueta en la posición
+    `indice_en_pagina` (0-based, se recorre por filas de izquierda a
+    derecha) dentro de la grilla actual."""
+    _, alto_pagina = A4
+    fila, columna = divmod(indice_en_pagina, columnas)
+    x0 = _ETIQUETA_MARGEN_PAGINA + columna * (_ETIQUETA_ANCHO + _ETIQUETA_GAP_X)
+    y0 = alto_pagina - _ETIQUETA_MARGEN_PAGINA - _ETIQUETA_ALTO - fila * (_ETIQUETA_ALTO + _ETIQUETA_GAP_Y)
+    return x0, y0
+
+
+def _generar_hoja_etiquetas(
+    solicitud, items: list[tuple[str, str, str | None]], iniciales_muestreador: str | None,
+) -> bytes:
+    """`items`: (titulo_etiqueta, cantidad_texto, laboratorio_nombre) por
+    etiqueta a dibujar, en orden. Reparte en la grilla calculada por
+    _grilla_etiquetas y arranca hoja nueva cuando se llena."""
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
-    _, height = A4
-    ancho, alto = 9 * cm, 5 * cm
-    x0 = 2 * cm
-    y0_analisis = height - 2 * cm - alto
-    y0_contra = y0_analisis - 1 * cm - alto
+    columnas, filas = _grilla_etiquetas()
+    por_pagina = columnas * filas
 
-    cant_analisis = _cantidad_texto(cantidades.get("cantidad_muestra"), cantidades.get("unidad_muestra"))
-    cant_contra = _cantidad_texto(cantidades.get("cantidad_contramuestra"), cantidades.get("unidad_contramuestra"))
-
-    _dibujar_etiqueta(
-        c, x0, y0_analisis, ancho, alto, "MUESTRA PARA ANÁLISIS", solicitud, cant_analisis, solicitud.laboratorio_nombre,
-    )
-    _dibujar_etiqueta(
-        c, x0, y0_contra, ancho, alto, "CONTRAMUESTRA", solicitud, cant_contra, None,
-    )
+    for i, (titulo, cantidad_texto, laboratorio_nombre) in enumerate(items):
+        indice_en_pagina = i % por_pagina
+        if i > 0 and indice_en_pagina == 0:
+            c.showPage()
+        x0, y0 = _posicion_etiqueta(indice_en_pagina, columnas)
+        _dibujar_etiqueta(
+            c, x0, y0, _ETIQUETA_ANCHO, _ETIQUETA_ALTO, titulo, solicitud, cantidad_texto, laboratorio_nombre,
+            iniciales_muestreador,
+        )
 
     c.showPage()
     c.save()
     return buffer.getvalue()
 
 
-def generar_pdf_etiquetas_v2(solicitud, muestras: list) -> bytes:
+def generar_pdf_etiquetas(solicitud, cantidades: dict, iniciales_muestreador: str | None = None) -> bytes:
+    """Modelo legacy de 2 etiquetas fijas (análisis + contramuestra), usado
+    como fallback cuando la solicitud no tiene filas confirmadas en
+    lims_solicitud_muestras (solicitudes viejas, o entornos donde todavía no
+    se corrió esa migración) -- ver generar_pdf_etiquetas_v2 para el modelo
+    nuevo de N muestras."""
+    cant_analisis = _cantidad_texto(cantidades.get("cantidad_muestra"), cantidades.get("unidad_muestra"))
+    cant_contra = _cantidad_texto(cantidades.get("cantidad_contramuestra"), cantidades.get("unidad_contramuestra"))
+    items = [
+        ("MUESTRA PARA ANÁLISIS", cant_analisis, solicitud.laboratorio_nombre),
+        ("CONTRAMUESTRA", cant_contra, None),
+    ]
+    return _generar_hoja_etiquetas(solicitud, items, iniciales_muestreador)
+
+
+def generar_pdf_etiquetas_v2(solicitud, muestras: list, iniciales_muestreador: str | None = None) -> bytes:
     """Una etiqueta por cada fila de lims_solicitud_muestras confirmada
     (`muestras`, cada una con .tipo_muestra/.cantidad_real/.unidad/
-    .laboratorio_nombre) -- 2 por hoja, igual disposición que el modelo
-    legacy pero con N filas en vez de las 2 fijas (análisis/contramuestra)."""
-    buffer = io.BytesIO()
-    c = canvas.Canvas(buffer, pagesize=A4)
-    _, height = A4
-    ancho, alto = 9 * cm, 5 * cm
-    x0 = 2 * cm
-    y0_top = height - 2 * cm - alto
-    y0_bottom = y0_top - 1 * cm - alto
-
-    for i, m in enumerate(muestras):
-        pos_en_pagina = i % 2
-        if i > 0 and pos_en_pagina == 0:
-            c.showPage()
-        y0 = y0_top if pos_en_pagina == 0 else y0_bottom
+    .laboratorio_nombre), en la misma grilla que el modelo legacy pero con N
+    filas en vez de las 2 fijas (análisis/contramuestra)."""
+    items = []
+    for m in muestras:
         if m.tipo_muestra == "analisis":
             titulo = "MUESTRA PARA ANÁLISIS"
         elif m.tipo_muestra == "testigo":
             titulo = "TESTIGO"
         else:
             titulo = "CONTRAMUESTRA"
-        cantidad_texto = _cantidad_texto(float(m.cantidad_real), m.unidad)
-        _dibujar_etiqueta(c, x0, y0, ancho, alto, titulo, solicitud, cantidad_texto, m.laboratorio_nombre)
-
-    c.showPage()
-    c.save()
-    return buffer.getvalue()
+        items.append((titulo, _cantidad_texto(float(m.cantidad_real), m.unidad), m.laboratorio_nombre))
+    return _generar_hoja_etiquetas(solicitud, items, iniciales_muestreador)
 
 
 # ── Orden de Trabajo de Control de Calidad (P_CC002-1) y ──────────

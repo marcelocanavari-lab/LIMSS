@@ -47,7 +47,7 @@ function labelRolEbr(rolEbr) {
 
 const FORM_VACIO = {
   codigo: '', nombre: '', apellido: '', pin: '', rol: 'muestreador',
-  rolEbr: '', activoEbr: true,
+  rolEbr: '', activoEbr: true, forzarCambioPin: true,
 };
 
 export default function UsuariosPage() {
@@ -68,6 +68,7 @@ export default function UsuariosPage() {
   const [resetPinId, setResetPinId] = useState(null);
   const [pinNuevo, setPinNuevo] = useState('');
   const [pinConfirmar, setPinConfirmar] = useState('');
+  const [pinForzarCambio, setPinForzarCambio] = useState(true);
   const [pinError, setPinError] = useState('');
   const [pinGuardando, setPinGuardando] = useState(false);
 
@@ -142,6 +143,7 @@ export default function UsuariosPage() {
           rol: form.rol,
           rol_ebr: rolEbr,
           activo_ebr: activoEbr,
+          forzar_cambio_pin: form.forzarCambioPin,
         });
         setSuccessMsg('Usuario creado correctamente');
       }
@@ -168,6 +170,7 @@ export default function UsuariosPage() {
     setResetPinId(u.id_usuario);
     setPinNuevo('');
     setPinConfirmar('');
+    setPinForzarCambio(true);
     setPinError('');
   }
 
@@ -188,7 +191,7 @@ export default function UsuariosPage() {
     setPinError('');
     setPinGuardando(true);
     try {
-      await authApi.resetearPin(resetPinId, pinNuevo);
+      await authApi.resetearPin(resetPinId, pinNuevo, pinForzarCambio);
       setSuccessMsg('PIN reseteado correctamente');
       cerrarResetPin();
     } catch (err) {
@@ -254,6 +257,18 @@ export default function UsuariosPage() {
                   disabled={guardando}
                 />
               </div>
+            )}
+
+            {!editandoId && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', marginBottom: 'var(--sp-3)', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={form.forzarCambioPin}
+                  onChange={(e) => actualizarCampo('forzarCambioPin', e.target.checked)}
+                  disabled={guardando}
+                />
+                <span className="field-label" style={{ marginBottom: 0 }}>Forzar cambio de PIN en el próximo ingreso</span>
+              </label>
             )}
 
             <div className="field">
@@ -397,6 +412,16 @@ export default function UsuariosPage() {
                 disabled={pinGuardando}
               />
             </div>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', marginTop: 'var(--sp-3)', marginBottom: 0, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={pinForzarCambio}
+                onChange={(e) => setPinForzarCambio(e.target.checked)}
+                disabled={pinGuardando}
+              />
+              <span className="field-label" style={{ marginBottom: 0 }}>Forzar cambio de PIN en el próximo ingreso</span>
+            </label>
 
             {pinError && <div className="alert alert-danger" style={{ marginTop: 'var(--sp-3)' }}>{pinError}</div>}
 
