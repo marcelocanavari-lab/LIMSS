@@ -8,7 +8,10 @@
 --    desde la pantalla de administración (ver app/api/routes/erp_config.py).
 -- 2. lims_agente_control: idempotencia por comprobante IR (N01Id) -- UNIQUE
 --    en id_comprobante_erp porque cada IR trae un solo ítem, así que la
---    evaluación es 1 a 1 con el comprobante.
+--    evaluación es 1 a 1 con el comprobante. Incluye erp_desart (nombre del
+--    material) y nro_ir (formato "NNN/AA" que ve el usuario) para que la
+--    pantalla del agente los muestre sin resolver contra el ERP en cada
+--    consulta.
 -- 3. lims_agente_log: historial detallado de cada evaluación (una fila por
 --    intento -- reprocesar un comprobante agrega una fila nueva, no pisa
 --    la anterior).
@@ -65,6 +68,8 @@ BEGIN
         erp_idm21               INT                 NULL,
         erp_codart              VARCHAR(20)         NULL,
         erp_codsar              VARCHAR(20)         NULL,
+        erp_desart              VARCHAR(100)        NULL, -- nombre del material (GIM21ART.DESART), para mostrar en la pantalla del agente sin resolver contra el ERP
+        nro_ir                  VARCHAR(10)         NULL, -- formato "NNN/AA" (formatear_nro_ir en erp_ir.py) -- identificador principal en pantalla, N01Id no significa nada para un humano
         fecha_evaluacion        DATETIME            NOT NULL DEFAULT GETDATE(),
         resultado               VARCHAR(30)         NOT NULL, -- solicitud_generada|no_requiere_muestreo|subarticulo_no_configurado|error
         id_solicitud_generada   INT                 NULL REFERENCES lims_solicitudes_muestreo(id_solicitud),
@@ -123,6 +128,24 @@ BEGIN
     INSERT INTO lims_erp_config (clave, valor, descripcion, editable) VALUES
     ('agente_muestreo_fecha_inicio', '2026-08-01', 'Fecha (FECCOR) a partir de la cual el agente evalúa comprobantes IR -- los anteriores se ignoran por completo', 1);
     PRINT 'Parámetro agente_muestreo_fecha_inicio insertado';
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('lims_agente_control') AND name = 'erp_desart'
+)
+BEGIN
+    ALTER TABLE lims_agente_control ADD erp_desart VARCHAR(100) NULL;
+    PRINT 'Columna lims_agente_control.erp_desart agregada';
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('lims_agente_control') AND name = 'nro_ir'
+)
+BEGIN
+    ALTER TABLE lims_agente_control ADD nro_ir VARCHAR(10) NULL;
+    PRINT 'Columna lims_agente_control.nro_ir agregada';
 END
 GO
 

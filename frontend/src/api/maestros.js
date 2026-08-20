@@ -74,16 +74,18 @@ export const maestrosApi = {
 
   // Laboratorios asignados a un testigo (muchos a muchos)
   listarLaboratoriosTestigo: (id) => api.get(`/api/maestros/testigos/${id}/laboratorios`),
-  asignarLaboratorioTestigo: (id, idLaboratorio, consumoEstimado, unidadConsumo) =>
+  asignarLaboratorioTestigo: (id, idLaboratorio, consumoEstimado, unidadConsumo, fechaEnvioReal) =>
     api.post(`/api/maestros/testigos/${id}/laboratorios`, {
       id_laboratorio: idLaboratorio,
       consumo_estimado: consumoEstimado !== undefined && consumoEstimado !== '' ? Number(consumoEstimado) : null,
       unidad_consumo: unidadConsumo || null,
+      fecha_envio_real: fechaEnvioReal || null,
     }),
-  editarConsumoLaboratorioTestigo: (id, idLaboratorio, consumoEstimado, unidadConsumo) =>
+  editarConsumoLaboratorioTestigo: (id, idLaboratorio, consumoEstimado, unidadConsumo, fechaEnvioReal) =>
     api.put(`/api/maestros/testigos/${id}/laboratorios/${idLaboratorio}`, {
       consumo_estimado: consumoEstimado !== undefined && consumoEstimado !== '' ? Number(consumoEstimado) : null,
       unidad_consumo: unidadConsumo || null,
+      fecha_envio_real: fechaEnvioReal || null,
     }),
   desvincularLaboratorioTestigo: (id, idLaboratorio) =>
     api.del(`/api/maestros/testigos/${id}/laboratorios/${idLaboratorio}`),

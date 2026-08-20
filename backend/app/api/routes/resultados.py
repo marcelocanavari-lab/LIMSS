@@ -25,8 +25,10 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import ValidationError
 
+from app.api.routes import empaque_ia
 from app.core.security import get_current_user, require_rol
 from app.db.connections import limss_db
+from app.schemas.empaque_ia import CompararEtiquetaResponse
 from app.schemas.resultados import (
     EnsayoParaCarga,
     EnvioParaCarga,
@@ -35,7 +37,7 @@ from app.schemas.resultados import (
     ProtocoloResponse,
     ResultadoInput,
 )
-from app.services import audit, storage
+from app.services import audit, comparacion_empaque_ia, storage
 
 router = APIRouter(prefix="/api/envios", tags=["Resultados Analíticos"])
 
@@ -46,7 +48,7 @@ def _obtener_envio_o_404(cursor, id_envio: int):
     cursor.execute(
         """
         SELECT e.*, m.codigo_muestra, m.erp_CODART, m.erp_DESART, m.estado AS estado_muestra,
-               lab.nombre AS laboratorio_nombre
+               m.tipo_material AS tipo_material_muestra, lab.nombre AS laboratorio_nombre
         FROM lims_envios e
         INNER JOIN lims_muestras m ON m.id_muestra = e.id_muestra
         INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = e.id_laboratorio
@@ -64,7 +66,8 @@ def _obtener_envio_para_carga(cursor, envio) -> EnvioParaCarga:
     cursor.execute(
         """
         SELECT se.id_espec_ensayo, se.orden, m.nombre_ensayo, se.metodologia, se.tipo_dato,
-               se.limite_inferior, se.limite_superior, se.unidad_medida, se.valor_requerido, se.obligatorio,
+               se.limite_inferior, se.limite_superior, se.unidad_medida, se.valor_requerido,
+               se.especificacion_texto, se.obligatorio,
                r.valor_numerico, r.valor_cualitativo, r.dentro_especificacion
         FROM lims_envio_ensayos ee
         INNER JOIN lims_especificacion_ensayos se ON se.id_espec_ensayo = ee.id_espec_ensayo
@@ -86,6 +89,7 @@ def _obtener_envio_para_carga(cursor, envio) -> EnvioParaCarga:
             limite_superior=float(e.limite_superior) if e.limite_superior is not None else None,
             unidad_medida=e.unidad_medida,
             valor_requerido=e.valor_requerido,
+            especificacion_texto=e.especificacion_texto,
             obligatorio=bool(e.obligatorio),
             valor_numerico=float(e.valor_numerico) if e.valor_numerico is not None else None,
             valor_cualitativo=e.valor_cualitativo,
@@ -116,8 +120,11 @@ def _obtener_envio_para_carga(cursor, envio) -> EnvioParaCarga:
         erp_DESART=envio.erp_DESART,
         laboratorio_nombre=envio.laboratorio_nombre,
         estado_muestra=envio.estado_muestra,
+        tipo_material=envio.tipo_material_muestra,
         ensayos=ensayos,
         protocolo=protocolo,
+        observacion_ia=envio.observacion_ia,
+        tiene_imagen_comparacion=envio.imagen_comparacion_path is not None,
     )
 
 
@@ -138,6 +145,51 @@ def _tiene_valor(r: ResultadoInput) -> bool:
     return r.valor_numerico is not None or bool((r.valor_cualitativo or "").strip())
 
 
+def _guardar_protocolo(cursor, envio, nro_protocolo_ext: str, fecha_emision: date, protocolo_pdf: UploadFile, id_usuario: int) -> ProtocoloResponse:
+    """Alta/reemplazo del protocolo de un envío -- un protocolo por envío
+    (upsert por id_envio). Usado tanto por el guardado conjunto en
+    guardar_resultados (si se manda protocolo en la misma request) como por
+    el endpoint dedicado guardar_protocolo (subida por separado, cuando el
+    protocolo llega después que los resultados)."""
+    ruta_pdf = storage.guardar_pdf_protocolo(protocolo_pdf, envio.codigo_muestra)
+
+    cursor.execute("SELECT id_protocolo FROM lims_protocolos WHERE id_envio = ?", envio.id_envio)
+    existente = cursor.fetchone()
+    if existente:
+        cursor.execute(
+            """
+            UPDATE lims_protocolos
+            SET nro_protocolo_ext = ?, fecha_emision = ?, pdf_path = ?, pdf_nombre_original = ?,
+                id_usuario_carga = ?, fecha_carga = GETDATE()
+            WHERE id_envio = ?
+            """,
+            nro_protocolo_ext, str(fecha_emision), ruta_pdf, protocolo_pdf.filename, id_usuario, envio.id_envio,
+        )
+        id_protocolo = existente.id_protocolo
+    else:
+        cursor.execute(
+            """
+            INSERT INTO lims_protocolos
+                (id_muestra, id_envio, nro_protocolo_ext, fecha_emision, pdf_path, pdf_nombre_original, id_usuario_carga)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            envio.id_muestra, envio.id_envio, nro_protocolo_ext, str(fecha_emision), ruta_pdf, protocolo_pdf.filename, id_usuario,
+        )
+        cursor.execute("SELECT @@IDENTITY AS id")
+        id_protocolo = int(cursor.fetchone().id)
+
+    cursor.execute("SELECT fecha_carga FROM lims_protocolos WHERE id_protocolo = ?", id_protocolo)
+    fecha_carga = cursor.fetchone().fecha_carga
+
+    return ProtocoloResponse(
+        id_protocolo=id_protocolo,
+        nro_protocolo_ext=nro_protocolo_ext,
+        fecha_emision=fecha_emision,
+        pdf_nombre_original=protocolo_pdf.filename,
+        fecha_carga=fecha_carga,
+    )
+
+
 # ── Endpoints ──────────────────────────────────────────────────────
 
 @router.get("/pendientes", response_model=list[EnvioPendienteResultados])
@@ -155,7 +207,8 @@ def listar_pendientes_resultados(
                lab.nombre AS laboratorio_nombre, rem.nro_remito_interno,
                (SELECT COUNT(*) FROM lims_envio_ensayos ee
                 LEFT JOIN lims_resultados r ON r.id_espec_ensayo = ee.id_espec_ensayo AND r.id_envio = ee.id_envio
-                WHERE ee.id_envio = e.id_envio AND r.id_resultado IS NULL) AS ensayos_pendientes
+                WHERE ee.id_envio = e.id_envio AND r.id_resultado IS NULL) AS ensayos_pendientes,
+               (SELECT COUNT(*) FROM lims_envio_ensayos ee WHERE ee.id_envio = e.id_envio) AS total_ensayos
         FROM lims_envios e
         INNER JOIN lims_muestras m ON m.id_muestra = e.id_muestra
         INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = e.id_laboratorio
@@ -180,6 +233,7 @@ def listar_pendientes_resultados(
             erp_DESART=r.erp_DESART,
             laboratorio_nombre=r.laboratorio_nombre,
             ensayos_pendientes=r.ensayos_pendientes,
+            total_ensayos=r.total_ensayos,
             fecha_despacho=r.fecha_despacho,
         )
         for r in cursor.fetchall()
@@ -200,13 +254,29 @@ def detalle_para_carga(
 @router.post("/{id_envio}/resultados", response_model=GuardarResultadosResponse)
 def guardar_resultados(
     id_envio: int,
-    resultados: str = Form(..., description="JSON de list[ResultadoInput]"),
-    nro_protocolo_ext: str = Form(..., min_length=1, max_length=50),
-    fecha_emision: date = Form(...),
-    protocolo_pdf: UploadFile = File(...),
+    resultados: str = Form(..., description="JSON de list[ResultadoInput] -- pueden venir solo algunos con valor, el resto se ignora (guardado parcial)"),
+    nro_protocolo_ext: Optional[str] = Form(None, min_length=1, max_length=50),
+    fecha_emision: Optional[date] = Form(None),
+    protocolo_pdf: Optional[UploadFile] = File(None),
+    imagen_comparacion_path: Optional[str] = Form(
+        None, description="Resultado provisorio de POST .../comparar-etiqueta, si se corrió -- recién se persiste acá"
+    ),
+    observacion_ia: Optional[str] = Form(None),
     user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
     conn: pyodbc.Connection = Depends(limss_db),
 ):
+    """Guardado parcial: cada ensayo con valor se guarda (INSERT/UPDATE
+    independiente por id_espec_ensayo), los que vienen sin valor simplemente
+    no se tocan -- no hace falta completar todos los ensayos del envío en la
+    misma llamada, el laboratorio suele informar resultados de a poco. La
+    completitud (todos los ensayos con valor) recién se exige más adelante,
+    al habilitar el dictamen (ver WHERE_MUESTRA_PENDIENTE_DICTAMEN en
+    dictamenes.py) -- acá no se bloquea nada por ensayos faltantes.
+
+    El protocolo del laboratorio es independiente de esto: es opcional en
+    esta misma llamada (si ya se tiene a mano, se puede mandar junto) pero
+    también se puede cargar después, sin resultados, vía POST
+    .../protocolo -- ver guardar_protocolo más abajo."""
     cursor = conn.cursor()
     envio = _obtener_envio_o_404(cursor, id_envio)
     if envio.estado_muestra != "en_análisis":
@@ -233,18 +303,11 @@ def guardar_resultados(
     )
     ensayos = {e.id_espec_ensayo: e for e in cursor.fetchall()}
 
-    # REQ-MAS-002: los ensayos marcados obligatorios deben tener valor -- solo
-    # se exigen los de ESTE envío, no los de toda la especificación.
-    faltantes = [
-        e.nombre_ensayo
-        for e in ensayos.values()
-        if e.obligatorio and not _tiene_valor(resultados_por_ensayo.get(e.id_espec_ensayo, ResultadoInput(id_espec_ensayo=e.id_espec_ensayo)))
-    ]
-    if faltantes:
-        raise HTTPException(status_code=400, detail=f"Faltan resultados obligatorios: {', '.join(faltantes)}")
-
-    # REQ-RES-004: sin PDF válido no se guarda nada — falla rápido, antes de escribir resultados.
-    ruta_pdf = storage.guardar_pdf_protocolo(protocolo_pdf, envio.codigo_muestra)
+    if protocolo_pdf is not None and (not nro_protocolo_ext or not fecha_emision):
+        raise HTTPException(
+            status_code=400,
+            detail="Si se adjunta el protocolo hacen falta también el número de protocolo y la fecha de emisión",
+        )
 
     hay_oos = False
     for id_espec_ensayo, r in resultados_por_ensayo.items():
@@ -277,25 +340,18 @@ def guardar_resultados(
                 envio.id_muestra, id_envio, id_espec_ensayo, r.valor_numerico, r.valor_cualitativo, dentro, user["id_usuario"],
             )
 
-    cursor.execute("SELECT 1 FROM lims_protocolos WHERE id_envio = ?", id_envio)
-    if cursor.fetchone():
+    if protocolo_pdf is not None:
+        _guardar_protocolo(cursor, envio, nro_protocolo_ext, fecha_emision, protocolo_pdf, user["id_usuario"])
+
+    # Comparación de etiqueta (Material de Empaque): provisoria hasta acá --
+    # POST .../comparar-etiqueta ya no escribe en lims_envios (ver ese
+    # endpoint), así que recién queda persistida en este mismo guardado.
+    # Si no se corrió ninguna comparación en esta sesión de carga, no se
+    # manda nada y no se toca la fila (no se fuerza a NULL).
+    if imagen_comparacion_path is not None:
         cursor.execute(
-            """
-            UPDATE lims_protocolos
-            SET nro_protocolo_ext = ?, fecha_emision = ?, pdf_path = ?, pdf_nombre_original = ?,
-                id_usuario_carga = ?, fecha_carga = GETDATE()
-            WHERE id_envio = ?
-            """,
-            nro_protocolo_ext, str(fecha_emision), ruta_pdf, protocolo_pdf.filename, user["id_usuario"], id_envio,
-        )
-    else:
-        cursor.execute(
-            """
-            INSERT INTO lims_protocolos
-                (id_muestra, id_envio, nro_protocolo_ext, fecha_emision, pdf_path, pdf_nombre_original, id_usuario_carga)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            envio.id_muestra, id_envio, nro_protocolo_ext, str(fecha_emision), ruta_pdf, protocolo_pdf.filename, user["id_usuario"],
+            "UPDATE lims_envios SET imagen_comparacion_path = ?, observacion_ia = ? WHERE id_envio = ?",
+            imagen_comparacion_path, observacion_ia, id_envio,
         )
 
     audit.registrar(
@@ -305,6 +361,89 @@ def guardar_resultados(
     )
 
     return GuardarResultadosResponse(id_envio=id_envio, hay_oos=hay_oos)
+
+
+@router.post("/{id_envio}/protocolo", response_model=ProtocoloResponse)
+def guardar_protocolo(
+    id_envio: int,
+    nro_protocolo_ext: str = Form(..., min_length=1, max_length=50),
+    fecha_emision: date = Form(...),
+    protocolo_pdf: UploadFile = File(...),
+    user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Carga (o reemplazo) del protocolo del laboratorio, independiente de
+    guardar_resultados -- para cuando el protocolo formal llega en un
+    momento distinto al de los valores (antes, después, o nunca en la misma
+    sesión). No toca lims_resultados."""
+    cursor = conn.cursor()
+    envio = _obtener_envio_o_404(cursor, id_envio)
+    if envio.estado_muestra != "en_análisis":
+        raise HTTPException(
+            status_code=409,
+            detail=f"La muestra está en estado '{envio.estado_muestra}', no se puede cargar el protocolo",
+        )
+
+    respuesta = _guardar_protocolo(cursor, envio, nro_protocolo_ext, fecha_emision, protocolo_pdf, user["id_usuario"])
+
+    audit.registrar(
+        conn, entidad="protocolo", accion="guardar",
+        id_usuario=user["id_usuario"], id_entidad=id_envio,
+        valor_nuevo={"nro_protocolo_ext": nro_protocolo_ext},
+    )
+
+    return respuesta
+
+
+@router.post("/{id_envio}/comparar-etiqueta", response_model=CompararEtiquetaResponse)
+def comparar_etiqueta(
+    id_envio: int,
+    imagen: UploadFile = File(..., description="Foto de la etiqueta recibida en esta inspección"),
+    user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Comparación con IA -- asistencia visual, no reemplaza el criterio de
+    quien inspecciona (ver app/services/comparacion_empaque_ia.py). UNA
+    sola foto y observación por ENVÍO (no por ensayo): varios ensayos de un
+    mismo envío (texto legal, colores, código de barras) se verifican
+    todos contra la misma etiqueta recibida, así que se sube y se compara
+    una sola vez acá, no repetido por cada uno.
+
+    Provisorio hasta guardar: este endpoint sube la imagen a disco y corre
+    el OCR, pero NO escribe en lims_envios -- si el usuario sale de la
+    pantalla sin guardar los resultados, no debe quedar nada grabado (el
+    archivo puede quedar huérfano en disco, no se limpia automáticamente).
+    El frontend guarda la respuesta en estado local y la reenvía recién en
+    POST .../resultados (guardar_resultados), que es quien persiste."""
+    cursor = conn.cursor()
+    envio = _obtener_envio_o_404(cursor, id_envio)
+    if envio.tipo_material_muestra != "material_empaque":
+        raise HTTPException(status_code=400, detail="La comparación con IA solo está disponible para Material de Empaque")
+
+    referencia = empaque_ia.obtener_referencia_activa(cursor, envio.erp_CODART)
+    if not referencia:
+        raise HTTPException(
+            status_code=400,
+            detail=f"El artículo '{envio.erp_CODART.strip()}' no tiene una imagen de referencia cargada -- subila primero en la especificación",
+        )
+
+    ruta_comparacion = storage.guardar_imagen_comparacion(imagen, envio.codigo_muestra)
+
+    observacion = comparacion_empaque_ia.comparar_etiquetas(
+        imagen_referencia_path=storage.ruta_absoluta(referencia.imagen_path),
+        imagen_nueva_path=storage.ruta_absoluta(ruta_comparacion),
+        contexto=f"envio={id_envio}",
+    )
+
+    audit.registrar(
+        conn, entidad="comparacion_etiqueta_ia", accion="comparar", id_usuario=user["id_usuario"], id_entidad=id_envio,
+        valor_nuevo={"ia_disponible": observacion is not None},
+    )
+
+    return CompararEtiquetaResponse(
+        id_envio=id_envio, imagen_comparacion_path=ruta_comparacion,
+        observacion_ia=observacion, ia_disponible=observacion is not None,
+    )
 
 
 @router.get("/{id_envio}/protocolo")

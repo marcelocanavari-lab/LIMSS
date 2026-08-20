@@ -4,6 +4,14 @@ import TopBar from '../../components/TopBar';
 import { resultadosApi } from '../../api/resultados';
 import { ApiError } from '../../api/client';
 
+// Esta bandeja solo lista envíos con AL MENOS UN ensayo pendiente (ver
+// WHERE en listar_pendientes_resultados) -- "Completo" nunca aparece acá,
+// solo distingue si ya se cargó algo (Parcial) o nada todavía (Sin cargar).
+function badgeEstadoCarga(ensayosPendientes, totalEnsayos) {
+  if (ensayosPendientes === totalEnsayos) return { texto: 'Sin cargar', clase: 'badge-neutral' };
+  return { texto: 'Parcial', clase: 'badge-warn' };
+}
+
 export default function CargaResultadosBandejaPage() {
   const navigate = useNavigate();
 
@@ -41,21 +49,26 @@ export default function CargaResultadosBandejaPage() {
                   <th>Muestra</th>
                   <th>Material</th>
                   <th>Laboratorio</th>
+                  <th>Estado</th>
                   <th>Ensayos pendientes</th>
                   <th>Fecha envío</th>
                 </tr>
               </thead>
               <tbody>
-                {envios.map((e) => (
-                  <tr key={e.id_envio} style={{ cursor: 'pointer' }} onClick={() => navigate(`/envios/${e.id_envio}/resultados`)}>
-                    <td style={{ fontFamily: 'var(--font-mono)' }}>{e.nro_remito_interno || '—'}</td>
-                    <td style={{ fontFamily: 'var(--font-mono)' }}>{e.codigo_muestra}</td>
-                    <td>{e.erp_DESART}</td>
-                    <td>{e.laboratorio_nombre}</td>
-                    <td><span className="badge badge-warn">{e.ensayos_pendientes}</span></td>
-                    <td>{new Date(e.fecha_despacho).toLocaleDateString()}</td>
-                  </tr>
-                ))}
+                {envios.map((e) => {
+                  const badge = badgeEstadoCarga(e.ensayos_pendientes, e.total_ensayos);
+                  return (
+                    <tr key={e.id_envio} style={{ cursor: 'pointer' }} onClick={() => navigate(`/envios/${e.id_envio}/resultados`)}>
+                      <td style={{ fontFamily: 'var(--font-mono)' }}>{e.nro_remito_interno || '—'}</td>
+                      <td style={{ fontFamily: 'var(--font-mono)' }}>{e.codigo_muestra}</td>
+                      <td>{e.erp_DESART}</td>
+                      <td>{e.laboratorio_nombre}</td>
+                      <td><span className={`badge ${badge.clase}`}>{badge.texto}</span></td>
+                      <td><span className="badge badge-warn">{e.ensayos_pendientes} de {e.total_ensayos}</span></td>
+                      <td>{new Date(e.fecha_despacho).toLocaleDateString()}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

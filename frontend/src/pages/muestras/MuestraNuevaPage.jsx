@@ -16,6 +16,12 @@ function labelTipo(valor) {
   return TIPOS_MATERIAL.find((t) => t.value === valor)?.label || valor;
 }
 
+function formatFechaSimple(fechaISO) {
+  if (!fechaISO) return '—';
+  const [anio, mes, dia] = fechaISO.split('-');
+  return `${dia}/${mes}/${anio}`;
+}
+
 export default function MuestraNuevaPage() {
   const navigate = useNavigate();
 
@@ -109,6 +115,7 @@ export default function MuestraNuevaPage() {
         tipo_referencia: esMateriaPrima ? 'ir' : 'lote',
         tipo_material: tipo,
         nro_referencia: linea.referencia,
+        erp_n01id: esMateriaPrima ? (linea.N01Id ?? null) : null,
         erp_IdM21: linea.IdM21,
         erp_CODART: linea.CODART,
         erp_DESART: linea.DESART,
@@ -172,24 +179,37 @@ export default function MuestraNuevaPage() {
             )}
 
             {lineas && lineas.length > 1 && (
-              <div className="select-list" style={{ marginTop: 'var(--sp-4)' }}>
-                {lineas.map((l) => (
-                  <button
-                    key={l.IdM21}
-                    type="button"
-                    className="select-item"
-                    onClick={() => {
-                      setLinea(l);
-                      setPaso(3);
-                    }}
-                  >
-                    <span className="select-item-main">
-                      <span className="select-item-title">{l.DESART}</span>
-                      <span className="select-item-sub">{l.CODART} — {l.cantidad} {l.unidad || ''}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
+              <>
+                {esMateriaPrima && (
+                  <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', marginTop: 'var(--sp-4)', marginBottom: 'var(--sp-2)' }}>
+                    Hay más de un comprobante para este IR en el ERP -- elegí cuál corresponde:
+                  </p>
+                )}
+                <div className="select-list" style={{ marginTop: esMateriaPrima ? 0 : 'var(--sp-4)' }}>
+                  {lineas.map((l) => (
+                    <button
+                      key={l.N01Id ?? l.IdM21}
+                      type="button"
+                      className="select-item"
+                      onClick={() => {
+                        setLinea(l);
+                        setPaso(3);
+                      }}
+                    >
+                      <span className="select-item-main">
+                        <span className="select-item-title">{l.DESART}</span>
+                        <span className="select-item-sub">{l.CODART} — {l.cantidad} {l.unidad || ''}</span>
+                        {esMateriaPrima && (
+                          <span className="select-item-sub">
+                            Proveedor: {l.proveedor_codigo ? `${l.proveedor_codigo} - ${l.proveedor}` : '—'} — Fecha del
+                            comprobante: {formatFechaSimple(l.fecha_comprobante)} — Vencimiento: {formatFechaSimple(l.fecha_vencimiento)}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         )}

@@ -25,6 +25,7 @@ from app.schemas.envios import RemitoPdfResponse
 from app.services import audit, storage
 from app.services.erp_composicion import obtener_principios_activos
 from app.services.erp_ir import obtener_vencimiento_lote as obtener_vencimiento_ir
+from app.services.erp_ir import obtener_vencimiento_por_n01id
 from app.services.erp_lotes import obtener_vencimiento_lote_produccion
 from app.services.pdf_remito import generar_pdf_remito
 
@@ -47,7 +48,7 @@ def _a_fecha(valor):
 _SELECT_DATOS_REMITO = """
     SELECT e.id_envio, e.fecha_despacho, e.temperatura_transporte, e.nro_remito,
            e.transportista, e.analisis_solicitados, e.protocolo_utilizar,
-           m.codigo_muestra, m.tipo_referencia, m.nro_referencia,
+           m.codigo_muestra, m.tipo_referencia, m.nro_referencia, m.erp_n01id,
            m.erp_CODART, m.erp_DESART, m.fecha_muestreo,
            m.cantidad_enviada, m.unidad_enviada,
            u.nombre + ' ' + u.apellido AS usuario_muestreo_nombre,
@@ -132,7 +133,16 @@ def generar_remito(
     vencimiento_lote = None
     try:
         if datos.tipo_referencia == "ir":
-            vencimiento_lote = obtener_vencimiento_ir(erp, datos.nro_referencia)
+            # erp_n01id ya resuelto (ver investigación de colisiones de
+            # NUMCOMO+año) -- se usa directo en vez de volver a resolver
+            # datos.nro_referencia por texto, así una colisión que aparezca
+            # después para el mismo IR no puede traer el comprobante
+            # equivocado. Sin erp_n01id (muestras creadas antes de este
+            # campo) se cae al camino de siempre.
+            if datos.erp_n01id is not None:
+                vencimiento_lote = obtener_vencimiento_por_n01id(erp, datos.erp_n01id)
+            else:
+                vencimiento_lote = obtener_vencimiento_ir(erp, datos.nro_referencia)
         else:
             vencimiento_lote = obtener_vencimiento_lote_produccion(erp, datos.nro_referencia)
     except Exception:

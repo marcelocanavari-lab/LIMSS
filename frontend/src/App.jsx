@@ -6,6 +6,9 @@ import LoginPage from './pages/LoginPage';
 import CambiarPinPage from './pages/CambiarPinPage';
 import DashboardPage from './pages/DashboardPage';
 import AdminMenuPage from './pages/AdminMenuPage';
+import DefinicionesMenuPage from './pages/DefinicionesMenuPage';
+import MuestrasMenuPage from './pages/MuestrasMenuPage';
+import ImpresionEtiquetasPage from './pages/ImpresionEtiquetasPage';
 import UsuariosPage from './pages/UsuariosPage';
 import ErpConfigPage from './pages/ErpConfigPage';
 import SubarticulosConfigPage from './pages/SubarticulosConfigPage';
@@ -17,6 +20,7 @@ import EspecificacionesPage from './pages/maestros/EspecificacionesPage';
 import EspecificacionFormPage from './pages/maestros/EspecificacionFormPage';
 import EspecificacionDetallePage from './pages/maestros/EspecificacionDetallePage';
 import CatalogoEnsayosPage from './pages/maestros/CatalogoEnsayosPage';
+import NovedadesEmpaquePage from './pages/maestros/NovedadesEmpaquePage';
 import TestigosPage from './pages/maestros/TestigosPage';
 import TestigoFormPage from './pages/maestros/TestigoFormPage';
 import TestigoDetallePage from './pages/maestros/TestigoDetallePage';
@@ -33,6 +37,10 @@ import MuestraEtiquetaPage from './pages/muestras/MuestraEtiquetaPage';
 import EnvioFormPage from './pages/muestras/EnvioFormPage';
 import RemitoImprimirPage from './pages/muestras/RemitoImprimirPage';
 import LaboratoriosPage from './pages/muestras/LaboratoriosPage';
+import ImpresorasConfigPage from './pages/muestras/ImpresorasConfigPage';
+import CajasPage from './pages/muestras/CajasPage';
+import CajaDetallePage from './pages/muestras/CajaDetallePage';
+import BusquedaProductoCajasPage from './pages/muestras/BusquedaProductoCajasPage';
 import ConsultaMuestrasPage from './pages/muestras/ConsultaMuestrasPage';
 import ConsultaMuestraDetallePage from './pages/muestras/ConsultaMuestraDetallePage';
 import ResultadosPage from './pages/resultados/ResultadosPage';
@@ -72,8 +80,15 @@ export default function App() {
           <Route path="/subarticulos-config" element={<PrivateRoute roles={ADMIN}><SubarticulosConfigPage /></PrivateRoute>} />
           <Route path="/agente-muestreo" element={<PrivateRoute roles={QA_ADMIN}><AgenteMuestreoPage /></PrivateRoute>} />
           <Route path="/auditoria" element={<PrivateRoute roles={ADMIN}><AuditoriaPage /></PrivateRoute>} />
-          <Route path="/maestros/testigo-categorias" element={<PrivateRoute roles={ADMIN}><TestigoCategoriasPage /></PrivateRoute>} />
-          <Route path="/maestros/testigo-origenes" element={<PrivateRoute roles={ADMIN}><TestigoOrigenesPage /></PrivateRoute>} />
+
+          {/* ── Definiciones (analista_qc, qa, admin) ───────────── */}
+          <Route path="/menu-definiciones" element={<PrivateRoute roles={GESTION}><DefinicionesMenuPage /></PrivateRoute>} />
+          <Route path="/maestros/testigo-categorias" element={<PrivateRoute roles={GESTION}><TestigoCategoriasPage /></PrivateRoute>} />
+          <Route path="/maestros/testigo-origenes" element={<PrivateRoute roles={GESTION}><TestigoOrigenesPage /></PrivateRoute>} />
+
+          {/* ── Muestras (analista_qc, qa, admin) ───────────────── */}
+          <Route path="/menu-muestras" element={<PrivateRoute roles={GESTION}><MuestrasMenuPage /></PrivateRoute>} />
+          <Route path="/impresion-etiquetas" element={<PrivateRoute roles={GESTION}><ImpresionEtiquetasPage /></PrivateRoute>} />
 
           {/* ── Datos Maestros (analista_qc, qa, admin) ─────────── */}
           <Route path="/maestros/especificaciones" element={<PrivateRoute roles={GESTION}><EspecificacionesPage /></PrivateRoute>} />
@@ -81,6 +96,7 @@ export default function App() {
           <Route path="/maestros/especificaciones/:id" element={<PrivateRoute roles={GESTION}><EspecificacionDetallePage /></PrivateRoute>} />
           <Route path="/maestros/especificaciones/:id/revisar" element={<PrivateRoute roles={GESTION}><EspecificacionFormPage modo="revisar" /></PrivateRoute>} />
           <Route path="/maestros/ensayos" element={<PrivateRoute roles={GESTION}><CatalogoEnsayosPage /></PrivateRoute>} />
+          <Route path="/maestros/novedades-empaque" element={<PrivateRoute roles={GESTION}><NovedadesEmpaquePage /></PrivateRoute>} />
 
           <Route path="/maestros/testigos" element={<PrivateRoute roles={GESTION}><TestigosPage /></PrivateRoute>} />
           <Route path="/maestros/testigos/nuevo" element={<PrivateRoute roles={GESTION}><TestigoFormPage modo="crear" /></PrivateRoute>} />
@@ -92,6 +108,12 @@ export default function App() {
           <Route path="/maestros/testigos/:id/editar" element={<PrivateRoute roles={GESTION}><TestigoFormPage modo="editar" /></PrivateRoute>} />
 
           <Route path="/muestras/laboratorios" element={<PrivateRoute roles={GESTION}><LaboratoriosPage /></PrivateRoute>} />
+          <Route path="/muestras/impresoras" element={<PrivateRoute roles={GESTION}><ImpresorasConfigPage /></PrivateRoute>} />
+
+          {/* ── Archivo de Contramuestras (analista_qc, qa, admin) ──── */}
+          <Route path="/cajas" element={<PrivateRoute roles={GESTION}><CajasPage /></PrivateRoute>} />
+          <Route path="/cajas/buscar-producto" element={<PrivateRoute roles={GESTION}><BusquedaProductoCajasPage /></PrivateRoute>} />
+          <Route path="/cajas/:id" element={<PrivateRoute roles={GESTION}><CajaDetallePage /></PrivateRoute>} />
 
           {/* ── Muestras: alta y detalle, accesibles a los 4 roles ── */}
           {/* Solicitudes de Muestreo: gestión (QA crea y asigna) es GESTION;

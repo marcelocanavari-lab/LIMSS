@@ -21,6 +21,8 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 from reportlab.platypus import Paragraph
 
+from app.services.formato import etiqueta_referencia
+
 _ESTILO_CELDA = ParagraphStyle(
     "celda_tabla_ensayos", fontName="Helvetica", fontSize=8, leading=9.5,
 )
@@ -146,7 +148,7 @@ def _dibujar_copia(
     subtitulo("Muestra")
     campo("ID de Muestra", _texto(datos.codigo_muestra))
     campo("Material", f"{datos.erp_CODART} - {datos.erp_DESART}")
-    campo("IR" if datos.tipo_referencia == "ir" else "Lote", _texto(datos.nro_referencia))
+    campo(etiqueta_referencia(datos.tipo_referencia), _texto(datos.nro_referencia))
     campo("Fecha de muestreo", _fmt_fecha(datos.fecha_muestreo))
     campo("Vencimiento del lote", _fmt_vencimiento_lote(vencimiento_lote))
     campo("Muestreador", _texto(datos.usuario_muestreo_nombre))

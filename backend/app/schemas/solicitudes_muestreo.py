@@ -19,6 +19,14 @@ class MuestraConfirmadaInput(BaseModel):
 
 class SolicitudMuestreoCreate(BaseModel):
     erp_nro_ir: str = Field(..., min_length=1, max_length=20)
+    # N01Id del comprobante ya resuelto por el frontend (ver búsqueda previa,
+    # GET /api/muestras/buscar-material) -- si viene, crear_solicitud lo usa
+    # directo (lineas_comprobante_por_id) en vez de volver a resolver
+    # erp_nro_ir por texto, así que una colisión de (NUMCOMO, año) no puede
+    # traer el comprobante equivocado. None = comportamiento de siempre
+    # (buscar_lineas_ir resuelve por texto) -- válido solo cuando no hay
+    # colisión, que es el caso normal.
+    erp_n01id: Optional[int] = None
     id_laboratorio: int
     id_muestreador: int
     observaciones: Optional[str] = Field(None, max_length=500)
@@ -28,7 +36,10 @@ class SolicitudMuestreoCreate(BaseModel):
     proveedor_codigo: str = Field(..., min_length=1, max_length=20)
     proveedor_nombre: str = Field(..., min_length=1, max_length=150)
     # Datos manuales del ingreso -- no vienen del ERP (ver P_CC002-1/2).
-    lote_proveedor: str = Field(..., min_length=1, max_length=20)
+    # Opcional a nivel de schema porque Material de Empaque sin codificar
+    # (GIT59SAR.CODSAR '0006') no lo exige -- crear_solicitud valida que
+    # venga completo para cualquier otro subartículo (ver ese endpoint).
+    lote_proveedor: Optional[str] = Field(None, max_length=20)
     # Se precarga en el frontend con el VENCOM del ERP al buscar el IR, pero
     # el usuario la puede corregir antes de confirmar -- si no manda nada,
     # se usa el valor del ERP como antes (ver crear_solicitud).
@@ -111,16 +122,28 @@ class SolicitudMuestreoResponse(BaseModel):
     # 'manual' (QA la crea desde "+ Nueva solicitud") o 'agente' (generada
     # automáticamente al detectar un IR nuevo -- ver app/services/agente_muestreo.py).
     origen: str = "manual"
+    # N01Id del comprobante ya resuelto (ver SolicitudMuestreoCreate.erp_n01id)
+    # -- None en solicitudes creadas antes de este campo.
+    erp_n01id: Optional[int] = None
 
 
 class SolicitudMuestreoCompletar(BaseModel):
-    """Completa id_laboratorio y/o id_muestreador en una solicitud
-    'pendiente' que quedó sin alguno de los dos -- pensado para las que
-    generó el agente (ver SolicitudMuestreoResponse.origen), que puede
-    dejarlos en blanco cuando la especificación no resuelve un único
-    laboratorio o para que QA elija quién muestrea."""
+    """Completa los datos que una solicitud generada por el agente (ver
+    SolicitudMuestreoResponse.origen) no puede resolver solo con el ERP --
+    laboratorio/muestreador (el agente los deja en blanco a propósito, ver
+    app/services/agente_muestreo.py) y los datos manuales del ingreso que en
+    el alta manual carga QA a mano (lote del proveedor, país de origen,
+    fecha de reanálisis, bultos, metodología, fabricante). Solo toca los
+    campos que vengan con valor -- si un campo no se manda, se conserva el
+    que ya tenía la solicitud."""
     id_laboratorio: Optional[int] = None
     id_muestreador: Optional[int] = None
+    lote_proveedor: Optional[str] = Field(None, min_length=1, max_length=20)
+    fecha_reanalisis: Optional[date] = None
+    pais_origen: Optional[str] = Field(None, max_length=100)
+    nro_bultos: Optional[int] = None
+    metodologia_analisis: Optional[str] = Field(None, max_length=200)
+    fabricante: Optional[str] = Field(None, max_length=200)
 
 
 class EnsayoSolicitudMuestreo(BaseModel):
@@ -180,6 +203,26 @@ class DatosFisicosMuestreo(BaseModel):
     nro_bultos_muestreados: Optional[int] = None
 
 
+class ChecklistMuestreoItem(BaseModel):
+    """Ítem del checklist físico de muestreo (etapa='muestreo' en
+    lims_especificacion_ensayos), configurable por especificación -- ver
+    lims_resultados_muestreo. Reemplaza al set fijo de 4 campos
+    (aspecto_externo/cierre/aspecto_interno/precintos) para solicitudes
+    ejecutadas de acá en adelante."""
+    id_espec_ensayo: int
+    orden: int
+    nombre_ensayo: str
+    especificacion_texto: Optional[str] = None
+    # Respuesta ya cargada, si la solicitud ya fue ejecutada (None = todavía
+    # no se confirmó el muestreo).
+    valor_cualitativo: Optional[str] = None
+
+
+class ChecklistMuestreoRespuesta(BaseModel):
+    id_espec_ensayo: int
+    valor_cualitativo: str = Field(..., min_length=1, max_length=20)
+
+
 class EnsayosParaOrdenResponse(BaseModel):
     id_solicitud: int
     nro_solicitud: str
@@ -187,10 +230,12 @@ class EnsayosParaOrdenResponse(BaseModel):
     erp_DESART: str
     estado: str
     datos_fisicos: DatosFisicosMuestreo
+    checklist_muestreo: list[ChecklistMuestreoItem] = []
 
 
 class OrdenTrabajoDigitalBody(BaseModel):
     datos_fisicos: DatosFisicosMuestreo
+    checklist_muestreo: list[ChecklistMuestreoRespuesta] = []
 
 
 class OrdenTrabajoDigitalResponse(BaseModel):

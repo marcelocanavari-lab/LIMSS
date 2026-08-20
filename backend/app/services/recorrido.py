@@ -249,6 +249,40 @@ def construir_recorrido(cursor, id_muestra: int) -> Optional[RecorridoResponse]:
 
     cursor.execute(
         """
+        SELECT se.id_espec_ensayo, se.orden, em.nombre_ensayo, se.metodologia, se.tipo_dato,
+               se.limite_inferior, se.limite_superior, se.unidad_medida, se.valor_requerido, se.obligatorio,
+               r.valor_cualitativo, r.dentro_especificacion
+        FROM lims_especificacion_ensayos se
+        INNER JOIN lims_ensayos_maestro em ON em.id_ensayo_maestro = se.id_ensayo_maestro
+        LEFT JOIN lims_resultados_muestreo r ON r.id_espec_ensayo = se.id_espec_ensayo AND r.id_muestra = ?
+        WHERE se.id_especificacion = ? AND se.etapa = 'muestreo' AND se.activo = 1
+        ORDER BY se.orden
+        """,
+        id_muestra, muestra.id_especificacion,
+    )
+    checklist_muestreo: list[EnsayoResultado] = []
+    for r in cursor.fetchall():
+        dentro = bool(r.dentro_especificacion) if r.dentro_especificacion is not None else None
+        if dentro is False:
+            hay_oos = True
+        checklist_muestreo.append(EnsayoResultado(
+            id_espec_ensayo=r.id_espec_ensayo,
+            orden=r.orden,
+            nombre_ensayo=r.nombre_ensayo,
+            metodologia=r.metodologia,
+            tipo_dato=r.tipo_dato,
+            limite_inferior=float(r.limite_inferior) if r.limite_inferior is not None else None,
+            limite_superior=float(r.limite_superior) if r.limite_superior is not None else None,
+            unidad_medida=r.unidad_medida,
+            valor_requerido=r.valor_requerido,
+            obligatorio=bool(r.obligatorio),
+            valor_numerico=None,
+            valor_cualitativo=r.valor_cualitativo,
+            dentro_especificacion=dentro,
+        ))
+
+    cursor.execute(
+        """
         SELECT d.estado_dictamen, d.fecha_dictamen, d.justificacion_oos, d.observaciones,
                u.nombre + ' ' + u.apellido AS usuario_qa_nombre
         FROM lims_dictamenes d
@@ -284,6 +318,7 @@ def construir_recorrido(cursor, id_muestra: int) -> Optional[RecorridoResponse]:
         estado=muestra.estado,
         solicitud=solicitud_info,
         resultados_orden_trabajo=resultados_orden_trabajo,
+        checklist_muestreo=checklist_muestreo,
         envios=envios,
         dictamen=dictamen,
         hay_oos=hay_oos,

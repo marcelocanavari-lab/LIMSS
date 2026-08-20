@@ -102,10 +102,18 @@ def _fila_a_subarticulo(erp_codsar: str, erp_dessar: Optional[str], config_row) 
     activo=1)."""
     configurado = config_row is not None and bool(config_row.activo)
     if not configurado:
+        # Sin configurar todavía -- requiere_muestreo en False (comportamiento
+        # histórico) pero los 4 bloques en True (default del modelo), mismo
+        # criterio de "no ocultar nada por falta de información" que usa la
+        # ficha de especificación.
         return SubarticuloConfig(erp_codsar=erp_codsar, erp_dessar=erp_dessar, configurado=False, requiere_muestreo=False)
     return SubarticuloConfig(
         erp_codsar=erp_codsar, erp_dessar=erp_dessar, configurado=True,
         requiere_muestreo=bool(config_row.requiere_muestreo),
+        incluye_bloque_muestras=bool(config_row.incluye_bloque_muestras),
+        incluye_bloque_analisis_laboratorio=bool(config_row.incluye_bloque_analisis_laboratorio),
+        incluye_bloque_muestreo_fisico=bool(config_row.incluye_bloque_muestreo_fisico),
+        incluye_bloque_testigos=bool(config_row.incluye_bloque_testigos),
         id=config_row.id, fecha_carga=config_row.fecha_carga, id_usuario_carga=config_row.id_usuario_carga,
     )
 
@@ -161,30 +169,60 @@ def guardar_subarticulo(
     cursor.execute("SELECT * FROM lims_erp_subarticulo_config WHERE erp_codsar = ?", codsar)
     existente = cursor.fetchone()
 
+    bloques_nuevos = {
+        "incluye_bloque_muestras": body.incluye_bloque_muestras,
+        "incluye_bloque_analisis_laboratorio": body.incluye_bloque_analisis_laboratorio,
+        "incluye_bloque_muestreo_fisico": body.incluye_bloque_muestreo_fisico,
+        "incluye_bloque_testigos": body.incluye_bloque_testigos,
+    }
+
     if existente:
         cursor.execute(
-            "UPDATE lims_erp_subarticulo_config SET requiere_muestreo = ?, descripcion = ?, activo = 1 WHERE id = ?",
-            1 if body.requiere_muestreo else 0, dessar, existente.id,
+            """
+            UPDATE lims_erp_subarticulo_config
+            SET requiere_muestreo = ?, descripcion = ?, activo = 1,
+                incluye_bloque_muestras = ?, incluye_bloque_analisis_laboratorio = ?,
+                incluye_bloque_muestreo_fisico = ?, incluye_bloque_testigos = ?
+            WHERE id = ?
+            """,
+            1 if body.requiere_muestreo else 0, dessar,
+            1 if body.incluye_bloque_muestras else 0, 1 if body.incluye_bloque_analisis_laboratorio else 0,
+            1 if body.incluye_bloque_muestreo_fisico else 0, 1 if body.incluye_bloque_testigos else 0,
+            existente.id,
         )
         id_fila = existente.id
         audit.registrar(
             conn, entidad="erp_subarticulo_config", accion="modificar",
             id_usuario=user["id_usuario"], id_entidad=id_fila,
-            valor_anterior={"requiere_muestreo": bool(existente.requiere_muestreo)},
-            valor_nuevo={"erp_codsar": codsar, "requiere_muestreo": body.requiere_muestreo},
+            valor_anterior={
+                "requiere_muestreo": bool(existente.requiere_muestreo),
+                "incluye_bloque_muestras": bool(existente.incluye_bloque_muestras),
+                "incluye_bloque_analisis_laboratorio": bool(existente.incluye_bloque_analisis_laboratorio),
+                "incluye_bloque_muestreo_fisico": bool(existente.incluye_bloque_muestreo_fisico),
+                "incluye_bloque_testigos": bool(existente.incluye_bloque_testigos),
+            },
+            valor_nuevo={"erp_codsar": codsar, "requiere_muestreo": body.requiere_muestreo, **bloques_nuevos},
         )
     else:
         cursor.execute(
-            "INSERT INTO lims_erp_subarticulo_config (erp_codsar, descripcion, requiere_muestreo, id_usuario_carga) "
-            "VALUES (?, ?, ?, ?)",
-            codsar, dessar, 1 if body.requiere_muestreo else 0, user["id_usuario"],
+            """
+            INSERT INTO lims_erp_subarticulo_config
+                (erp_codsar, descripcion, requiere_muestreo,
+                 incluye_bloque_muestras, incluye_bloque_analisis_laboratorio,
+                 incluye_bloque_muestreo_fisico, incluye_bloque_testigos, id_usuario_carga)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            codsar, dessar, 1 if body.requiere_muestreo else 0,
+            1 if body.incluye_bloque_muestras else 0, 1 if body.incluye_bloque_analisis_laboratorio else 0,
+            1 if body.incluye_bloque_muestreo_fisico else 0, 1 if body.incluye_bloque_testigos else 0,
+            user["id_usuario"],
         )
         cursor.execute("SELECT @@IDENTITY AS id")
         id_fila = int(cursor.fetchone().id)
         audit.registrar(
             conn, entidad="erp_subarticulo_config", accion="crear",
             id_usuario=user["id_usuario"], id_entidad=id_fila,
-            valor_nuevo={"erp_codsar": codsar, "requiere_muestreo": body.requiere_muestreo},
+            valor_nuevo={"erp_codsar": codsar, "requiere_muestreo": body.requiere_muestreo, **bloques_nuevos},
         )
 
     cursor.execute("SELECT * FROM lims_erp_subarticulo_config WHERE id = ?", id_fila)

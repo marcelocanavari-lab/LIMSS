@@ -27,6 +27,14 @@ class SubarticuloConfig(BaseModel):
     erp_dessar: Optional[str] = None
     configurado: bool
     requiere_muestreo: bool
+    # Qué bloques mostrar en la ficha de especificación de este subarticulo
+    # (ver EspecificacionDetalle.incluye_bloque_* en app/schemas/maestros.py)
+    # -- default True porque arrancan todos tildados, tanto a nivel de
+    # columna (DEFAULT 1) como para un subarticulo todavía sin configurar.
+    incluye_bloque_muestras: bool = True
+    incluye_bloque_analisis_laboratorio: bool = True
+    incluye_bloque_muestreo_fisico: bool = True
+    incluye_bloque_testigos: bool = True
     id: Optional[int] = None
     fecha_carga: Optional[datetime] = None
     id_usuario_carga: Optional[int] = None
@@ -34,3 +42,7 @@ class SubarticuloConfig(BaseModel):
 
 class SubarticuloUpsert(BaseModel):
     requiere_muestreo: bool
+    incluye_bloque_muestras: bool = True
+    incluye_bloque_analisis_laboratorio: bool = True
+    incluye_bloque_muestreo_fisico: bool = True
+    incluye_bloque_testigos: bool = True

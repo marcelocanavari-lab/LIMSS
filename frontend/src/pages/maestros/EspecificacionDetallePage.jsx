@@ -5,6 +5,7 @@ import TopBar from '../../components/TopBar';
 import { maestrosApi } from '../../api/maestros';
 import { muestrasApi } from '../../api/muestras';
 import { materialesApi } from '../../api/materiales';
+import { empaqueIaApi } from '../../api/empaqueIa';
 import { ApiError } from '../../api/client';
 
 const TIPOS_MATERIAL = [
@@ -12,6 +13,7 @@ const TIPOS_MATERIAL = [
   { value: 'granel', label: 'Granel' },
   { value: 'semi_elaborado', label: 'Semi-Elaborado' },
   { value: 'producto_terminado', label: 'Producto Terminado' },
+  { value: 'material_empaque', label: 'Material de Empaque' },
 ];
 
 function formatearEspecificacion(en) {
@@ -68,6 +70,7 @@ const MUESTRA_FORM_VACIO = {
 
 const ENSAYO_FORM_VACIO = {
   orden: 1,
+  etapa: 'analisis',
   metodologia: '',
   tipo_dato: 'numerico',
   limite_inferior: '',
@@ -79,6 +82,11 @@ const ENSAYO_FORM_VACIO = {
   requerido_por_defecto: true,
   id_laboratorio: '',
   analito: '',
+};
+
+const LABEL_ETAPA = {
+  analisis: 'Análisis de laboratorio',
+  muestreo: 'Muestreo físico',
 };
 
 // "Valoración — Trimetoprima" cuando el mismo ensayo del catálogo se repite
@@ -96,6 +104,7 @@ export default function EspecificacionDetallePage() {
 
   const [especificacion, setEspecificacion] = useState(null);
   const [ensayos, setEnsayos] = useState([]);
+  const [etapaActiva, setEtapaActiva] = useState('analisis');
   const [muestrasDefinidas, setMuestrasDefinidas] = useState([]);
   const [laboratorios, setLaboratorios] = useState([]);
   const [testigosAsociados, setTestigosAsociados] = useState([]);
@@ -134,6 +143,12 @@ export default function EspecificacionDetallePage() {
   const [errorCopiar, setErrorCopiar] = useState('');
   const [guardandoCopia, setGuardandoCopia] = useState(false);
 
+  // ── Imagen de referencia (Comparación de etiquetas con IA) ──────
+  const [referencia, setReferencia] = useState(null); // null = todavía no se buscó / sin referencia
+  const [referenciaImagenUrl, setReferenciaImagenUrl] = useState(null);
+  const [subiendoReferencia, setSubiendoReferencia] = useState(false);
+  const [errorReferencia, setErrorReferencia] = useState('');
+
   const puedeEditarEnsayos = puedeGestionar && especificacion?.vigente;
 
   function cargarTestigosAsociados() {
@@ -142,6 +157,10 @@ export default function EspecificacionDetallePage() {
 
   function cargarEnsayos() {
     return maestrosApi.listarEnsayosEspecificacion(id).then(setEnsayos);
+  }
+
+  function ensayosDeEtapa(etapa) {
+    return ensayos.filter((en) => (en.etapa || 'analisis') === etapa);
   }
 
   function cargarMuestrasDefinidas() {
@@ -161,6 +180,47 @@ export default function EspecificacionDetallePage() {
       .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo cargar la especificación'))
       .finally(() => setLoading(false));
   }, [id]);
+
+  function cargarReferencia(erpCodart) {
+    empaqueIaApi
+      .obtenerReferencia(erpCodart)
+      .then((r) => {
+        setReferencia(r);
+        return empaqueIaApi.imagenReferenciaBlob(erpCodart);
+      })
+      .then((blob) => setReferenciaImagenUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(blob); }))
+      .catch((err) => {
+        if (err instanceof ApiError && err.status === 404) {
+          setReferencia('none');
+          setReferenciaImagenUrl(null);
+        }
+      });
+  }
+
+  useEffect(() => {
+    if (especificacion?.tipo_material === 'material_empaque') {
+      cargarReferencia(especificacion.erp_CODART);
+    }
+    return () => {
+      setReferenciaImagenUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+    };
+  }, [especificacion?.tipo_material, especificacion?.erp_CODART]);
+
+  async function handleSubirReferencia(e) {
+    const archivo = e.target.files?.[0];
+    e.target.value = '';
+    if (!archivo) return;
+    setSubiendoReferencia(true);
+    setErrorReferencia('');
+    try {
+      await empaqueIaApi.subirReferencia(especificacion.erp_CODART, archivo);
+      cargarReferencia(especificacion.erp_CODART);
+    } catch (err) {
+      setErrorReferencia(err instanceof ApiError ? err.message : 'No se pudo subir la imagen de referencia');
+    } finally {
+      setSubiendoReferencia(false);
+    }
+  }
 
   useEffect(() => {
     if (!modalAbierto || ensayoMaestroElegido || catalogoBuscar.trim().length < 2) {
@@ -212,7 +272,12 @@ export default function EspecificacionDetallePage() {
     setCatalogoBuscar('');
     setCatalogoResultados([]);
     setNombreNuevoEnsayo('');
-    setFormEnsayo({ ...ENSAYO_FORM_VACIO, orden: ensayos.length + 1 });
+    setFormEnsayo({
+      ...ENSAYO_FORM_VACIO,
+      etapa: etapaActiva,
+      tipo_dato: etapaActiva === 'muestreo' ? 'cualitativo' : 'numerico',
+      orden: ensayosDeEtapa(etapaActiva).length + 1,
+    });
     setErrorEnsayo('');
     setModalAbierto(true);
   }
@@ -225,6 +290,7 @@ export default function EspecificacionDetallePage() {
     setNombreNuevoEnsayo('');
     setFormEnsayo({
       orden: en.orden,
+      etapa: en.etapa || 'analisis',
       metodologia: en.metodologia || '',
       tipo_dato: en.tipo_dato,
       limite_inferior: en.limite_inferior ?? '',
@@ -275,6 +341,7 @@ export default function EspecificacionDetallePage() {
     const body = {
       id_ensayo_maestro: ensayoMaestroElegido.id_ensayo_maestro,
       orden: Number(formEnsayo.orden),
+      etapa: formEnsayo.etapa,
       metodologia: formEnsayo.metodologia.trim() || null,
       tipo_dato: formEnsayo.tipo_dato,
       limite_inferior: formEnsayo.tipo_dato === 'numerico' && formEnsayo.limite_inferior !== '' ? Number(formEnsayo.limite_inferior) : null,
@@ -284,7 +351,7 @@ export default function EspecificacionDetallePage() {
       especificacion_texto: formEnsayo.especificacion_texto.trim() || null,
       obligatorio: formEnsayo.obligatorio,
       requerido_por_defecto: formEnsayo.requerido_por_defecto,
-      id_laboratorio: formEnsayo.id_laboratorio !== '' ? Number(formEnsayo.id_laboratorio) : null,
+      id_laboratorio: formEnsayo.etapa === 'muestreo' || formEnsayo.id_laboratorio === '' ? null : Number(formEnsayo.id_laboratorio),
       analito: formEnsayo.analito.trim() || null,
     };
 
@@ -444,6 +511,17 @@ export default function EspecificacionDetallePage() {
     );
   }
 
+  // Qué pestañas de etapa mostrar según la config del subarticulo (ver
+  // incluye_bloque_analisis_laboratorio/incluye_bloque_muestreo_fisico) --
+  // si la etapa activa quedó oculta (ej. cambió la config), se cae a la
+  // primera visible en vez de mostrar una pestaña sin botón para volver.
+  const etapasVisibles = especificacion
+    ? ['analisis', 'muestreo'].filter((etapa) => (
+        etapa === 'analisis' ? especificacion.incluye_bloque_analisis_laboratorio : especificacion.incluye_bloque_muestreo_fisico
+      ))
+    : [];
+  const etapaMostrada = etapasVisibles.includes(etapaActiva) ? etapaActiva : etapasVisibles[0];
+
   if (error || !especificacion) {
     return (
       <div className="screen">
@@ -496,163 +574,243 @@ export default function EspecificacionDetallePage() {
           )}
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--sp-3)' }}>
-          <h2 style={{ fontSize: 'var(--fs-lg)' }}>Muestras definidas ({muestrasDefinidas.length})</h2>
-          {puedeGestionar && (
-            <button className="btn btn-secondary" onClick={abrirAgregarMuestra}>
-              + Agregar muestra
-            </button>
-          )}
-        </div>
-        {muestrasDefinidas.length === 0 ? (
-          <div className="alert alert-warn" style={{ marginBottom: 'var(--sp-5)' }}>
-            Esta especificación no tiene muestras definidas. Configurá las muestras acá para que estén disponibles al generar una Solicitud de Muestreo.
+        {especificacion.tipo_material === 'material_empaque' && (
+          <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
+            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-2)' }}>Imagen de referencia (Comparación con IA)</h2>
+            <p style={{ color: 'var(--ink-2)', fontSize: 'var(--fs-sm)', marginBottom: 'var(--sp-3)' }}>
+              El arte aprobado de la etiqueta de este artículo -- se usa para comparar contra la foto de la etiqueta
+              recibida en cada inspección (ver Carga de Resultados). Es una ayuda visual, no reemplaza el criterio de
+              quien inspecciona.
+            </p>
+
+            {errorReferencia && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-3)' }}>{errorReferencia}</div>}
+
+            <div style={{ display: 'flex', gap: 'var(--sp-4)', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+              {referencia && referencia !== 'none' && referenciaImagenUrl && (
+                <div>
+                  <img
+                    src={referenciaImagenUrl}
+                    alt="Referencia de etiqueta"
+                    style={{ maxWidth: 220, maxHeight: 220, border: '1px solid var(--border)', borderRadius: 4 }}
+                  />
+                  <p style={{ fontSize: 'var(--fs-xs)', color: 'var(--ink-3)', marginTop: 'var(--sp-1)' }}>
+                    Subida el {new Date(referencia.fecha_carga).toLocaleString()} por {referencia.usuario_carga_nombre}
+                  </p>
+                </div>
+              )}
+              {referencia === 'none' && (
+                <div className="state-block" style={{ flex: 1 }}>
+                  <span className="state-block-title">Sin imagen de referencia cargada</span>
+                </div>
+              )}
+              {puedeGestionar && (
+                <label className="btn btn-secondary" style={{ cursor: subiendoReferencia ? 'default' : 'pointer' }}>
+                  {subiendoReferencia ? <span className="spinner" /> : (referencia && referencia !== 'none' ? 'Reemplazar imagen' : 'Subir imagen de referencia')}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,application/pdf"
+                    style={{ display: 'none' }}
+                    disabled={subiendoReferencia}
+                    onChange={handleSubirReferencia}
+                  />
+                </label>
+              )}
+            </div>
           </div>
-        ) : (
-          <table className="data-table data-table-compact" style={{ marginBottom: 'var(--sp-5)' }}>
-            <thead>
-              <tr>
-                <th>Tipo</th>
-                <th>Cantidad</th>
-                <th>Unidad</th>
-                <th>Genera etiqueta</th>
-                <th>Laboratorio</th>
-                {puedeGestionar && <th>Acciones</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {muestrasDefinidas.map((m) => (
-                <tr key={m.id}>
-                  <td>
-                    <span className={`badge ${BADGE_TIPO_MUESTRA[m.tipo_muestra] || 'badge-neutral'}`}>
-                      {LABEL_TIPO_MUESTRA[m.tipo_muestra] || m.tipo_muestra}
-                    </span>
-                  </td>
-                  <td className="num">{m.cantidad}</td>
-                  <td>{m.unidad}</td>
-                  <td>{m.genera_etiqueta ? '✓' : '—'}</td>
-                  <td>{m.laboratorio_nombre || 'Sin asignar'}</td>
-                  {puedeGestionar && (
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                      <button className="btn btn-ghost" onClick={() => abrirEditarMuestra(m)}>Editar</button>
-                      <button className="btn btn-ghost" style={{ color: 'var(--danger)', marginLeft: 'var(--sp-2)' }} onClick={() => handleEliminarMuestra(m)}>
-                        Eliminar
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--sp-3)' }}>
-          <h2 style={{ fontSize: 'var(--fs-lg)' }}>Ensayos ({ensayos.length})</h2>
-          {puedeEditarEnsayos && (
-            <button className="btn btn-secondary" onClick={abrirAgregarEnsayo}>
-              + Agregar ensayo
-            </button>
-          )}
-        </div>
-        <table className="data-table data-table-compact" style={{ marginBottom: 'var(--sp-5)' }}>
-          <thead>
-            <tr>
-              <th style={{ textAlign: 'center' }}>Orden</th>
-              <th>Nombre del ensayo</th>
-              <th>Metodología</th>
-              <th>Tipo</th>
-              <th>Especificación/Límites</th>
-              <th>Unidad</th>
-              <th>Laboratorio</th>
-              {puedeEditarEnsayos && <th>Acciones</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {ensayos.map((en) => (
-              <tr key={en.id_espec_ensayo}>
-                <td style={{ textAlign: 'center' }}>{en.orden}</td>
-                <td>{nombreConAnalito(en)}</td>
-                <td>{en.metodologia || '—'}</td>
-                <td>
-                  {en.tipo_dato === 'numerico' ? (
-                    <span className="badge badge-info">Numérico</span>
-                  ) : (
-                    <span className="badge badge-neutral">Cualitativo</span>
-                  )}
-                </td>
-                <td>{formatearEspecificacion(en)}</td>
-                <td>{en.tipo_dato === 'numerico' ? (en.unidad_medida || '—') : '—'}</td>
-                <td>{en.laboratorio_nombre || '—'}</td>
-                {puedeEditarEnsayos && (
-                  <td style={{ whiteSpace: 'nowrap' }}>
-                    <button className="btn btn-ghost" onClick={() => abrirEditarEnsayo(en)}>Editar</button>
-                    <button className="btn btn-ghost" style={{ color: 'var(--danger)', marginLeft: 'var(--sp-2)' }} onClick={() => handleEliminarEnsayo(en)}>
-                      Eliminar
-                    </button>
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {especificacion.incluye_bloque_muestras && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--sp-3)' }}>
+              <h2 style={{ fontSize: 'var(--fs-lg)' }}>Muestras definidas ({muestrasDefinidas.length})</h2>
+              {puedeGestionar && (
+                <button className="btn btn-secondary" onClick={abrirAgregarMuestra}>
+                  + Agregar muestra
+                </button>
+              )}
+            </div>
+            {muestrasDefinidas.length === 0 ? (
+              <div className="alert alert-warn" style={{ marginBottom: 'var(--sp-5)' }}>
+                Esta especificación no tiene muestras definidas. Configurá las muestras acá para que estén disponibles al generar una Solicitud de Muestreo.
+              </div>
+            ) : (
+              <table className="data-table data-table-compact" style={{ marginBottom: 'var(--sp-5)' }}>
+                <thead>
+                  <tr>
+                    <th>Tipo</th>
+                    <th>Cantidad</th>
+                    <th>Unidad</th>
+                    <th>Genera etiqueta</th>
+                    <th>Laboratorio</th>
+                    {puedeGestionar && <th>Acciones</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {muestrasDefinidas.map((m) => (
+                    <tr key={m.id}>
+                      <td>
+                        <span className={`badge ${BADGE_TIPO_MUESTRA[m.tipo_muestra] || 'badge-neutral'}`}>
+                          {LABEL_TIPO_MUESTRA[m.tipo_muestra] || m.tipo_muestra}
+                        </span>
+                      </td>
+                      <td className="num">{m.cantidad}</td>
+                      <td>{m.unidad}</td>
+                      <td>{m.genera_etiqueta ? '✓' : '—'}</td>
+                      <td>{m.laboratorio_nombre || 'Sin asignar'}</td>
+                      {puedeGestionar && (
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          <button className="btn btn-ghost" onClick={() => abrirEditarMuestra(m)}>Editar</button>
+                          <button className="btn btn-ghost" style={{ color: 'var(--danger)', marginLeft: 'var(--sp-2)' }} onClick={() => handleEliminarMuestra(m)}>
+                            Eliminar
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </>
+        )}
 
-        <h2 style={{ fontSize: 'var(--fs-lg)', margin: 'var(--sp-5) 0 var(--sp-3)' }}>
-          Testigos asociados ({testigosAsociados.length})
-        </h2>
-        <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
-          {testigosAsociados.length === 0 ? (
-            <p style={{ color: 'var(--ink-2)' }}>Ningún testigo asociado todavía.</p>
-          ) : (
-            <table className="data-table" style={{ marginBottom: puedeGestionar ? 'var(--sp-4)' : 0 }}>
+        {etapasVisibles.length > 0 && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--sp-3)' }}>
+              <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
+                {etapasVisibles.map((etapa) => (
+                  <button
+                    key={etapa}
+                    type="button"
+                    className={etapaMostrada === etapa ? 'btn btn-primary' : 'btn btn-secondary'}
+                    onClick={() => setEtapaActiva(etapa)}
+                  >
+                    {LABEL_ETAPA[etapa]} ({ensayosDeEtapa(etapa).length})
+                  </button>
+                ))}
+              </div>
+              {puedeEditarEnsayos && (
+                <button className="btn btn-secondary" onClick={abrirAgregarEnsayo}>
+                  + Agregar ítem
+                </button>
+              )}
+            </div>
+            {etapaMostrada === 'muestreo' && (
+              <p style={{ color: 'var(--ink-2)', fontSize: 'var(--fs-sm)', marginBottom: 'var(--sp-3)' }}>
+                Checklist físico que se revisa al ejecutar el muestreo (Cumple/No cumple) -- ver Orden de Trabajo digital.
+              </p>
+            )}
+            <table className="data-table data-table-compact" style={{ marginBottom: 'var(--sp-5)' }}>
               <thead>
                 <tr>
-                  <th>Código</th>
-                  <th>Nombre</th>
-                  <th>Vencimiento</th>
-                  <th>Estado</th>
-                  <th>Stock</th>
-                  {puedeGestionar && <th></th>}
+                  <th style={{ textAlign: 'center' }}>Orden</th>
+                  <th>Nombre del ensayo</th>
+                  <th>Metodología</th>
+                  <th>Tipo</th>
+                  <th>Especificación/Límites</th>
+                  <th>Unidad</th>
+                  <th>Laboratorio</th>
+                  {puedeEditarEnsayos && <th>Acciones</th>}
                 </tr>
               </thead>
               <tbody>
-                {testigosAsociados.map((t) => (
-                  <tr key={t.id_testigo}>
-                    <td style={{ textAlign: 'left', fontFamily: 'var(--font-mono)' }}>{t.codigo}</td>
-                    <td style={{ textAlign: 'left' }}>{t.nombre}</td>
-                    <td style={{ textAlign: 'left' }}>{formatFechaVencimiento(t.fecha_vencimiento)}</td>
-                    <td style={{ textAlign: 'left' }}><BadgeEstadoTestigo testigo={t} /></td>
-                    <td style={{ textAlign: 'left' }}>{t.stock_actual != null ? `${t.stock_actual} ${t.unidad_medida || ''}` : '—'}</td>
-                    {puedeGestionar && (
-                      <td style={{ textAlign: 'left' }}>
-                        <button className="btn btn-ghost" style={{ color: 'var(--danger)' }} onClick={() => handleDesasociarTestigo(t.id_testigo)}>
-                          Quitar
+                {ensayosDeEtapa(etapaMostrada).map((en) => (
+                  <tr key={en.id_espec_ensayo}>
+                    <td style={{ textAlign: 'center' }}>{en.orden}</td>
+                    <td>{nombreConAnalito(en)}</td>
+                    <td>{en.metodologia || '—'}</td>
+                    <td>
+                      {en.tipo_dato === 'numerico' ? (
+                        <span className="badge badge-info">Numérico</span>
+                      ) : (
+                        <span className="badge badge-neutral">Cualitativo</span>
+                      )}
+                    </td>
+                    <td>{formatearEspecificacion(en)}</td>
+                    <td>{en.tipo_dato === 'numerico' ? (en.unidad_medida || '—') : '—'}</td>
+                    <td>{en.etapa === 'muestreo' ? 'N/A' : (en.laboratorio_nombre || '—')}</td>
+                    {puedeEditarEnsayos && (
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <button className="btn btn-ghost" onClick={() => abrirEditarEnsayo(en)}>Editar</button>
+                        <button className="btn btn-ghost" style={{ color: 'var(--danger)', marginLeft: 'var(--sp-2)' }} onClick={() => handleEliminarEnsayo(en)}>
+                          Eliminar
                         </button>
                       </td>
                     )}
                   </tr>
                 ))}
+                {ensayosDeEtapa(etapaMostrada).length === 0 && (
+                  <tr>
+                    <td colSpan={puedeEditarEnsayos ? 8 : 7} style={{ textAlign: 'center', color: 'var(--ink-2)' }}>
+                      Sin ítems configurados para {LABEL_ETAPA[etapaMostrada].toLowerCase()}.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
-          )}
+          </>
+        )}
 
-          {puedeGestionar && (
-            <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
-              <select className="field-input" style={{ flex: 1 }} value={idTestigoNuevo} onChange={(e) => setIdTestigoNuevo(e.target.value)}>
-                <option value="">Seleccioná un testigo para asociar...</option>
-                {testigosDisponibles
-                  .filter((t) => !testigosAsociados.some((ta) => ta.id_testigo === t.id_testigo))
-                  .map((t) => (
-                    <option key={t.id_testigo} value={t.id_testigo}>{t.codigo} — {t.nombre}</option>
-                  ))}
-              </select>
-              <button type="button" className="btn btn-secondary" disabled={!idTestigoNuevo} onClick={handleAsociarTestigo}>
-                Asociar
-              </button>
+        {especificacion.incluye_bloque_testigos && (
+          <>
+            <h2 style={{ fontSize: 'var(--fs-lg)', margin: 'var(--sp-5) 0 var(--sp-3)' }}>
+              Testigos asociados ({testigosAsociados.length})
+            </h2>
+            <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
+              {testigosAsociados.length === 0 ? (
+                <p style={{ color: 'var(--ink-2)' }}>Ningún testigo asociado todavía.</p>
+              ) : (
+                <table className="data-table" style={{ marginBottom: puedeGestionar ? 'var(--sp-4)' : 0 }}>
+                  <thead>
+                    <tr>
+                      <th>Código</th>
+                      <th>Nombre</th>
+                      <th>Vencimiento</th>
+                      <th>Estado</th>
+                      <th>Stock</th>
+                      {puedeGestionar && <th></th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {testigosAsociados.map((t) => (
+                      <tr key={t.id_testigo}>
+                        <td style={{ textAlign: 'left', fontFamily: 'var(--font-mono)' }}>{t.codigo}</td>
+                        <td style={{ textAlign: 'left' }}>{t.nombre}</td>
+                        <td style={{ textAlign: 'left' }}>{formatFechaVencimiento(t.fecha_vencimiento)}</td>
+                        <td style={{ textAlign: 'left' }}><BadgeEstadoTestigo testigo={t} /></td>
+                        <td style={{ textAlign: 'left' }}>{t.stock_actual != null ? `${t.stock_actual} ${t.unidad_medida || ''}` : '—'}</td>
+                        {puedeGestionar && (
+                          <td style={{ textAlign: 'left' }}>
+                            <button className="btn btn-ghost" style={{ color: 'var(--danger)' }} onClick={() => handleDesasociarTestigo(t.id_testigo)}>
+                              Quitar
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              {puedeGestionar && (
+                <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+                  <select className="field-input" style={{ flex: 1 }} value={idTestigoNuevo} onChange={(e) => setIdTestigoNuevo(e.target.value)}>
+                    <option value="">Seleccioná un testigo para asociar...</option>
+                    {testigosDisponibles
+                      .filter((t) => !testigosAsociados.some((ta) => ta.id_testigo === t.id_testigo))
+                      .map((t) => (
+                        <option key={t.id_testigo} value={t.id_testigo}>{t.codigo} — {t.nombre}</option>
+                      ))}
+                  </select>
+                  <button type="button" className="btn btn-secondary" disabled={!idTestigoNuevo} onClick={handleAsociarTestigo}>
+                    Asociar
+                  </button>
+                </div>
+              )}
+
+              {errorTestigos && <div className="alert alert-danger" style={{ marginTop: 'var(--sp-3)' }}>{errorTestigos}</div>}
             </div>
-          )}
-
-          {errorTestigos && <div className="alert alert-danger" style={{ marginTop: 'var(--sp-3)' }}>{errorTestigos}</div>}
-        </div>
+          </>
+        )}
       </div>
 
       {modalAbierto && (
@@ -728,6 +886,25 @@ export default function EspecificacionDetallePage() {
                 </div>
 
                 <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
+                  <div className="field" style={{ flex: '1 1 160px' }}>
+                    <label className="field-label">Etapa</label>
+                    <select
+                      className="field-input"
+                      value={formEnsayo.etapa}
+                      onChange={(e) => {
+                        const etapa = e.target.value;
+                        setFormEnsayo((prev) => ({
+                          ...prev,
+                          etapa,
+                          tipo_dato: etapa === 'muestreo' ? 'cualitativo' : prev.tipo_dato,
+                          id_laboratorio: etapa === 'muestreo' ? '' : prev.id_laboratorio,
+                        }));
+                      }}
+                    >
+                      <option value="analisis">Análisis de laboratorio</option>
+                      <option value="muestreo">Muestreo físico</option>
+                    </select>
+                  </div>
                   <div className="field" style={{ flex: '2 1 220px' }}>
                     <label className="field-label">Analito (opcional)</label>
                     <input
@@ -823,19 +1000,21 @@ export default function EspecificacionDetallePage() {
                   />
                 </div>
 
-                <div className="field">
-                  <label className="field-label">Laboratorio</label>
-                  <select
-                    className="field-input"
-                    value={formEnsayo.id_laboratorio}
-                    onChange={(e) => setFormEnsayo((prev) => ({ ...prev, id_laboratorio: e.target.value }))}
-                  >
-                    <option value="">(sin asignar)</option>
-                    {laboratorios.map((lab) => (
-                      <option key={lab.id_laboratorio} value={lab.id_laboratorio}>{lab.nombre}</option>
-                    ))}
-                  </select>
-                </div>
+                {formEnsayo.etapa !== 'muestreo' && (
+                  <div className="field">
+                    <label className="field-label">Laboratorio</label>
+                    <select
+                      className="field-input"
+                      value={formEnsayo.id_laboratorio}
+                      onChange={(e) => setFormEnsayo((prev) => ({ ...prev, id_laboratorio: e.target.value }))}
+                    >
+                      <option value="">(sin asignar)</option>
+                      {laboratorios.map((lab) => (
+                        <option key={lab.id_laboratorio} value={lab.id_laboratorio}>{lab.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <div style={{ display: 'flex', gap: 'var(--sp-4)', flexWrap: 'wrap', marginTop: 'var(--sp-2)', marginBottom: 'var(--sp-3)' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}>

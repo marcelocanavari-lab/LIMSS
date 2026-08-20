@@ -11,6 +11,7 @@ const TIPOS_MATERIAL = [
   { value: 'granel', label: 'Granel' },
   { value: 'semi_elaborado', label: 'Semi-Elaborado' },
   { value: 'producto_terminado', label: 'PT' },
+  { value: 'material_empaque', label: 'Material de Empaque' },
 ];
 
 function Indicador({ activo }) {

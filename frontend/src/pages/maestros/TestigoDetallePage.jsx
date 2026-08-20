@@ -24,6 +24,7 @@ export default function TestigoDetallePage() {
   const [idLaboratorioNuevo, setIdLaboratorioNuevo] = useState('');
   const [consumoNuevo, setConsumoNuevo] = useState('');
   const [unidadConsumoNuevo, setUnidadConsumoNuevo] = useState('mg');
+  const [fechaEnvioNuevo, setFechaEnvioNuevo] = useState('');
   const [agregandoLab, setAgregandoLab] = useState(false);
   const [quitandoLab, setQuitandoLab] = useState(null);
   const [errorLab, setErrorLab] = useState('');
@@ -31,6 +32,7 @@ export default function TestigoDetallePage() {
   const [editandoConsumoId, setEditandoConsumoId] = useState(null);
   const [consumoEditado, setConsumoEditado] = useState('');
   const [unidadConsumoEditado, setUnidadConsumoEditado] = useState('mg');
+  const [fechaEnvioEditado, setFechaEnvioEditado] = useState('');
   const [guardandoConsumo, setGuardandoConsumo] = useState(false);
 
   const [ajusteCantidad, setAjusteCantidad] = useState('');
@@ -62,12 +64,13 @@ export default function TestigoDetallePage() {
     setAgregandoLab(true);
     try {
       const laboratorios = await maestrosApi.asignarLaboratorioTestigo(
-        id, Number(idLaboratorioNuevo), consumoNuevo, unidadConsumoNuevo
+        id, Number(idLaboratorioNuevo), consumoNuevo, unidadConsumoNuevo, fechaEnvioNuevo
       );
       setTestigo((prev) => ({ ...prev, laboratorios }));
       setIdLaboratorioNuevo('');
       setConsumoNuevo('');
       setUnidadConsumoNuevo('mg');
+      setFechaEnvioNuevo('');
     } catch (err) {
       setErrorLab(err instanceof ApiError ? err.message : 'No se pudo asignar el laboratorio');
     } finally {
@@ -92,6 +95,7 @@ export default function TestigoDetallePage() {
     setEditandoConsumoId(l.id_laboratorio);
     setConsumoEditado(l.consumo_estimado != null ? String(l.consumo_estimado) : '');
     setUnidadConsumoEditado(l.unidad_consumo || 'mg');
+    setFechaEnvioEditado(l.fecha_envio_real || '');
     setErrorLab('');
   }
 
@@ -104,7 +108,7 @@ export default function TestigoDetallePage() {
     setGuardandoConsumo(true);
     try {
       const laboratorios = await maestrosApi.editarConsumoLaboratorioTestigo(
-        id, idLaboratorio, consumoEditado, unidadConsumoEditado
+        id, idLaboratorio, consumoEditado, unidadConsumoEditado, fechaEnvioEditado
       );
       setTestigo((prev) => ({ ...prev, laboratorios }));
       setEditandoConsumoId(null);
@@ -235,6 +239,9 @@ export default function TestigoDetallePage() {
                       <span style={{ color: 'var(--ink-2)', fontSize: 'var(--fs-sm)' }}>
                         Consumo estimado: {l.consumo_estimado != null ? `${l.consumo_estimado} ${l.unidad_consumo || ''}` : '—'}
                       </span>
+                      <span style={{ color: 'var(--ink-2)', fontSize: 'var(--fs-sm)' }}>
+                        Fecha de envío: {l.fecha_envio_real || '—'}
+                      </span>
                       {puedeGestionar && editandoConsumoId !== l.id_laboratorio && (
                         <button
                           type="button"
@@ -284,6 +291,16 @@ export default function TestigoDetallePage() {
                           <option value="mg">mg</option>
                           <option value="ml">ml</option>
                         </select>
+                      </div>
+                      <div className="field" style={{ margin: 0, flex: '0 0 160px' }}>
+                        <label className="field-label" style={{ fontSize: 'var(--fs-xs)' }}>Fecha de envío</label>
+                        <input
+                          className="field-input"
+                          type="date"
+                          value={fechaEnvioEditado}
+                          onChange={(e) => setFechaEnvioEditado(e.target.value)}
+                          disabled={guardandoConsumo}
+                        />
                       </div>
                       <button
                         type="button"
@@ -350,6 +367,16 @@ export default function TestigoDetallePage() {
                   <option value="mg">mg</option>
                   <option value="ml">ml</option>
                 </select>
+              </div>
+              <div className="field" style={{ margin: 0, flex: '0 0 160px' }}>
+                <label className="field-label" style={{ fontSize: 'var(--fs-xs)' }}>Fecha de envío</label>
+                <input
+                  className="field-input"
+                  type="date"
+                  value={fechaEnvioNuevo}
+                  onChange={(e) => setFechaEnvioNuevo(e.target.value)}
+                  disabled={agregandoLab}
+                />
               </div>
               <button
                 type="button"

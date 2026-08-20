@@ -3,11 +3,9 @@ import TopBar from '../components/TopBar';
 
 const ITEMS = [
   { label: 'Gestión de Usuarios', ruta: '/usuarios' },
-  { label: 'Categorías de Testigos', ruta: '/maestros/testigo-categorias' },
-  { label: 'Orígenes de Testigos', ruta: '/maestros/testigo-origenes' },
   { label: 'Configuración ERP', ruta: '/erp-config' },
   { label: 'Subartículos y Muestreo', ruta: '/subarticulos-config' },
-  { label: 'Agente de Muestreo', ruta: '/agente-muestreo' },
+  { label: 'Impresoras de Etiquetas', ruta: '/muestras/impresoras' },
   { label: 'Auditoría', ruta: '/auditoria' },
 ];
 

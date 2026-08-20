@@ -7,6 +7,7 @@ primera ruta cuyo patrón calza sintácticamente, y "/{id_muestra}" (un solo
 segmento, tipo genérico a nivel de ruteo) calzaría con "/laboratorios" si se
 declarara antes -- por eso los literales van primero.
 """
+import logging
 from datetime import date, datetime
 from typing import Optional
 
@@ -25,6 +26,12 @@ from app.schemas.muestras import (
     EnvioResponse,
     EtiquetaResponse,
     FacturaResumenEnvio,
+    ImpresoraEtiquetaCreate,
+    ImpresoraEtiquetaResponse,
+    ImpresoraEtiquetaUpdate,
+    ImprimirDirectoBody,
+    ImprimirDirectoResponse,
+    ItemImpresionEtiquetas,
     LaboratorioCreate,
     LaboratorioResponse,
     LaboratorioUpdate,
@@ -39,15 +46,26 @@ from app.schemas.muestras import (
     TestigoRemito,
 )
 from app.api.routes.facturas import ensayos_de_envio
-from app.api.routes.solicitudes_muestreo import generar_pdf_etiquetas_de_solicitud, obtener_solicitud_o_404
+from app.api.routes.solicitudes_muestreo import (
+    generar_pdf_etiquetas_de_solicitud,
+    iniciales_muestreador,
+    obtener_muestras_confirmadas,
+    obtener_solicitud_o_404,
+)
+from app.services.impresion_sato import generar_sbpl_etiqueta, generar_sbpl_etiqueta_estado, imprimir_sbpl
+from app.services.pdf_solicitud_muestreo import generar_pdf_etiqueta_muestra
 from app.schemas.facturas import EnvioSinFacturar
 from app.schemas.recorrido import RecorridoResponse
 from app.services import audit, storage
-from app.services.erp_ir import buscar_lineas_ir, formatear_nro_ir, normalizar_fecha_sentinel
+from app.services.formato import etiqueta_referencia, formatear_cantidad
+from app.services.especificaciones import tiene_ensayos_analisis
+from app.services.erp_ir import buscar_todos_candidatos_ir, formatear_nro_ir, normalizar_fecha_sentinel
 from app.services.erp_lotes import buscar_lote
 from app.services.erp_materiales import obtener_codsar_por_tipo
 from app.services.pdf_legajo import AdjuntoLegajo, generar_pdf_legajo
 from app.services.recorrido import construir_recorrido
+
+logger = logging.getLogger("muestras")
 
 router = APIRouter(prefix="/api/muestras", tags=["Muestras y Envíos"])
 
@@ -428,13 +446,35 @@ def envios_sin_facturar(
 
 # ── Búsqueda de IR en el ERP (REQ-ENV-002) ────────────────────────
 
+# CODSAR de artículos que legítimamente se buscan por IR en estas pantallas
+# -- Materia Prima ('0001') y Material de Empaque, codificado o sin
+# codificar ('0005'/'0006'). Cualquier otro CODSAR (Granel, Semi-Elaborado,
+# Producto Terminado) sí amerita la advertencia de "verificá el IR", porque
+# esos tipos no se reciben por IR en el circuito normal.
+_CODSAR_ESPERADOS_POR_IR = {"0001", "0005", "0006"}
+
+
+def _advertencia_codsar_inesperado(codsar: Optional[str], dessar: Optional[str]) -> Optional[str]:
+    if codsar is None or codsar in _CODSAR_ESPERADOS_POR_IR:
+        return None
+    return (
+        f"Este IR corresponde a un artículo de tipo {dessar.strip()} (no es Materia Prima ni Material de Empaque). "
+        "Verificá que el número de IR sea correcto."
+    )
+
+
 @router.get("/erp/ir/{nro_ir}", response_model=list[LineaIR])
 def buscar_ir(
     nro_ir: str,
     user: dict = Depends(require_rol("muestreador", "analista_qc", "qa", "admin")),
     erp: pyodbc.Connection = Depends(erp_db),
 ):
-    rows = buscar_lineas_ir(erp, nro_ir)
+    # buscar_todos_candidatos_ir (en vez de buscar_lineas_ir): si hay
+    # colisión real de (NUMCOMO, año) -- más de un comprobante para este IR,
+    # ver investigación previa -- devuelve los ítems de TODOS los candidatos
+    # en vez de que el backend elija uno solo. Sin colisión, el resultado es
+    # idéntico a antes (0 o 1 comprobante).
+    rows = buscar_todos_candidatos_ir(erp, nro_ir)
     if not rows:
         raise HTTPException(status_code=404, detail=f"No se encontró el IR '{nro_ir}' en el ERP")
     return [
@@ -445,11 +485,8 @@ def buscar_ir(
             fecha_ingreso=normalizar_fecha_sentinel(r.FECCOM),
             fecha_vencimiento=normalizar_fecha_sentinel(r.VENCOM),
             cantidad_ingresada=float(r.cantidad_total) if r.cantidad_total is not None else None,
-            advertencia=(
-                f"Este IR corresponde a un artículo de tipo {r.DESSAR.strip()} (no es Materia Prima). "
-                "Verificá que el número de IR sea correcto."
-                if r.CODSAR is not None and r.CODSAR != "0001" else None
-            ),
+            advertencia=_advertencia_codsar_inesperado(r.CODSAR, r.DESSAR),
+            fecha_comprobante=r.FECCOR.date() if hasattr(r.FECCOR, "date") else r.FECCOR,
         )
         for r in rows
     ]
@@ -468,7 +505,10 @@ def buscar_material(
     por número de lote, también en el ERP pero como atributo del artículo
     (GIM25ALT/GIT52DSC -- ver erp_lotes.py), no por un documento de recepción."""
     if tipo == "materia_prima":
-        rows = buscar_lineas_ir(erp, referencia)
+        # buscar_todos_candidatos_ir: ver comentario en buscar_ir más arriba
+        # -- misma lógica, un MaterialEncontrado por cada comprobante
+        # candidato cuando hay colisión, cada uno con su propio N01Id.
+        rows = buscar_todos_candidatos_ir(erp, referencia)
         if not rows:
             raise HTTPException(status_code=404, detail=f"No se encontró el IR '{referencia}' en el ERP")
         return [
@@ -478,11 +518,10 @@ def buscar_material(
                 fecha_ingreso=normalizar_fecha_sentinel(r.FECCOM),
                 fecha_vencimiento=normalizar_fecha_sentinel(r.VENCOM),
                 cantidad_ingresada=float(r.cantidad_total) if r.cantidad_total is not None else None,
-                advertencia=(
-                    f"Este IR corresponde a un artículo de tipo {r.DESSAR.strip()} (no es Materia Prima). "
-                    "Verificá que el número de IR sea correcto."
-                    if r.CODSAR is not None and r.CODSAR != "0001" else None
-                ),
+                CODSAR=r.CODSAR,
+                advertencia=_advertencia_codsar_inesperado(r.CODSAR, r.DESSAR),
+                N01Id=r.N01Id,
+                fecha_comprobante=r.FECCOR.date() if hasattr(r.FECCOR, "date") else r.FECCOR,
             )
             for r in rows
         ]
@@ -496,6 +535,205 @@ def buscar_material(
         )
         for r in rows
     ]
+
+
+@router.get("/buscar-etiquetas", response_model=list[ItemImpresionEtiquetas])
+def buscar_para_etiquetas(
+    buscar: str = Query(..., min_length=1),
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Búsqueda unificada para la pantalla "Impresión de Etiquetas" del
+    Dashboard: solicitudes (candidatas a CUARENTENA, aunque todavía no
+    tengan muestra vinculada -- se imprime al ingreso, antes del muestreo
+    físico) + muestras (candidatas a MUESTRA siempre, y a APROBADO si el
+    dictamen las aprobó). Ruta literal -- declarada ACÁ, antes de cualquier
+    "/{id_muestra}" (empieza más abajo, en "Muestras"), mismo motivo que
+    "/impresoras..." un poco más abajo: un solo segmento matchea contra
+    "/{id_muestra}" sin importar el nombre."""
+    cursor = conn.cursor()
+    like = f"%{buscar}%"
+    resultados: list[ItemImpresionEtiquetas] = []
+
+    cursor.execute(
+        """
+        SELECT TOP 20 id_solicitud, nro_solicitud, erp_CODART, erp_DESART, estado, nro_bultos
+        FROM lims_solicitudes_muestreo
+        WHERE (nro_solicitud LIKE ? OR erp_CODART LIKE ? OR erp_DESART LIKE ? OR erp_nro_ir LIKE ?)
+          AND estado <> 'anulada' AND nro_bultos IS NOT NULL
+        ORDER BY fecha_solicitud DESC
+        """,
+        like, like, like, like,
+    )
+    for r in cursor.fetchall():
+        resultados.append(ItemImpresionEtiquetas(
+            tipo="solicitud", id=r.id_solicitud, identificador=r.nro_solicitud,
+            erp_CODART=(r.erp_CODART or "").strip(), erp_DESART=r.erp_DESART or "",
+            estado=r.estado, etiquetas_disponibles=["cuarentena"],
+        ))
+
+    cursor.execute(
+        _SELECT_MUESTRA + """
+        WHERE (m.codigo_muestra LIKE ? OR m.erp_CODART LIKE ? OR m.erp_DESART LIKE ? OR m.nro_referencia LIKE ?)
+        ORDER BY m.fecha_muestreo DESC
+        """,
+        like, like, like, like,
+    )
+    for m in cursor.fetchall()[:20]:
+        etiquetas = ["muestra"]
+        if m.estado == "aprobado":
+            etiquetas.append("aprobado")
+        resultados.append(ItemImpresionEtiquetas(
+            tipo="muestra", id=m.id_muestra, identificador=m.codigo_muestra,
+            erp_CODART=(m.erp_CODART or "").strip(), erp_DESART=m.erp_DESART or "",
+            estado=m.estado, etiquetas_disponibles=etiquetas,
+        ))
+
+    return resultados
+
+
+# ── Impresoras de etiquetas (SATO, impresión directa) ──────────────
+#
+# Rutas literales ("/impresoras...") -- se declaran ACÁ, antes de cualquier
+# "/{id_muestra}" (empieza más abajo, en "Muestras"), por el mismo motivo
+# documentado arriba para Laboratorios: un solo segmento matchea contra
+# "/{id_muestra}" sin importar el nombre.
+
+def _fila_a_impresora(row) -> ImpresoraEtiquetaResponse:
+    return ImpresoraEtiquetaResponse(
+        id_impresora=row.id_impresora, nombre=row.nombre, modelo=row.modelo,
+        tipo_conexion=getattr(row, "tipo_conexion", None) or "compartida",
+        ruta_red=row.ruta_red, ip_directa=getattr(row, "ip_directa", None),
+        puerto_directo=getattr(row, "puerto_directo", None) or 9100,
+        resolucion_dpi=row.resolucion_dpi,
+        ancho_mm=row.ancho_mm, alto_mm=row.alto_mm, activa=bool(row.activa),
+    )
+
+
+@router.post("/impresoras", response_model=ImpresoraEtiquetaResponse, status_code=201)
+def crear_impresora(
+    body: ImpresoraEtiquetaCreate,
+    user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO lims_impresoras_etiquetas
+            (nombre, modelo, tipo_conexion, ruta_red, ip_directa, puerto_directo,
+             resolucion_dpi, ancho_mm, alto_mm, activa, id_usuario_carga)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+        """,
+        body.nombre, body.modelo, body.tipo_conexion, body.ruta_red, body.ip_directa, body.puerto_directo,
+        body.resolucion_dpi, body.ancho_mm, body.alto_mm, user["id_usuario"],
+    )
+    cursor.execute("SELECT @@IDENTITY AS id")
+    id_impresora = int(cursor.fetchone().id)
+
+    audit.registrar(
+        conn, entidad="impresora_etiqueta", accion="crear",
+        id_usuario=user["id_usuario"], id_entidad=id_impresora,
+        valor_nuevo={
+            "nombre": body.nombre, "tipo_conexion": body.tipo_conexion,
+            "ruta_red": body.ruta_red, "ip_directa": body.ip_directa, "puerto_directo": body.puerto_directo,
+        },
+    )
+
+    cursor.execute("SELECT * FROM lims_impresoras_etiquetas WHERE id_impresora = ?", id_impresora)
+    return _fila_a_impresora(cursor.fetchone())
+
+
+@router.get("/impresoras", response_model=list[ImpresoraEtiquetaResponse])
+def listar_impresoras(
+    activa: Optional[bool] = Query(None),
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    if activa is None:
+        cursor.execute("SELECT * FROM lims_impresoras_etiquetas ORDER BY nombre")
+    else:
+        cursor.execute("SELECT * FROM lims_impresoras_etiquetas WHERE activa = ? ORDER BY nombre", 1 if activa else 0)
+    return [_fila_a_impresora(r) for r in cursor.fetchall()]
+
+
+@router.put("/impresoras/{id_impresora}", response_model=ImpresoraEtiquetaResponse)
+def editar_impresora(
+    id_impresora: int,
+    body: ImpresoraEtiquetaUpdate,
+    user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM lims_impresoras_etiquetas WHERE id_impresora = ?", id_impresora)
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Impresora no encontrada")
+
+    campos_anteriores = {
+        "nombre": row.nombre, "modelo": row.modelo,
+        "tipo_conexion": getattr(row, "tipo_conexion", None) or "compartida",
+        "ruta_red": row.ruta_red, "ip_directa": getattr(row, "ip_directa", None),
+        "puerto_directo": getattr(row, "puerto_directo", None) or 9100,
+        "resolucion_dpi": row.resolucion_dpi, "ancho_mm": row.ancho_mm, "alto_mm": row.alto_mm,
+        "activa": bool(row.activa),
+    }
+    campos_nuevos = {
+        "nombre": body.nombre, "modelo": body.modelo, "tipo_conexion": body.tipo_conexion,
+        "ruta_red": body.ruta_red, "ip_directa": body.ip_directa, "puerto_directo": body.puerto_directo,
+        "resolucion_dpi": body.resolucion_dpi, "ancho_mm": body.ancho_mm, "alto_mm": body.alto_mm,
+        "activa": body.activa,
+    }
+
+    cursor.execute(
+        """
+        UPDATE lims_impresoras_etiquetas
+        SET nombre = ?, modelo = ?, tipo_conexion = ?, ruta_red = ?, ip_directa = ?, puerto_directo = ?,
+            resolucion_dpi = ?, ancho_mm = ?, alto_mm = ?, activa = ?
+        WHERE id_impresora = ?
+        """,
+        body.nombre, body.modelo, body.tipo_conexion, body.ruta_red, body.ip_directa, body.puerto_directo,
+        body.resolucion_dpi, body.ancho_mm, body.alto_mm, 1 if body.activa else 0, id_impresora,
+    )
+
+    valor_anterior = {k: v for k, v in campos_anteriores.items() if v != campos_nuevos[k]}
+    valor_nuevo = {k: v for k, v in campos_nuevos.items() if v != campos_anteriores[k]}
+    audit.registrar(
+        conn, entidad="impresora_etiqueta", accion="modificar",
+        id_usuario=user["id_usuario"], id_entidad=id_impresora,
+        valor_anterior=valor_anterior or None, valor_nuevo=valor_nuevo or None,
+    )
+
+    cursor.execute("SELECT * FROM lims_impresoras_etiquetas WHERE id_impresora = ?", id_impresora)
+    return _fila_a_impresora(cursor.fetchone())
+
+
+@router.put("/impresoras/{id_impresora}/estado", response_model=ImpresoraEtiquetaResponse)
+def cambiar_estado_impresora(
+    id_impresora: int,
+    activa: bool,
+    user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM lims_impresoras_etiquetas WHERE id_impresora = ?", id_impresora)
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Impresora no encontrada")
+
+    cursor.execute(
+        "UPDATE lims_impresoras_etiquetas SET activa = ? WHERE id_impresora = ?",
+        1 if activa else 0, id_impresora,
+    )
+
+    audit.registrar(
+        conn, entidad="impresora_etiqueta", accion="activar" if activa else "desactivar",
+        id_usuario=user["id_usuario"], id_entidad=id_impresora,
+        valor_anterior={"activa": bool(row.activa)}, valor_nuevo={"activa": activa},
+    )
+
+    cursor.execute("SELECT * FROM lims_impresoras_etiquetas WHERE id_impresora = ?", id_impresora)
+    return _fila_a_impresora(cursor.fetchone())
 
 
 # ── Muestras (REQ-ENV-001) ────────────────────────────────────────
@@ -543,17 +781,24 @@ def crear_muestra(
                 cantidad_enviada = float(fila_cantidad.cantidad)
                 unidad_enviada = fila_cantidad.unidad
 
+    # Sin ningún ensayo de etapa 'analisis' en la especificación (solo
+    # checklist de muestreo), no hay nada que enviar a un laboratorio -- la
+    # muestra arranca directo en 'en_análisis' en vez de 'pendiente_envio'
+    # (mismo criterio que _crear_muestra_desde_solicitud en
+    # solicitudes_muestreo.py).
+    estado_inicial = "en_análisis" if not tiene_ensayos_analisis(cursor, id_especificacion) else "pendiente_envio"
+
     cursor.execute(
         """
         INSERT INTO lims_muestras
-            (codigo_muestra, tipo_referencia, tipo_material, nro_referencia, erp_IdM21, erp_CODART, erp_DESART,
+            (codigo_muestra, tipo_referencia, tipo_material, nro_referencia, erp_n01id, erp_IdM21, erp_CODART, erp_DESART,
              erp_cantidad_lote, erp_proveedor, cantidad_enviada, unidad_enviada, id_especificacion, estado,
              id_usuario_muestreo, observaciones)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente_envio', ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        codigo_muestra, body.tipo_referencia, body.tipo_material, body.nro_referencia, body.erp_IdM21, body.erp_CODART, body.erp_DESART,
+        codigo_muestra, body.tipo_referencia, body.tipo_material, body.nro_referencia, body.erp_n01id, body.erp_IdM21, body.erp_CODART, body.erp_DESART,
         body.erp_cantidad_lote, body.erp_proveedor, cantidad_enviada, unidad_enviada, id_especificacion,
-        user["id_usuario"], body.observaciones,
+        estado_inicial, user["id_usuario"], body.observaciones,
     )
     cursor.execute("SELECT @@IDENTITY AS id")
     id_muestra = int(cursor.fetchone().id)
@@ -623,12 +868,27 @@ def listar_pendientes_envio(
     conn: pyodbc.Connection = Depends(limss_db),
 ):
     """Bandeja de Envío de Muestras (Etapas 2/3): muestras que todavía
-    admiten crear un nuevo envío o cargar resultados de los que ya tiene."""
+    admiten crear un nuevo envío o cargar resultados de los que ya tiene.
+
+    Excluye especificaciones sin ningún ensayo de etapa 'analisis' (solo
+    checklist de muestreo) -- no hay nada que enviar a ningún laboratorio
+    para esas, quedan directo esperando Dictamen (ver
+    especificaciones.tiene_ensayos_analisis y el estado inicial que ya les
+    asigna la creación de la muestra). Sin especificación resuelta
+    (id_especificacion NULL) se mantiene en la bandeja -- mismo criterio
+    conservador de siempre."""
     cursor = conn.cursor()
     like = f"%{buscar}%"
     cursor.execute(
         _SELECT_MUESTRA + """
         WHERE m.estado IN ('pendiente_envio', 'en_análisis')
+          AND (
+              m.id_especificacion IS NULL
+              OR EXISTS (
+                  SELECT 1 FROM lims_especificacion_ensayos see
+                  WHERE see.id_especificacion = m.id_especificacion AND see.etapa = 'analisis' AND see.activo = 1
+              )
+          )
           AND (m.codigo_muestra LIKE ? OR m.nro_referencia LIKE ? OR m.erp_CODART LIKE ? OR m.erp_DESART LIKE ?)
         ORDER BY m.fecha_muestreo DESC
         """,
@@ -1372,17 +1632,232 @@ def descargar_etiquetas_de_muestra(
     que ambos caminos generen exactamente el mismo PDF, en vez de un
     template paralelo. El registro de auditoría de la reimpresión
     (lims_etiquetas.reimpresion) lo sigue llevando POST /{id_muestra}/etiqueta,
-    sin cambios."""
+    sin cambios.
+
+    Una muestra creada por "Nueva Muestra" (en vez de por Solicitudes de
+    Muestreo) no tiene fila en lims_solicitudes_muestreo -- en ese caso se
+    arma una etiqueta simplificada con los datos propios de la muestra
+    (ver generar_pdf_etiqueta_muestra) en vez de devolver 404, porque el
+    botón "Imprimir etiqueta" se ofrece para cualquier muestra sin importar
+    cómo se haya creado."""
     cursor = conn.cursor()
     cursor.execute("SELECT id_solicitud FROM lims_solicitudes_muestreo WHERE id_muestra = ?", id_muestra)
     fila = cursor.fetchone()
-    if not fila:
-        raise HTTPException(status_code=404, detail="Esta muestra no tiene una solicitud de muestreo asociada")
 
-    row = obtener_solicitud_o_404(cursor, fila.id_solicitud)
-    pdf_bytes = generar_pdf_etiquetas_de_solicitud(cursor, row)
+    if fila:
+        row = obtener_solicitud_o_404(cursor, fila.id_solicitud)
+        pdf_bytes = generar_pdf_etiquetas_de_solicitud(cursor, row)
+        nombre_archivo = f"{row.nro_solicitud}_etiquetas.pdf"
+    else:
+        cursor.execute(_SELECT_MUESTRA + " WHERE m.id_muestra = ?", id_muestra)
+        muestra = cursor.fetchone()
+        if not muestra:
+            raise HTTPException(status_code=404, detail="Muestra no encontrada")
+        try:
+            iniciales = iniciales_muestreador(cursor, muestra.id_usuario_muestreo)
+            pdf_bytes = generar_pdf_etiqueta_muestra(muestra, iniciales)
+        except Exception:
+            logger.error("Error generando la etiqueta simplificada (id_muestra=%s)", id_muestra, exc_info=True)
+            raise HTTPException(status_code=500, detail="No se pudo generar el PDF de etiquetas -- ver el log del servidor")
+        nombre_archivo = f"{muestra.codigo_muestra}_etiqueta.pdf"
 
     return Response(
         content=pdf_bytes, media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{row.nro_solicitud}_etiquetas.pdf"'},
+        headers={"Content-Disposition": f'inline; filename="{nombre_archivo}"'},
     )
+
+
+# Análisis/Testigo tienen su propio texto; cualquier otro tipo (hoy solo
+# "contramuestra") cae en el mismo texto genérico -- misma correspondencia
+# que ya usa generar_pdf_etiquetas_v2 en solicitudes_muestreo.py para el
+# título de cada etiqueta del PDF (acá es un campo de texto aparte, no un
+# título, porque el título ya no se imprime -- ver Punto 1 de un pedido
+# anterior).
+_LABEL_TIPO_MUESTRA_ETIQUETA = {"analisis": "Análisis", "testigo": "Testigo"}
+
+
+def _datos_etiqueta_para_impresion(cursor, id_muestra: int) -> dict:
+    """Mismos datos que ya muestra la etiqueta en PDF (ver
+    descargar_etiquetas_de_muestra arriba) pero como dict de campos planos,
+    para que generar_sbpl_etiqueta arme el layout SBPL en vez de dibujar un
+    PDF con reportlab. Se apoya siempre en lims_muestras (existe para
+    cualquier muestra, tenga o no una Solicitud de Muestreo asociada) y
+    enriquece con nro_solicitud/laboratorio cuando esa fila existe.
+
+    Incluye id_solicitud (no es un campo de la etiqueta en sí, lo saca
+    imprimir_etiqueta_directo antes de armar el SBPL) para que el llamador
+    pueda resolver los tipos de muestra confirmados -- ver
+    obtener_muestras_confirmadas más abajo."""
+    cursor.execute(_SELECT_MUESTRA + " WHERE m.id_muestra = ?", id_muestra)
+    muestra = cursor.fetchone()
+    if not muestra:
+        raise HTTPException(status_code=404, detail="Muestra no encontrada")
+
+    cursor.execute(
+        """
+        SELECT s.id_solicitud, s.nro_solicitud, lab.nombre AS laboratorio_nombre
+        FROM lims_solicitudes_muestreo s
+        LEFT JOIN lims_laboratorios lab ON lab.id_laboratorio = s.id_laboratorio
+        WHERE s.id_muestra = ?
+        """,
+        id_muestra,
+    )
+    solicitud = cursor.fetchone()
+
+    if muestra.cantidad_enviada is not None:
+        cantidad_texto = f"{formatear_cantidad(muestra.cantidad_enviada)} {muestra.unidad_enviada or ''}".strip()
+    else:
+        cantidad_texto = None
+
+    return {
+        "titulo": "MUESTRA PARA ANÁLISIS" if solicitud else "MUESTRA",
+        "identificador": solicitud.nro_solicitud if solicitud else muestra.codigo_muestra,
+        "erp_codart": muestra.erp_CODART.strip() if muestra.erp_CODART else None,
+        "erp_desart": muestra.erp_DESART.strip() if muestra.erp_DESART else None,
+        "nro_ir": muestra.nro_referencia,
+        "etiqueta_referencia": etiqueta_referencia(muestra.tipo_referencia),
+        "cantidad_texto": cantidad_texto,
+        "laboratorio_nombre": solicitud.laboratorio_nombre if solicitud else None,
+        "fecha": muestra.fecha_muestreo,
+        "iniciales_muestreador": iniciales_muestreador(cursor, muestra.id_usuario_muestreo),
+        "id_solicitud": solicitud.id_solicitud if solicitud else None,
+    }
+
+
+@router.post("/{id_muestra}/imprimir-directo", response_model=ImprimirDirectoResponse)
+def imprimir_etiqueta_directo(
+    id_muestra: int,
+    body: ImprimirDirectoBody,
+    user: dict = Depends(require_rol("muestreador", "analista_qc", "qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Alternativa a "Descargar PDF" (no la reemplaza): arma el comando SBPL
+    y lo manda directo, como trabajo RAW, a una impresora SATO configurada
+    en lims_impresoras_etiquetas -- ver app/services/impresion_sato.py.
+
+    Una etiqueta por cada tipo de muestra confirmado en la especificación
+    (análisis, contramuestra, testigo, etc.) -- misma fuente de datos
+    (obtener_muestras_confirmadas) y mismo criterio que ya usa el PDF
+    (generar_pdf_etiquetas_v2 en solicitudes_muestreo.py), para no
+    mantener dos lógicas de iteración distintas. Si la muestra no tiene
+    Solicitud de Muestreo asociada, o la solicitud no tiene ningún tipo
+    confirmado (solicitudes viejas, o el modelo previo a
+    lims_solicitud_muestras), se manda una sola etiqueta genérica -- mismo
+    fallback que ya usa el PDF."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM lims_impresoras_etiquetas WHERE id_impresora = ? AND activa = 1", body.id_impresora)
+    impresora = cursor.fetchone()
+    if not impresora:
+        raise HTTPException(status_code=404, detail="La impresora indicada no existe o está inactiva")
+
+    datos_base = _datos_etiqueta_para_impresion(cursor, id_muestra)
+    id_solicitud = datos_base.pop("id_solicitud", None)
+
+    tipos_confirmados = obtener_muestras_confirmadas(cursor, id_solicitud) if id_solicitud else []
+
+    etiquetas = []
+    if tipos_confirmados:
+        for t in tipos_confirmados:
+            d = dict(datos_base)
+            d["tipo_muestra"] = _LABEL_TIPO_MUESTRA_ETIQUETA.get(t.tipo_muestra, "Contramuestra")
+            d["cantidad_muestra_texto"] = (
+                f"{formatear_cantidad(t.cantidad_real)} {t.unidad or ''}".strip() if t.cantidad_real is not None else None
+            )
+            # Laboratorio propio de ESTE tipo de muestra (puede diferir del
+            # laboratorio general de la solicitud) -- mismo dato que usa el
+            # PDF para cada etiqueta individual.
+            d["laboratorio_nombre"] = t.laboratorio_nombre
+            etiquetas.append(d)
+    else:
+        etiquetas.append(datos_base)
+
+    enviadas = 0
+    for d in etiquetas:
+        sbpl_bytes = generar_sbpl_etiqueta(d, impresora.ancho_mm, impresora.alto_mm, impresora.resolucion_dpi)
+        try:
+            imprimir_sbpl(impresora, sbpl_bytes, nombre_trabajo=f"Etiqueta {d['identificador']}")
+        except RuntimeError as e:
+            detalle = str(e)
+            if enviadas:
+                detalle += f" (se enviaron {enviadas} de {len(etiquetas)} etiquetas antes de este error)"
+            raise HTTPException(status_code=502, detail=detalle)
+        enviadas += 1
+
+    audit.registrar(
+        conn, entidad="etiqueta", accion="imprimir_directo",
+        id_usuario=user["id_usuario"], id_entidad=id_muestra,
+        valor_nuevo={"id_impresora": body.id_impresora, "ruta_red": impresora.ruta_red, "cantidad_etiquetas": enviadas},
+    )
+
+    plural = "s" if enviadas != 1 else ""
+    return ImprimirDirectoResponse(ok=True, mensaje=f"{enviadas} etiqueta{plural} enviada{plural} a {impresora.nombre}")
+
+
+@router.post("/{id_muestra}/imprimir-aprobado", response_model=ImprimirDirectoResponse)
+def imprimir_etiqueta_aprobado(
+    id_muestra: int,
+    body: ImprimirDirectoBody,
+    user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Etiqueta APROBADO -- validación de cumplimiento real, no solo de UX:
+    lims_muestras.estado queda igual al estado_dictamen emitido (ver
+    emitir_dictamen en dictamenes.py, UPDATE ... SET estado = ?), así que
+    'aprobado' acá significa que el dictamen de QA realmente aprobó esta
+    muestra -- no se imprime "APROBADO" sobre nada que no lo esté."""
+    cursor = conn.cursor()
+    cursor.execute(_SELECT_MUESTRA + " WHERE m.id_muestra = ?", id_muestra)
+    muestra = cursor.fetchone()
+    if not muestra:
+        raise HTTPException(status_code=404, detail="Muestra no encontrada")
+    if muestra.estado != "aprobado":
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se puede imprimir la etiqueta APROBADO: el dictamen de esta muestra no está aprobado (estado actual: '{muestra.estado}')",
+        )
+
+    cursor.execute("SELECT * FROM lims_impresoras_etiquetas WHERE id_impresora = ? AND activa = 1", body.id_impresora)
+    impresora = cursor.fetchone()
+    if not impresora:
+        raise HTTPException(status_code=404, detail="La impresora indicada no existe o está inactiva")
+
+    cursor.execute(
+        "SELECT fecha_ingreso, fecha_vencimiento, nro_bultos FROM lims_solicitudes_muestreo WHERE id_muestra = ?",
+        id_muestra,
+    )
+    solicitud = cursor.fetchone()
+    bultos = solicitud.nro_bultos if solicitud and solicitud.nro_bultos else 1
+
+    if muestra.cantidad_enviada is not None:
+        cantidad_texto = f"{formatear_cantidad(muestra.cantidad_enviada)} {muestra.unidad_enviada or ''}".strip()
+    else:
+        cantidad_texto = None
+
+    datos = {
+        "erp_desart": muestra.erp_DESART,
+        "erp_codart": muestra.erp_CODART,
+        "nro_ir": muestra.nro_referencia,
+        "etiqueta_referencia": etiqueta_referencia(muestra.tipo_referencia),
+        "fecha_ingreso": _a_fecha(solicitud.fecha_ingreso) if solicitud else None,
+        "fecha_vencimiento": _a_fecha(solicitud.fecha_vencimiento) if solicitud else None,
+        # Sin concepto de "bulto individual" para esta etiqueta (se imprime
+        # una sola vez, no una por bulto como CUARENTENA) -- se muestra el
+        # total contra sí mismo (ej. "3/3") para reflejar que TODOS los
+        # bultos del lote quedaron aprobados, no uno en particular.
+        "bulto_actual": bultos,
+        "bulto_total": bultos,
+        "cantidad_texto": cantidad_texto,
+    }
+    sbpl_bytes = generar_sbpl_etiqueta_estado(datos, "APROBADO", impresora.ancho_mm, impresora.alto_mm, impresora.resolucion_dpi)
+    try:
+        imprimir_sbpl(impresora, sbpl_bytes, nombre_trabajo=f"Aprobado {muestra.codigo_muestra}")
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    audit.registrar(
+        conn, entidad="etiqueta_aprobado", accion="imprimir",
+        id_usuario=user["id_usuario"], id_entidad=id_muestra,
+        valor_nuevo={"id_impresora": body.id_impresora, "ruta_red": impresora.ruta_red},
+    )
+
+    return ImprimirDirectoResponse(ok=True, mensaje=f"Etiqueta APROBADO enviada a {impresora.nombre}")

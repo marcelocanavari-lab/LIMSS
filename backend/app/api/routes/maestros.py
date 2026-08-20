@@ -45,6 +45,7 @@ from app.schemas.maestros import (
 )
 from app.services import audit, storage
 from app.services.erp_articulos import buscar_articulos
+from app.services.erp_ir import resolver_codsar_por_codart
 
 router = APIRouter(prefix="/api/maestros", tags=["Datos Maestros"])
 
@@ -59,7 +60,7 @@ def _insertar_especificacion(
     accion_terapeutica: Optional[str] = None, sinonimia: Optional[str] = None,
     nro_cas: Optional[str] = None, nombre_quimico: Optional[str] = None,
     formula_molecular: Optional[str] = None, peso_molecular: Optional[str] = None,
-    envasado_almacenamiento: Optional[str] = None,
+    envasado_almacenamiento: Optional[str] = None, erp_codsar: Optional[str] = None,
 ) -> int:
     cursor.execute(
         """
@@ -67,13 +68,13 @@ def _insertar_especificacion(
             (erp_IdM21, erp_CODART, erp_DESART, tipo_material, cantidad_muestra, unidad_muestra,
              cantidad_contramuestra, unidad_contramuestra,
              version, vigente, id_usuario_carga, accion_terapeutica, sinonimia, nro_cas,
-             nombre_quimico, formula_molecular, peso_molecular, envasado_almacenamiento)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
+             nombre_quimico, formula_molecular, peso_molecular, envasado_almacenamiento, erp_codsar)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         erp_IdM21, erp_CODART, erp_DESART, tipo_material, cantidad_muestra, unidad_muestra,
         cantidad_contramuestra, unidad_contramuestra, version, user_id,
         accion_terapeutica, sinonimia, nro_cas, nombre_quimico, formula_molecular, peso_molecular,
-        envasado_almacenamiento,
+        envasado_almacenamiento, erp_codsar,
     )
     cursor.execute("SELECT @@IDENTITY AS id")
     return int(cursor.fetchone().id)
@@ -105,12 +106,12 @@ def _copiar_ensayos_especificacion(cursor, *, id_especificacion_origen: int, id_
             cursor.execute(
                 """
                 INSERT INTO lims_especificacion_ensayos
-                    (id_especificacion, id_ensayo_maestro, orden, metodologia, tipo_dato,
+                    (id_especificacion, id_ensayo_maestro, orden, etapa, metodologia, tipo_dato,
                      limite_inferior, limite_superior, unidad_medida, valor_requerido,
                      especificacion_texto, obligatorio, requerido_por_defecto, id_laboratorio, analito)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                id_especificacion_destino, e.id_ensayo_maestro, e.orden, e.metodologia, e.tipo_dato,
+                id_especificacion_destino, e.id_ensayo_maestro, e.orden, e.etapa, e.metodologia, e.tipo_dato,
                 e.limite_inferior, e.limite_superior, e.unidad_medida, e.valor_requerido,
                 e.especificacion_texto, e.obligatorio, e.requerido_por_defecto, e.id_laboratorio,
                 getattr(e, "analito", None),
@@ -119,15 +120,49 @@ def _copiar_ensayos_especificacion(cursor, *, id_especificacion_origen: int, id_
             cursor.execute(
                 """
                 INSERT INTO lims_especificacion_ensayos
-                    (id_especificacion, id_ensayo_maestro, orden, metodologia, tipo_dato,
+                    (id_especificacion, id_ensayo_maestro, orden, etapa, metodologia, tipo_dato,
                      limite_inferior, limite_superior, unidad_medida, valor_requerido,
                      especificacion_texto, obligatorio, requerido_por_defecto, id_laboratorio)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                id_especificacion_destino, e.id_ensayo_maestro, e.orden, e.metodologia, e.tipo_dato,
+                id_especificacion_destino, e.id_ensayo_maestro, e.orden, e.etapa, e.metodologia, e.tipo_dato,
                 e.limite_inferior, e.limite_superior, e.unidad_medida, e.valor_requerido,
                 e.especificacion_texto, e.obligatorio, e.requerido_por_defecto, e.id_laboratorio,
             )
+
+
+def _obtener_bloques_config(cursor, erp_codsar: Optional[str]) -> dict:
+    """Qué bloques mostrar en la ficha de una especificación, según
+    lims_erp_subarticulo_config -- todos True (no ocultar nada) si
+    erp_codsar es NULL (sin resolver contra el ERP todavía) o si no hay
+    ninguna fila de config activa para ese subarticulo, para no esconder
+    datos ya cargados de especificaciones que no se pudieron vincular."""
+    bloques = {
+        "incluye_bloque_muestras": True,
+        "incluye_bloque_analisis_laboratorio": True,
+        "incluye_bloque_muestreo_fisico": True,
+        "incluye_bloque_testigos": True,
+    }
+    if not erp_codsar:
+        return bloques
+    cursor.execute(
+        """
+        SELECT incluye_bloque_muestras, incluye_bloque_analisis_laboratorio,
+               incluye_bloque_muestreo_fisico, incluye_bloque_testigos
+        FROM lims_erp_subarticulo_config
+        WHERE erp_codsar = ? AND activo = 1
+        """,
+        erp_codsar,
+    )
+    fila = cursor.fetchone()
+    if not fila:
+        return bloques
+    return {
+        "incluye_bloque_muestras": bool(fila.incluye_bloque_muestras),
+        "incluye_bloque_analisis_laboratorio": bool(fila.incluye_bloque_analisis_laboratorio),
+        "incluye_bloque_muestreo_fisico": bool(fila.incluye_bloque_muestreo_fisico),
+        "incluye_bloque_testigos": bool(fila.incluye_bloque_testigos),
+    }
 
 
 def _fila_a_especificacion(row, tiene_muestras: bool = False, tiene_testigos: bool = False) -> EspecificacionResponse:
@@ -137,6 +172,7 @@ def _fila_a_especificacion(row, tiene_muestras: bool = False, tiene_testigos: bo
         erp_CODART=row.erp_CODART,
         erp_DESART=row.erp_DESART,
         tipo_material=row.tipo_material,
+        erp_codsar=getattr(row, "erp_codsar", None),
         cantidad_muestra=float(row.cantidad_muestra) if row.cantidad_muestra is not None else None,
         unidad_muestra=row.unidad_muestra,
         cantidad_contramuestra=float(row.cantidad_contramuestra) if row.cantidad_contramuestra is not None else None,
@@ -165,6 +201,7 @@ def _fila_a_especificacion_ensayo(e) -> EspecificacionEnsayoResponse:
         id_ensayo_maestro=e.id_ensayo_maestro,
         nombre_ensayo=e.nombre_ensayo,
         orden=e.orden,
+        etapa=e.etapa,
         metodologia=e.metodologia,
         tipo_dato=e.tipo_dato,
         limite_inferior=float(e.limite_inferior) if e.limite_inferior is not None else None,
@@ -191,7 +228,8 @@ def _obtener_especificacion_detalle(cursor, id_especificacion: int) -> Especific
     ensayos = [_fila_a_especificacion_ensayo(e) for e in cursor.fetchall()]
 
     base = _fila_a_especificacion(row)
-    return EspecificacionDetalle(**base.model_dump(), ensayos=ensayos)
+    bloques = _obtener_bloques_config(cursor, base.erp_codsar)
+    return EspecificacionDetalle(**base.model_dump(), ensayos=ensayos, **bloques)
 
 
 def _a_fecha(valor) -> Optional[date]:
@@ -224,12 +262,23 @@ def _tiene_tabla_testigo_laboratorios(cursor) -> bool:
     return cursor.fetchone().id is not None
 
 
+def _tiene_columna_fecha_envio_real(cursor) -> bool:
+    """fecha_envio_real en lims_testigo_laboratorios puede no existir todavía
+    (ver migrations_testigo_laboratorios_fecha_envio_real.sql, pendiente de
+    ejecutar en algunos entornos) -- se chequea antes de usarla en un
+    INSERT/UPDATE/SELECT explícito para no romper la consulta con un error
+    de compilación SQL."""
+    cursor.execute("SELECT COL_LENGTH('lims_testigo_laboratorios', 'fecha_envio_real') AS c")
+    return cursor.fetchone().c is not None
+
+
 def _laboratorios_de_testigo(cursor, id_testigo: int) -> list[LaboratorioAsignado]:
     if not _tiene_tabla_testigo_laboratorios(cursor):
         return []
+    columna_fecha = "tl.fecha_envio_real" if _tiene_columna_fecha_envio_real(cursor) else "NULL AS fecha_envio_real"
     cursor.execute(
-        """
-        SELECT lab.id_laboratorio, lab.nombre, tl.consumo_estimado, tl.unidad_consumo
+        f"""
+        SELECT lab.id_laboratorio, lab.nombre, tl.consumo_estimado, tl.unidad_consumo, {columna_fecha}
         FROM lims_testigo_laboratorios tl
         JOIN lims_laboratorios lab ON lab.id_laboratorio = tl.id_laboratorio
         WHERE tl.id_testigo = ?
@@ -243,6 +292,7 @@ def _laboratorios_de_testigo(cursor, id_testigo: int) -> list[LaboratorioAsignad
             nombre=r.nombre,
             consumo_estimado=float(r.consumo_estimado) if r.consumo_estimado is not None else None,
             unidad_consumo=r.unidad_consumo,
+            fecha_envio_real=r.fecha_envio_real,
         )
         for r in cursor.fetchall()
     ]
@@ -362,6 +412,7 @@ def crear_especificacion(
     body: EspecificacionCreate,
     user: dict = Depends(require_rol("analista_qc", "admin", "qa")),
     conn: pyodbc.Connection = Depends(limss_db),
+    erp: pyodbc.Connection = Depends(erp_db),
 ):
     cursor = conn.cursor()
     cursor.execute(
@@ -374,13 +425,19 @@ def crear_especificacion(
             detail="Ya existe una especificación vigente para este artículo. Usá 'revisar' para crear una nueva versión.",
         )
 
+    # Vínculo al subarticulo real del ERP -- determina qué bloques se
+    # muestran en la ficha (ver lims_erp_subarticulo_config). Si no se
+    # encuentra en el ERP (dato de prueba, artículo discontinuado), queda
+    # NULL y la ficha muestra todos los bloques por defecto.
+    erp_codsar = resolver_codsar_por_codart(erp, body.erp_CODART)
+
     id_especificacion = _insertar_especificacion(
         cursor,
         erp_IdM21=body.erp_IdM21, erp_CODART=body.erp_CODART, erp_DESART=body.erp_DESART,
         tipo_material=body.tipo_material,
         cantidad_muestra=body.cantidad_muestra, unidad_muestra=body.unidad_muestra,
         cantidad_contramuestra=body.cantidad_contramuestra, unidad_contramuestra=body.unidad_contramuestra,
-        version="1.0", user_id=user["id_usuario"],
+        version="1.0", user_id=user["id_usuario"], erp_codsar=erp_codsar,
     )
 
     audit.registrar(
@@ -396,7 +453,7 @@ def crear_especificacion(
 def listar_especificaciones(
     vigente: Optional[bool] = Query(True, description="true=solo vigentes, false=solo obsoletas, omitir=todas"),
     buscar: str = Query(""),
-    tipo_material: Optional[str] = Query(None, pattern=r"^(materia_prima|granel|semi_elaborado|producto_terminado)$"),
+    tipo_material: Optional[str] = Query(None, pattern=r"^(materia_prima|granel|semi_elaborado|producto_terminado|material_empaque)$"),
     user: dict = Depends(get_current_user),
     conn: pyodbc.Connection = Depends(limss_db),
 ):
@@ -480,6 +537,9 @@ def revisar_especificacion(
         cantidad_muestra=actual.cantidad_muestra, unidad_muestra=actual.unidad_muestra,
         cantidad_contramuestra=actual.cantidad_contramuestra, unidad_contramuestra=actual.unidad_contramuestra,
         version=version_nueva, user_id=user["id_usuario"],
+        # Mismo artículo que la versión anterior -- se copia el erp_codsar ya
+        # resuelto en vez de volver a consultar el ERP.
+        erp_codsar=getattr(actual, "erp_codsar", None),
     )
     _copiar_ensayos_especificacion(cursor, id_especificacion_origen=id_especificacion, id_especificacion_destino=id_nueva)
 
@@ -499,6 +559,7 @@ def copiar_especificacion(
     body: EspecificacionCopiar,
     user: dict = Depends(require_rol("analista_qc", "admin", "qa")),
     conn: pyodbc.Connection = Depends(limss_db),
+    erp: pyodbc.Connection = Depends(erp_db),
 ):
     """Crea una especificación nueva e independiente a partir de {id_especificacion},
     para un artículo/tipo de material potencialmente distinto (ej. la versión
@@ -522,6 +583,11 @@ def copiar_especificacion(
             detail="Ya existe una especificación vigente para este artículo. Usá 'revisar' para crear una nueva versión.",
         )
 
+    # El artículo puede ser distinto al original (ver docstring) -- se
+    # resuelve el subarticulo de nuevo contra el ERP, no se copia el del
+    # original.
+    erp_codsar = resolver_codsar_por_codart(erp, body.erp_CODART)
+
     id_nueva = _insertar_especificacion(
         cursor,
         erp_IdM21=body.erp_IdM21, erp_CODART=body.erp_CODART, erp_DESART=body.erp_DESART,
@@ -532,7 +598,7 @@ def copiar_especificacion(
         accion_terapeutica=original.accion_terapeutica, sinonimia=original.sinonimia,
         nro_cas=original.nro_cas, nombre_quimico=original.nombre_quimico,
         formula_molecular=original.formula_molecular, peso_molecular=original.peso_molecular,
-        envasado_almacenamiento=original.envasado_almacenamiento,
+        envasado_almacenamiento=original.envasado_almacenamiento, erp_codsar=erp_codsar,
     )
     _copiar_ensayos_especificacion(cursor, id_especificacion_origen=id_especificacion, id_especificacion_destino=id_nueva)
 
@@ -773,12 +839,12 @@ def agregar_ensayo_especificacion(
         cursor.execute(
             """
             INSERT INTO lims_especificacion_ensayos
-                (id_especificacion, id_ensayo_maestro, orden, metodologia, tipo_dato,
+                (id_especificacion, id_ensayo_maestro, orden, etapa, metodologia, tipo_dato,
                  limite_inferior, limite_superior, unidad_medida, valor_requerido,
                  especificacion_texto, obligatorio, requerido_por_defecto, id_laboratorio, analito)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            id_especificacion, body.id_ensayo_maestro, body.orden, body.metodologia, body.tipo_dato,
+            id_especificacion, body.id_ensayo_maestro, body.orden, body.etapa, body.metodologia, body.tipo_dato,
             body.limite_inferior, body.limite_superior, body.unidad_medida, body.valor_requerido,
             body.especificacion_texto, 1 if body.obligatorio else 0, 1 if body.requerido_por_defecto else 0,
             body.id_laboratorio, body.analito,
@@ -787,12 +853,12 @@ def agregar_ensayo_especificacion(
         cursor.execute(
             """
             INSERT INTO lims_especificacion_ensayos
-                (id_especificacion, id_ensayo_maestro, orden, metodologia, tipo_dato,
+                (id_especificacion, id_ensayo_maestro, orden, etapa, metodologia, tipo_dato,
                  limite_inferior, limite_superior, unidad_medida, valor_requerido,
                  especificacion_texto, obligatorio, requerido_por_defecto, id_laboratorio)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            id_especificacion, body.id_ensayo_maestro, body.orden, body.metodologia, body.tipo_dato,
+            id_especificacion, body.id_ensayo_maestro, body.orden, body.etapa, body.metodologia, body.tipo_dato,
             body.limite_inferior, body.limite_superior, body.unidad_medida, body.valor_requerido,
             body.especificacion_texto, 1 if body.obligatorio else 0, 1 if body.requerido_por_defecto else 0,
             body.id_laboratorio,
@@ -841,13 +907,13 @@ def editar_ensayo_especificacion(
         cursor.execute(
             """
             UPDATE lims_especificacion_ensayos
-            SET id_ensayo_maestro = ?, orden = ?, metodologia = ?, tipo_dato = ?,
+            SET id_ensayo_maestro = ?, orden = ?, etapa = ?, metodologia = ?, tipo_dato = ?,
                 limite_inferior = ?, limite_superior = ?, unidad_medida = ?, valor_requerido = ?,
                 especificacion_texto = ?, obligatorio = ?, requerido_por_defecto = ?, id_laboratorio = ?,
                 analito = ?
             WHERE id_espec_ensayo = ?
             """,
-            body.id_ensayo_maestro, body.orden, body.metodologia, body.tipo_dato,
+            body.id_ensayo_maestro, body.orden, body.etapa, body.metodologia, body.tipo_dato,
             body.limite_inferior, body.limite_superior, body.unidad_medida, body.valor_requerido,
             body.especificacion_texto, 1 if body.obligatorio else 0, 1 if body.requerido_por_defecto else 0,
             body.id_laboratorio, body.analito, id_espec_ensayo,
@@ -856,12 +922,12 @@ def editar_ensayo_especificacion(
         cursor.execute(
             """
             UPDATE lims_especificacion_ensayos
-            SET id_ensayo_maestro = ?, orden = ?, metodologia = ?, tipo_dato = ?,
+            SET id_ensayo_maestro = ?, orden = ?, etapa = ?, metodologia = ?, tipo_dato = ?,
                 limite_inferior = ?, limite_superior = ?, unidad_medida = ?, valor_requerido = ?,
                 especificacion_texto = ?, obligatorio = ?, requerido_por_defecto = ?, id_laboratorio = ?
             WHERE id_espec_ensayo = ?
             """,
-            body.id_ensayo_maestro, body.orden, body.metodologia, body.tipo_dato,
+            body.id_ensayo_maestro, body.orden, body.etapa, body.metodologia, body.tipo_dato,
             body.limite_inferior, body.limite_superior, body.unidad_medida, body.valor_requerido,
             body.especificacion_texto, 1 if body.obligatorio else 0, 1 if body.requerido_por_defecto else 0,
             body.id_laboratorio, id_espec_ensayo,
@@ -1838,10 +1904,16 @@ def asignar_laboratorio_testigo(
 
     unidad_consumo = body.unidad_consumo or ("mg" if body.consumo_estimado is not None else None)
 
-    cursor.execute(
-        "INSERT INTO lims_testigo_laboratorios (id_testigo, id_laboratorio, consumo_estimado, unidad_consumo) VALUES (?, ?, ?, ?)",
-        id_testigo, body.id_laboratorio, body.consumo_estimado, unidad_consumo,
-    )
+    if _tiene_columna_fecha_envio_real(cursor):
+        cursor.execute(
+            "INSERT INTO lims_testigo_laboratorios (id_testigo, id_laboratorio, consumo_estimado, unidad_consumo, fecha_envio_real) VALUES (?, ?, ?, ?, ?)",
+            id_testigo, body.id_laboratorio, body.consumo_estimado, unidad_consumo, body.fecha_envio_real,
+        )
+    else:
+        cursor.execute(
+            "INSERT INTO lims_testigo_laboratorios (id_testigo, id_laboratorio, consumo_estimado, unidad_consumo) VALUES (?, ?, ?, ?)",
+            id_testigo, body.id_laboratorio, body.consumo_estimado, unidad_consumo,
+        )
 
     audit.registrar(
         conn, entidad="testigo_laboratorio", accion="asignar",
@@ -1849,6 +1921,7 @@ def asignar_laboratorio_testigo(
         valor_nuevo={
             "id_testigo": id_testigo, "id_laboratorio": body.id_laboratorio,
             "consumo_estimado": body.consumo_estimado, "unidad_consumo": unidad_consumo,
+            "fecha_envio_real": str(body.fecha_envio_real) if body.fecha_envio_real else None,
         },
     )
 
@@ -1879,10 +1952,16 @@ def editar_consumo_laboratorio_testigo(
 
     unidad_consumo = body.unidad_consumo or ("mg" if body.consumo_estimado is not None else None)
 
-    cursor.execute(
-        "UPDATE lims_testigo_laboratorios SET consumo_estimado = ?, unidad_consumo = ? WHERE id_testigo = ? AND id_laboratorio = ?",
-        body.consumo_estimado, unidad_consumo, id_testigo, id_laboratorio,
-    )
+    if _tiene_columna_fecha_envio_real(cursor):
+        cursor.execute(
+            "UPDATE lims_testigo_laboratorios SET consumo_estimado = ?, unidad_consumo = ?, fecha_envio_real = ? WHERE id_testigo = ? AND id_laboratorio = ?",
+            body.consumo_estimado, unidad_consumo, body.fecha_envio_real, id_testigo, id_laboratorio,
+        )
+    else:
+        cursor.execute(
+            "UPDATE lims_testigo_laboratorios SET consumo_estimado = ?, unidad_consumo = ? WHERE id_testigo = ? AND id_laboratorio = ?",
+            body.consumo_estimado, unidad_consumo, id_testigo, id_laboratorio,
+        )
 
     audit.registrar(
         conn, entidad="testigo_laboratorio", accion="modificar_consumo",
@@ -1890,6 +1969,7 @@ def editar_consumo_laboratorio_testigo(
         valor_nuevo={
             "id_testigo": id_testigo, "id_laboratorio": id_laboratorio,
             "consumo_estimado": body.consumo_estimado, "unidad_consumo": unidad_consumo,
+            "fecha_envio_real": str(body.fecha_envio_real) if body.fecha_envio_real else None,
         },
     )
 

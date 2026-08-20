@@ -13,6 +13,7 @@ justificación genérica basada en el resultado ya decidido -- la
 disponibilidad de Claude nunca es un punto de falla para el flujo real.
 """
 import json
+import logging
 import time
 from datetime import date, datetime
 from typing import Optional
@@ -32,6 +33,8 @@ from app.services.erp_ir import (
     tipo_comprobante_ir,
 )
 
+logger = logging.getLogger("agente_muestreo")
+
 _CLAUDE_MODEL = "claude-sonnet-5"
 _REINTENTOS_BACKOFF_SEGUNDOS = (5, 15, 45)
 
@@ -40,6 +43,7 @@ _JUSTIFICACION_GENERICA = {
     "no_requiere_muestreo": "El subartículo del material está configurado como que no requiere muestreo: no se generó ninguna solicitud.",
     "subarticulo_no_configurado": "El subartículo de este material todavía no está configurado en LIMSS (no se sabe si requiere muestreo): no se generó ninguna solicitud, hace falta cargarlo en Administración.",
     "error": "El subartículo está configurado como que requiere muestreo, pero no se pudo completar la evaluación (falta especificación vigente, o falló la consulta al ERP/LIMSS): hace falta revisión manual.",
+    "ir_ya_tiene_solicitud": "Ya existe una solicitud de muestreo para este IR (manual o de una evaluación anterior del agente): no se generó una segunda.",
 }
 
 
@@ -138,12 +142,16 @@ def generar_justificacion(resultado: str, datos: dict) -> str:
             messages=[{"role": "user", "content": prompt}],
         )
         if response.stop_reason == "refusal":
+            logger.warning("Justificación del agente rechazada por Claude (resultado=%s, stop_reason=refusal)", resultado)
             return _justificacion_generica(resultado)
         texto = next((b.text for b in response.content if b.type == "text"), "")
         return texto.strip() or _justificacion_generica(resultado)
-    except Exception:
+    except Exception as e:
         # Deliberadamente amplio: cualquier falla de Claude (red, auth,
-        # timeout, SDK) degrada a la justificación genérica, nunca bloquea.
+        # timeout, SDK) degrada a la justificación genérica, nunca bloquea --
+        # pero SÍ queda logueada acá (antes se perdía en silencio, sin poder
+        # diagnosticar la causa real).
+        logger.error("Error al generar la justificación del agente con IA (resultado=%s): %s", resultado, e, exc_info=True)
         return _justificacion_generica(resultado)
 
 
@@ -156,34 +164,44 @@ def _obtener_control(cursor, n01id: int):
 
 def _guardar_control(
     cursor, n01id: int, erp_idm21: Optional[int], erp_codart: Optional[str], erp_codsar: Optional[str],
-    resultado: str, id_solicitud_generada: Optional[int], incrementar_reintentos: bool,
+    erp_desart: Optional[str], nro_ir: Optional[str], resultado: str, id_solicitud_generada: Optional[int],
+    incrementar_reintentos: bool,
 ) -> int:
     """INSERT si es la primera evaluación de este comprobante, UPDATE si ya
     existía -- así tanto el ciclo de polling normal como el reproceso manual
     (POST .../reprocesar/{id}) usan el mismo camino, y la fila de control
     siempre refleja el último estado (el historial completo queda en
-    lims_agente_log, que sí acumula una fila por intento)."""
+    lims_agente_log, que sí acumula una fila por intento).
+
+    erp_desart (nombre del material, GIM21ART.DESART) y nro_ir (formato
+    "NNN/AA" que ve el usuario, ver formatear_nro_ir en erp_ir.py) se
+    guardan acá para que la pantalla de Agente de Muestreo los muestre sin
+    tener que resolver contra el ERP en cada consulta -- ya vienen
+    disponibles en la respuesta de lineas_comprobante_por_id, no hace falta
+    una query nueva."""
     existente = _obtener_control(cursor, n01id)
     if existente:
         reintentos = existente.reintentos + 1 if incrementar_reintentos else existente.reintentos
         cursor.execute(
             """
             UPDATE lims_agente_control
-            SET erp_idm21 = ?, erp_codart = ?, erp_codsar = ?, fecha_evaluacion = GETDATE(),
+            SET erp_idm21 = ?, erp_codart = ?, erp_codsar = ?, erp_desart = ?, nro_ir = ?, fecha_evaluacion = GETDATE(),
                 resultado = ?, id_solicitud_generada = ?, reintentos = ?
             WHERE id = ?
             """,
-            erp_idm21, erp_codart, erp_codsar, resultado, id_solicitud_generada, reintentos, existente.id,
+            erp_idm21, erp_codart, erp_codsar, erp_desart, nro_ir, resultado, id_solicitud_generada, reintentos,
+            existente.id,
         )
         return existente.id
 
     cursor.execute(
         """
         INSERT INTO lims_agente_control
-            (id_comprobante_erp, erp_idm21, erp_codart, erp_codsar, resultado, id_solicitud_generada, reintentos)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+            (id_comprobante_erp, erp_idm21, erp_codart, erp_codsar, erp_desart, nro_ir, resultado, id_solicitud_generada, reintentos)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        n01id, erp_idm21, erp_codart, erp_codsar, resultado, id_solicitud_generada, 1 if incrementar_reintentos else 0,
+        n01id, erp_idm21, erp_codart, erp_codsar, erp_desart, nro_ir, resultado, id_solicitud_generada,
+        1 if incrementar_reintentos else 0,
     )
     cursor.execute("SELECT @@IDENTITY AS id")
     return int(cursor.fetchone().id)
@@ -210,6 +228,23 @@ def _id_usuario_agente(cursor) -> int:
     return row.id_usuario
 
 
+def _solicitud_activa_existente(cursor, erp_nro_ir: str):
+    """¿Ya hay una solicitud (de cualquier origen: manual o agente) para
+    este IR que no esté anulada? El agente nunca debe generar una segunda
+    -- ni contra otra que generó él mismo en una evaluación anterior, ni
+    contra una que un analista ya haya cargado a mano desde
+    '+ Nueva solicitud'. Anuladas quedan afuera a propósito: anular libera
+    el IR para que se pueda generar una solicitud válida después (mismo
+    criterio que el índice único filtrado de la base, ver
+    migrations_solicitudes_ir_unico_agente.sql)."""
+    cursor.execute(
+        "SELECT TOP 1 id_solicitud, nro_solicitud FROM lims_solicitudes_muestreo "
+        "WHERE erp_nro_ir = ? AND estado <> 'anulada' ORDER BY id_solicitud DESC",
+        erp_nro_ir,
+    )
+    return cursor.fetchone()
+
+
 def _crear_solicitud_desde_agente(cursor, linea, id_especificacion: int, nro_ir_normalizado: str,
                                    id_usuario_agente: int) -> tuple[int, str]:
     """Inserta lims_solicitudes_muestreo directamente (sin pasar por el
@@ -226,13 +261,13 @@ def _crear_solicitud_desde_agente(cursor, linea, id_especificacion: int, nro_ir_
     cursor.execute(
         """
         INSERT INTO lims_solicitudes_muestreo
-            (nro_solicitud, erp_nro_ir, erp_IdM21, erp_CODART, erp_DESART, id_especificacion,
+            (nro_solicitud, erp_nro_ir, erp_n01id, erp_IdM21, erp_CODART, erp_DESART, id_especificacion,
              id_laboratorio, id_muestreador, estado, id_usuario_qa,
              proveedor_codigo, proveedor_nombre, fecha_ingreso, fecha_vencimiento,
              cantidad_ingresada, unidad_cantidad, origen)
-        VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 'pendiente', ?, ?, ?, ?, ?, ?, ?, 'agente')
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 'pendiente', ?, ?, ?, ?, ?, ?, ?, 'agente')
         """,
-        nro_solicitud, nro_ir_normalizado, linea.IdM21, linea.CODART.strip(), linea.DESART, id_especificacion,
+        nro_solicitud, nro_ir_normalizado, linea.N01Id, linea.IdM21, linea.CODART.strip(), linea.DESART, id_especificacion,
         id_laboratorio, id_usuario_agente,
         linea.proveedor_codigo, linea.proveedor, _a_datetime(fecha_ingreso), _a_datetime(fecha_vencimiento),
         cantidad_ingresada, linea.unidad,
@@ -255,6 +290,8 @@ def _procesar_comprobante(limss_conn: pyodbc.Connection, n01id: int, linea) -> s
     erp_codart = linea.CODART.strip()
     erp_codsar = linea.CODSAR.strip() if linea.CODSAR else None
 
+    nro_ir = formatear_nro_ir(linea.NUMCOMO, linea.FECCOR)
+
     evaluacion = evaluar_comprobante(limss_conn, erp_codart, erp_codsar)
     resultado = evaluacion["resultado"]
     id_especificacion = evaluacion["id_especificacion"]
@@ -264,7 +301,7 @@ def _procesar_comprobante(limss_conn: pyodbc.Connection, n01id: int, linea) -> s
         "erp_CODART": erp_codart,
         "erp_CODSAR": erp_codsar,
         "erp_DESART": linea.DESART,
-        "erp_nro_ir": formatear_nro_ir(linea.NUMCOMO, linea.FECCOR),
+        "erp_nro_ir": nro_ir,
         "proveedor": linea.proveedor,
         "cantidad_total": float(linea.cantidad_total) if linea.cantidad_total is not None else None,
         "unidad": linea.unidad,
@@ -272,13 +309,24 @@ def _procesar_comprobante(limss_conn: pyodbc.Connection, n01id: int, linea) -> s
 
     id_solicitud = None
     if resultado == "solicitud_generada":
-        id_solicitud, nro_solicitud = _crear_solicitud_desde_agente(
-            cursor, linea, id_especificacion, datos_consultados["erp_nro_ir"], id_usuario_agente,
-        )
-        datos_consultados["nro_solicitud"] = nro_solicitud
+        existente = _solicitud_activa_existente(cursor, nro_ir)
+        if existente is not None:
+            # No duplicar: puede pasar por un reproceso manual sobre un
+            # comprobante que el agente ya resolvió antes, o porque alguien
+            # ya cargó una solicitud a mano para este mismo IR sin saber que
+            # el agente también la iba a generar.
+            resultado = "ir_ya_tiene_solicitud"
+            id_solicitud = existente.id_solicitud
+            datos_consultados["nro_solicitud_existente"] = existente.nro_solicitud
+        else:
+            id_solicitud, nro_solicitud = _crear_solicitud_desde_agente(
+                cursor, linea, id_especificacion, nro_ir, id_usuario_agente,
+            )
+            datos_consultados["nro_solicitud"] = nro_solicitud
 
     id_control = _guardar_control(
-        cursor, n01id, linea.IdM21, erp_codart, erp_codsar, resultado, id_solicitud, incrementar_reintentos=False,
+        cursor, n01id, linea.IdM21, erp_codart, erp_codsar, linea.DESART, nro_ir, resultado, id_solicitud,
+        incrementar_reintentos=False,
     )
 
     justificacion = generar_justificacion(resultado, datos_consultados)
@@ -302,9 +350,11 @@ def _registrar_error(limss_conn: pyodbc.Connection, n01id: int, error_detalle: s
     erp_idm21 = previo.erp_idm21 if previo else None
     erp_codart = previo.erp_codart if previo else None
     erp_codsar = previo.erp_codsar if previo else None
+    erp_desart = previo.erp_desart if previo else None
+    nro_ir = previo.nro_ir if previo else None
 
     id_control = _guardar_control(
-        cursor, n01id, erp_idm21, erp_codart, erp_codsar, "error", None, incrementar_reintentos,
+        cursor, n01id, erp_idm21, erp_codart, erp_codsar, erp_desart, nro_ir, "error", None, incrementar_reintentos,
     )
     _registrar_log(cursor, id_control, None, "error", _justificacion_generica("error"), error_detalle)
 

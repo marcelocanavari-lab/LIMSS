@@ -124,6 +124,33 @@ export default function DictamenDetallePage() {
           </table>
         </div>
 
+        {detalle.checklist_muestreo && detalle.checklist_muestreo.length > 0 && (
+          <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
+            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Checklist de Muestreo</h2>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Ítem</th>
+                  <th>Resultado</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {detalle.checklist_muestreo.map((ens) => {
+                  const oos = ens.dentro_especificacion === false;
+                  return (
+                    <tr key={ens.id_espec_ensayo} style={oos ? { background: 'var(--danger-soft)' } : undefined}>
+                      <td>{ens.nombre_ensayo}</td>
+                      <td>{resultadoTexto(ens)}</td>
+                      <td><BadgeEstadoEnsayo dentro={ens.dentro_especificacion} /></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
         {detalle.resultados_orden_trabajo && detalle.resultados_orden_trabajo.length > 0 && (
           <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
             <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Orden de Trabajo</h2>

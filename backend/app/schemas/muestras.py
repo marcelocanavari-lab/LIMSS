@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional
 from datetime import date, datetime
 
@@ -19,6 +19,12 @@ class LineaIR(BaseModel):
     fecha_vencimiento: Optional[date] = None
     cantidad_ingresada: Optional[float] = None
     advertencia: Optional[str] = None
+    # FECCOR del comprobante (no confundir con fecha_ingreso=FECCOM) -- el
+    # campo que efectivamente se usa para resolver colisiones de
+    # (NUMCOMO, año). Solo relevante para diferenciar candidatos cuando hay
+    # más de un N01Id para el mismo "NNN/AA" (ver buscar_todos_candidatos_ir
+    # en erp_ir.py); en el caso normal (sin colisión) es informativo nomás.
+    fecha_comprobante: Optional[date] = None
 
 
 # ── Materiales (búsqueda unificada por tipo: IR o lote) ──────────
@@ -36,6 +42,21 @@ class MaterialEncontrado(BaseModel):
     fecha_vencimiento: Optional[date] = None
     cantidad_ingresada: Optional[float] = None
     advertencia: Optional[str] = None
+    # Subartículo del ERP (GIT59SAR.CODSAR) -- solo viene poblado en la
+    # búsqueda por IR (rama 'materia_prima' de buscar_material). Lo usa
+    # SolicitudesMuestreoPage.jsx para saber si el material es '0006'
+    # (Material de Empaque sin codificar) y relajar lote_proveedor/
+    # fecha_vencimiento como opcionales -- ver crear_solicitud.
+    CODSAR: Optional[str] = None
+    # N01Id/fecha_comprobante: solo poblados en la rama 'materia_prima' (por
+    # IR) -- ver LineaIR más arriba para la misma distinción FECCOR vs
+    # FECCOM. Cuando hay colisión de (NUMCOMO, año), buscar_material devuelve
+    # un MaterialEncontrado por cada comprobante candidato con su propio
+    # N01Id, para que el frontend arme el selector (ver
+    # SolicitudesMuestreoPage.jsx/MuestraNuevaPage.jsx) y ese N01Id viaje tal
+    # cual hasta la creación de la solicitud/muestra.
+    N01Id: Optional[int] = None
+    fecha_comprobante: Optional[date] = None
 
 
 # ── Muestras ───────────────────────────────────────────────────
@@ -52,6 +73,11 @@ class MuestraCreate(BaseModel):
     cantidad_enviada: Optional[float] = None
     unidad_enviada: Optional[str] = Field(None, max_length=20)
     observaciones: Optional[str] = Field(None, max_length=500)
+    # N01Id del comprobante IR ya resuelto en la búsqueda previa (ver
+    # MaterialEncontrado.N01Id) -- solo aplica cuando tipo_referencia='ir'.
+    # Se guarda tal cual llega, sin volver a resolver contra el ERP acá (este
+    # endpoint no consulta el ERP, confía en lo que ya resolvió el frontend).
+    erp_n01id: Optional[int] = None
 
 
 class MuestraUpdate(BaseModel):
@@ -85,6 +111,10 @@ class MuestraResponse(BaseModel):
     # de que el muestreador ejecute el muestreo físico -- fecha_muestreo es
     # un placeholder hasta ese momento (ver POST .../orden-trabajo-digital).
     datos_muestreo_pendientes: bool = False
+    # N01Id del comprobante IR ya resuelto (ver MuestraCreate.erp_n01id) --
+    # None para muestras por lote, o para muestras viejas creadas antes de
+    # este campo.
+    erp_n01id: Optional[int] = None
 
 
 # ── Laboratorios ───────────────────────────────────────────────
@@ -109,6 +139,72 @@ class LaboratorioUpdate(BaseModel):
     email: Optional[str] = Field(None, max_length=100)
     telefono: Optional[str] = Field(None, max_length=30)
     activo: bool
+
+
+# ── Impresoras de etiquetas (SATO, impresión directa vía SBPL) ────
+
+class ImpresoraEtiquetaCreate(BaseModel):
+    nombre: str = Field(..., min_length=1, max_length=50)
+    modelo: str = Field(..., min_length=1, max_length=20)
+    # 'compartida': impresora conectada por USB a una PC y compartida en red
+    # (mecanismo original, ver app/services/impresion_sato.py). 'red_directa':
+    # impresora con IP propia en la LAN, se le escribe el SBPL directo por
+    # socket TCP, sin pasar por ningún driver de Windows.
+    tipo_conexion: str = Field("compartida", pattern=r"^(compartida|red_directa)$")
+    # Obligatorio solo si tipo_conexion='compartida' -- formato \\NOMBREPC\Compartido.
+    ruta_red: Optional[str] = Field(None, max_length=200)
+    # Obligatorios solo si tipo_conexion='red_directa'. 9100 es el puerto
+    # RAW/JetDirect estándar de facto, editable por si alguna impresora
+    # puntual usa otro.
+    ip_directa: Optional[str] = Field(None, max_length=50)
+    puerto_directo: int = Field(9100, gt=0, le=65535)
+    resolucion_dpi: int = Field(203, gt=0)
+    ancho_mm: int = Field(100, gt=0)
+    alto_mm: int = Field(85, gt=0)
+
+    @model_validator(mode="after")
+    def _validar_datos_conexion(self):
+        if self.tipo_conexion == "compartida" and not (self.ruta_red and self.ruta_red.strip()):
+            raise ValueError("ruta_red es obligatorio para impresoras de tipo 'compartida'")
+        if self.tipo_conexion == "red_directa" and not (self.ip_directa and self.ip_directa.strip()):
+            raise ValueError("ip_directa es obligatorio para impresoras de tipo 'red_directa'")
+        return self
+
+
+class ImpresoraEtiquetaUpdate(ImpresoraEtiquetaCreate):
+    activa: bool
+
+
+class ImpresoraEtiquetaResponse(ImpresoraEtiquetaCreate):
+    id_impresora: int
+    activa: bool
+
+
+class ImprimirDirectoBody(BaseModel):
+    id_impresora: int
+
+
+class ImprimirDirectoResponse(BaseModel):
+    ok: bool
+    mensaje: str
+
+
+# ── Impresión de Etiquetas (acceso general desde el Dashboard) ────
+#
+# Búsqueda unificada solicitud + muestra: CUARENTENA se imprime al ingreso
+# de la solicitud (puede no tener muestra vinculada todavía, si el
+# muestreo físico no se ejecutó), MUESTRA y APROBADO son por muestra.
+
+class ItemImpresionEtiquetas(BaseModel):
+    tipo: str  # 'solicitud' | 'muestra'
+    id: int  # id_solicitud o id_muestra, según `tipo`
+    identificador: str  # nro_solicitud o codigo_muestra
+    erp_CODART: str
+    erp_DESART: str
+    estado: str
+    # Subconjunto de ['muestra', 'cuarentena', 'aprobado'] -- lo que
+    # corresponde imprimir para este ítem según su estado actual.
+    etiquetas_disponibles: list[str]
 
 
 # ── Contactos por laboratorio ───────────────────────────────────

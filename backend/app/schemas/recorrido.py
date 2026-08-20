@@ -92,6 +92,12 @@ class RecorridoResponse(BaseModel):
     # Lista vacía si la muestra no tiene ninguna Solicitud de Muestreo
     # vinculada.
     resultados_orden_trabajo: list[EnsayoResultado] = []
+    # Checklist físico configurable (etapa='muestreo' en
+    # lims_especificacion_ensayos, resultados en lims_resultados_muestreo) --
+    # sección propia, separada de resultados_orden_trabajo (que son ensayos
+    # de laboratorio, etapa='analisis'). Vacío para muestras muestreadas
+    # antes de este cambio (sin ítems configurados) o sin especificación.
+    checklist_muestreo: list[EnsayoResultado] = []
     dictamen: Optional[DictamenInfo] = None
     hay_oos: bool = False
     # True cuando el envío se generó por adelantado desde la solicitud, antes

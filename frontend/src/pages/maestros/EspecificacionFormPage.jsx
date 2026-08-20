@@ -10,6 +10,7 @@ const TIPOS_MATERIAL = [
   { value: 'granel', label: 'Granel' },
   { value: 'semi_elaborado', label: 'Semi-Elaborado' },
   { value: 'producto_terminado', label: 'Producto Terminado' },
+  { value: 'material_empaque', label: 'Material de Empaque' },
 ];
 
 function labelTipo(valor) {

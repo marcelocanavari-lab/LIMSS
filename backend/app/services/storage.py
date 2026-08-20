@@ -141,3 +141,52 @@ def guardar_pdf_copia_firmada(upload_file: UploadFile, nro_remito: str) -> str:
 
 def ruta_absoluta(ruta_relativa: str) -> str:
     return os.path.join(settings.storage_path, ruta_relativa)
+
+
+_EXTENSIONES_IMAGEN_O_PDF = {
+    "application/pdf": "pdf",
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/png": "png",
+}
+
+_EXTENSIONES_SOLO_IMAGEN = {"image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png"}
+
+
+def guardar_imagen_referencia_empaque(upload_file: UploadFile, erp_codart: str) -> str:
+    """Imagen de referencia (arte aprobado) de un artículo de Material de
+    Empaque -- foto o PDF de una sola página, ver lims_empaque_referencia.
+    El soft-delete de la referencia anterior (activo=0) lo maneja el router,
+    esta función solo guarda el archivo nuevo."""
+    extension = _EXTENSIONES_IMAGEN_O_PDF.get(upload_file.content_type)
+    if extension is None:
+        raise HTTPException(status_code=400, detail="La imagen de referencia debe ser una imagen (JPG/PNG) o un PDF")
+
+    contenido = upload_file.file.read()
+    if not contenido:
+        raise HTTPException(status_code=400, detail="El archivo está vacío")
+    if len(contenido) > MAX_PDF_SIZE_BYTES:
+        raise HTTPException(status_code=400, detail="El archivo no puede superar los 10 MB")
+
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    nombre_archivo = f"LIMS_{_sanitizar(erp_codart)}_REF_{timestamp}.{extension}"
+    return _guardar_bytes(contenido, "empaque_referencia", nombre_archivo)
+
+
+def guardar_imagen_comparacion(upload_file: UploadFile, codigo_muestra: str) -> str:
+    """Foto de la etiqueta recibida en una inspección puntual, para comparar
+    contra la referencia activa del artículo -- solo imagen (a diferencia de
+    la referencia, acá siempre es una foto tomada en el momento, no un PDF)."""
+    extension = _EXTENSIONES_SOLO_IMAGEN.get(upload_file.content_type)
+    if extension is None:
+        raise HTTPException(status_code=400, detail="La foto de la etiqueta debe ser una imagen (JPG/PNG)")
+
+    contenido = upload_file.file.read()
+    if not contenido:
+        raise HTTPException(status_code=400, detail="El archivo está vacío")
+    if len(contenido) > MAX_PDF_SIZE_BYTES:
+        raise HTTPException(status_code=400, detail="El archivo no puede superar los 10 MB")
+
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    nombre_archivo = f"LIMS_{_sanitizar(codigo_muestra)}_COMPIA_{timestamp}.{extension}"
+    return _guardar_bytes(contenido, "comparaciones_ia", nombre_archivo)

@@ -26,6 +26,15 @@ class AgenteEvaluacion(BaseModel):
     erp_idm21: Optional[int] = None
     erp_codart: Optional[str] = None
     erp_codsar: Optional[str] = None
+    # erp_desart/nro_ir quedan NULL en evaluaciones registradas antes de que
+    # se agregaran estas columnas (ver migrations_agente_muestreo.sql) -- la
+    # pantalla debe mostrar "-" o el id_comprobante_erp solo en esos casos
+    # históricos, no romper por datos incompletos.
+    erp_desart: Optional[str] = None
+    # Formato "NNN/AA" (ver formatear_nro_ir en erp_ir.py) -- identificador
+    # que el usuario reconoce, a diferencia de id_comprobante_erp (N01Id
+    # interno del ERP, sin significado para un humano).
+    nro_ir: Optional[str] = None
     fecha_evaluacion: datetime
     resultado: str
     id_solicitud_generada: Optional[int] = None

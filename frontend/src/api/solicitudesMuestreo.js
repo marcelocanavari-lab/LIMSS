@@ -20,10 +20,23 @@ export const solicitudesMuestreoApi = {
   obtener: (id) => api.get(`/api/solicitudes-muestreo/${id}`),
   anular: (id, motivo) => api.put(`/api/solicitudes-muestreo/${id}/anular`, { motivo }),
 
-  // Completa laboratorio y/o muestreador de una solicitud pendiente que
-  // quedó sin alguno de los dos -- pensado para las que generó el agente
-  // (origen='agente', ver AgenteMuestreoPage).
-  completarLaboratorio: (id, data) => api.put(`/api/solicitudes-muestreo/${id}/completar-laboratorio`, data),
+  // Completa laboratorio, muestreador y/o los datos manuales del ingreso
+  // (lote, país de origen, fecha de reanálisis, bultos, metodología,
+  // fabricante) de una solicitud pendiente que quedó sin alguno -- pensado
+  // para las que generó el agente (origen='agente', ver AgenteMuestreoPage),
+  // que no puede resolverlos solo con el ERP. El protocolo y la
+  // documentación del proveedor se completan aparte, por archivo (ver
+  // subirProtocoloProveedor/subirDocumentacionProveedor).
+  completarDatos: (id, data) => api.put(`/api/solicitudes-muestreo/${id}/completar-datos`, data),
+
+  // Protocolo del proveedor (foto o PDF) -- obligatorio en el alta manual
+  // desde el momento de crear la solicitud (ver crear), pero las que genera
+  // el agente no lo tienen disponible en ese flujo automático.
+  subirProtocoloProveedor: (id, archivo) => {
+    const formData = new FormData();
+    formData.append('protocolo_proveedor', archivo);
+    return api.postForm(`/api/solicitudes-muestreo/${id}/protocolo-proveedor`, formData);
+  },
 
   // Documentación del proveedor (remito y/o factura, un solo archivo) --
   // opcional, se puede adjuntar en la creación (ver crear) o después.
@@ -43,4 +56,8 @@ export const solicitudesMuestreoApi = {
   // la solicitud).
   obtenerEnsayosParaOrden: (id) => api.get(`/api/solicitudes-muestreo/${id}/ensayos-para-orden`),
   confirmarOrdenTrabajo: (id, body) => api.post(`/api/solicitudes-muestreo/${id}/orden-trabajo-digital`, body),
+
+  // Etiquetas CUARENTENA -- una por bulto (nro_bultos), impresión directa SATO.
+  imprimirCuarentena: (id, idImpresora) =>
+    api.post(`/api/solicitudes-muestreo/${id}/imprimir-cuarentena`, { id_impresora: idImpresora }),
 };

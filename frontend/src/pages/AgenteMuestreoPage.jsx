@@ -7,6 +7,7 @@ import { ApiError } from '../api/client';
 const FILTROS_RESULTADO = [
   { value: '', label: 'Todos' },
   { value: 'solicitud_generada', label: 'Solicitud generada' },
+  { value: 'ir_ya_tiene_solicitud', label: 'IR ya tenía solicitud' },
   { value: 'no_requiere_muestreo', label: 'No requiere muestreo' },
   { value: 'subarticulo_no_configurado', label: 'Subartículo no configurado' },
   { value: 'error', label: 'Error' },
@@ -14,6 +15,7 @@ const FILTROS_RESULTADO = [
 
 const BADGE_RESULTADO = {
   solicitud_generada: 'badge-ok',
+  ir_ya_tiene_solicitud: 'badge-warn',
   no_requiere_muestreo: 'badge-neutral',
   subarticulo_no_configurado: 'badge-warn',
   error: 'badge-danger',
@@ -142,7 +144,7 @@ export default function AgenteMuestreoPage() {
             <table className="data-table data-table-compact">
               <thead>
                 <tr>
-                  <th>N01Id</th>
+                  <th>N° IR</th>
                   <th>Material</th>
                   <th>Resultado</th>
                   <th>Solicitud</th>
@@ -155,8 +157,22 @@ export default function AgenteMuestreoPage() {
                 {evaluaciones.map((ev) => (
                   <Fragment key={ev.id}>
                     <tr>
-                      <td style={{ fontFamily: 'var(--font-mono)' }}>{ev.id_comprobante_erp}</td>
-                      <td>{ev.erp_codart?.trim() || '—'} <span style={{ color: 'var(--ink-3)' }}>({ev.erp_codsar || '—'})</span></td>
+                      {/* nro_ir (formato "NNN/AA") es lo que el usuario reconoce -- el N01Id
+                          interno del ERP no significa nada para un humano, así que solo queda
+                          como respaldo (evaluaciones viejas, de antes de esta columna) y como
+                          tooltip para quien lo necesite igual. */}
+                      <td style={{ fontFamily: 'var(--font-mono)' }} title={`N01Id: ${ev.id_comprobante_erp}`}>
+                        {ev.nro_ir || ev.id_comprobante_erp}
+                      </td>
+                      <td>
+                        {/* erp_desart puede venir NULL en evaluaciones registradas antes de que se
+                            agregara la columna (ver migrations_agente_muestreo.sql) -- en ese caso
+                            se muestra solo el código, como antes, sin romper la fila. */}
+                        {ev.erp_desart && <>{ev.erp_desart} </>}
+                        <span style={{ color: 'var(--ink-3)' }}>
+                          {ev.erp_codart?.trim() || '—'} ({ev.erp_codsar || '—'})
+                        </span>
+                      </td>
                       <td><span className={`badge ${BADGE_RESULTADO[ev.resultado] || 'badge-neutral'}`}>{labelResultado(ev.resultado)}</span></td>
                       <td style={{ fontFamily: 'var(--font-mono)' }}>{ev.nro_solicitud_generada || '—'}</td>
                       <td>{formatFechaHora(ev.fecha_evaluacion)}</td>

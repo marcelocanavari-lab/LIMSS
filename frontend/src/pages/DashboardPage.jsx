@@ -8,24 +8,20 @@ import { ApiError } from '../api/client';
 
 const GESTION = ['analista_qc', 'qa', 'admin'];
 const QA_ADMIN = ['qa', 'admin'];
-const TODOS = ['muestreador', 'analista_qc', 'qa', 'admin'];
 
 const QUICK_LINKS = [
-  { label: 'Solicitudes de Muestreo', ruta: '/solicitudes-muestreo', roles: GESTION },
+  { label: 'Muestras', ruta: '/menu-muestras', roles: GESTION },
+  { label: 'Impresión de Etiquetas', ruta: '/impresion-etiquetas', roles: GESTION },
   { label: 'Mis Solicitudes', ruta: '/mis-solicitudes-muestreo', roles: ['muestreador'] },
-  { label: 'Nueva Muestra', ruta: '/muestras/nueva', roles: TODOS },
   { label: 'Mis Muestras', ruta: '/muestras', roles: ['muestreador'] },
-  { label: 'Consulta de Muestras', ruta: '/consulta-muestras', roles: GESTION },
-  { label: 'Envío de Muestras', ruta: '/envios', roles: GESTION },
+  { label: 'Envíos de Muestras', ruta: '/envios', roles: GESTION },
   { label: 'Carga de Resultados', ruta: '/carga-resultados', roles: GESTION },
-  { label: 'Especificaciones', ruta: '/maestros/especificaciones', roles: GESTION },
-  { label: 'Catálogo de Ensayos', ruta: '/maestros/ensayos', roles: GESTION },
-  { label: 'Testigos y Estándares', ruta: '/maestros/testigos', roles: GESTION },
-  { label: 'Laboratorios', ruta: '/muestras/laboratorios', roles: GESTION },
-  { label: 'Reporte de Testigos', ruta: '/maestros/testigos/reporte', roles: QA_ADMIN },
-  { label: 'Dictamen QA', ruta: '/dictamenes', roles: QA_ADMIN },
+  { label: 'Dictámenes de QA', ruta: '/dictamenes', roles: QA_ADMIN },
   { label: 'Agente de Muestreo', ruta: '/agente-muestreo', roles: QA_ADMIN },
+  { label: 'Definiciones', ruta: '/menu-definiciones', roles: GESTION },
   { label: 'Facturación', ruta: '/facturas', roles: GESTION },
+  { label: 'Novedades de Empaque', ruta: '/maestros/novedades-empaque', roles: GESTION },
+  { label: 'Archivo de Contramuestras', ruta: '/cajas', roles: GESTION },
   { label: 'Administración', ruta: '/admin', roles: ['admin'] },
 ];
 

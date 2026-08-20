@@ -212,7 +212,8 @@ def _logs_de_control(cursor, id_control: int) -> list[AgenteLogEntry]:
 def _fila_a_evaluacion(cursor, row) -> AgenteEvaluacion:
     return AgenteEvaluacion(
         id=row.id, id_comprobante_erp=row.id_comprobante_erp, erp_idm21=row.erp_idm21,
-        erp_codart=row.erp_codart, erp_codsar=row.erp_codsar, fecha_evaluacion=row.fecha_evaluacion,
+        erp_codart=row.erp_codart, erp_codsar=row.erp_codsar, erp_desart=row.erp_desart,
+        nro_ir=row.nro_ir, fecha_evaluacion=row.fecha_evaluacion,
         resultado=row.resultado, id_solicitud_generada=row.id_solicitud_generada,
         nro_solicitud_generada=row.nro_solicitud_generada, reintentos=row.reintentos,
         logs=_logs_de_control(cursor, row.id),
@@ -223,7 +224,7 @@ def _fila_a_evaluacion(cursor, row) -> AgenteEvaluacion:
 def listar_evaluaciones_agente(
     id_comprobante_erp: Optional[int] = Query(None),
     resultado: Optional[str] = Query(
-        None, pattern=r"^(solicitud_generada|no_requiere_muestreo|subarticulo_no_configurado|error)$",
+        None, pattern=r"^(solicitud_generada|ir_ya_tiene_solicitud|no_requiere_muestreo|subarticulo_no_configurado|error)$",
     ),
     desde: Optional[date] = Query(None, description="Fecha de evaluación desde (inclusive)"),
     hasta: Optional[date] = Query(None, description="Fecha de evaluación hasta (inclusive)"),

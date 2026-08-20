@@ -16,6 +16,7 @@ tiempo.
 """
 import io
 from datetime import date
+from types import SimpleNamespace
 
 from reportlab.graphics import renderPDF
 from reportlab.graphics.barcode.qr import QrCodeWidget
@@ -26,6 +27,8 @@ from reportlab.lib.units import cm
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 from reportlab.platypus import Paragraph
+
+from app.services.formato import etiqueta_referencia, formatear_cantidad
 
 _ESTILO_ESPECIFICACION = ParagraphStyle(
     "especificacion_solicitud", fontName="Helvetica", fontSize=8, leading=9.5,
@@ -84,7 +87,7 @@ def _especificacion_texto(e) -> str:
 def _cantidad_texto(cantidad, unidad) -> str:
     if cantidad is None:
         return "—"
-    return f"{_texto(cantidad)} {unidad or ''}".strip()
+    return f"{formatear_cantidad(cantidad)} {unidad or ''}".strip()
 
 
 # ── Formulario (2 copias) ──────────────────────────────────────────
@@ -297,7 +300,8 @@ def _dibujar_etiqueta(
     y -= 0.56 * cm * e
 
     c.setFont("Helvetica-Bold", 14 * e)
-    c.drawString(x, y, _truncar_a_ancho(f"IR: {solicitud.erp_nro_ir}", "Helvetica-Bold", 14 * e, ancho_texto_max))
+    etiqueta_ref = etiqueta_referencia(getattr(solicitud, "tipo_referencia", "ir"))
+    c.drawString(x, y, _truncar_a_ancho(f"{etiqueta_ref}: {solicitud.erp_nro_ir}", "Helvetica-Bold", 14 * e, ancho_texto_max))
     y -= 0.59 * cm * e
 
     c.setFont("Helvetica-Bold", 13 * e)
@@ -411,6 +415,35 @@ def generar_pdf_etiquetas_v2(solicitud, muestras: list, iniciales_muestreador: s
             titulo = "CONTRAMUESTRA"
         items.append((titulo, _cantidad_texto(float(m.cantidad_real), m.unidad), m.laboratorio_nombre))
     return _generar_hoja_etiquetas(solicitud, items, iniciales_muestreador)
+
+
+def generar_pdf_etiqueta_muestra(muestra, iniciales_muestreador: str | None = None) -> bytes:
+    """Etiqueta simplificada para una muestra SIN Solicitud de Muestreo
+    asociada -- creada directamente por "Nueva Muestra" (ver
+    descargar_etiquetas_de_muestra en app/api/routes/muestras.py), que no
+    pasa por el flujo de Solicitudes de Muestreo y por lo tanto no tiene
+    nro_solicitud/laboratorio/cantidades de esa tabla. Una sola etiqueta con
+    los datos propios de la muestra (código, artículo, cantidad enviada,
+    fecha de muestreo) -- sin desglose análisis/contramuestra ni
+    laboratorio, porque esa información no existe para este tipo de
+    muestra. _dibujar_etiqueta espera un objeto con los mismos nombres de
+    atributo que una fila de solicitud (nro_solicitud/erp_DESART/
+    erp_CODART/erp_nro_ir/tipo_referencia/fecha_solicitud); se arma un shim
+    en vez de duplicar la función de dibujo."""
+    solicitud_shim = SimpleNamespace(
+        nro_solicitud=muestra.codigo_muestra,
+        erp_DESART=muestra.erp_DESART,
+        erp_CODART=muestra.erp_CODART,
+        erp_nro_ir=muestra.nro_referencia,
+        tipo_referencia=muestra.tipo_referencia,
+        fecha_solicitud=muestra.fecha_muestreo,
+    )
+    cantidad_texto = _cantidad_texto(
+        float(muestra.cantidad_enviada) if muestra.cantidad_enviada is not None else None,
+        muestra.unidad_enviada,
+    )
+    items = [("MUESTRA", cantidad_texto, None)]
+    return _generar_hoja_etiquetas(solicitud_shim, items, iniciales_muestreador)
 
 
 # ── Orden de Trabajo de Control de Calidad (P_CC002-1) y ──────────

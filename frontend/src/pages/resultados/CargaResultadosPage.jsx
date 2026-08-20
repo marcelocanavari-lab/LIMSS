@@ -2,7 +2,14 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import TopBar from '../../components/TopBar';
 import { resultadosApi } from '../../api/resultados';
+import { empaqueIaApi } from '../../api/empaqueIa';
+import { muestrasApi } from '../../api/muestras';
 import { ApiError } from '../../api/client';
+
+function tieneResultado(en) {
+  if (en.tipo_dato === 'numerico') return en.valor_numerico !== null && en.valor_numerico !== undefined;
+  return !!(en.valor_cualitativo && en.valor_cualitativo.trim());
+}
 
 export default function CargaResultadosPage() {
   const { idEnvio } = useParams();
@@ -13,13 +20,39 @@ export default function CargaResultadosPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Comparación de etiquetas con IA (solo Material de Empaque) -- ayuda
+  // visual para quien inspecciona, nunca decide ni pre-carga el resultado.
+  // Una sola por ENVÍO (no por ensayo): varios ensayos del mismo envío se
+  // verifican todos contra la misma foto de etiqueta recibida.
+  //
+  // Provisoria hasta guardar: comparar-etiqueta ya no persiste en el
+  // backend (ver comparar_etiqueta en resultados.py) -- el resultado vive
+  // solo acá, en memoria, hasta que se manda junto con "Guardar resultados".
+  // Si se corre de nuevo antes de guardar, este objeto se reemplaza entero
+  // (no se acumula), así que solo la última corrida es la que se guarda.
+  const [comparacion, setComparacion] = useState({ observacion: null, iaDisponible: null, imagenComparacionPath: null, comparando: false, error: '' });
+
   const [nroProtocolo, setNroProtocolo] = useState('');
   const [fechaEmision, setFechaEmision] = useState('');
   const [archivo, setArchivo] = useState(null);
-  const [guardando, setGuardando] = useState(false);
+  const [guardandoResultados, setGuardandoResultados] = useState(false);
+  const [guardandoProtocolo, setGuardandoProtocolo] = useState(false);
+  const [errorProtocolo, setErrorProtocolo] = useState('');
+  const [mensajeOk, setMensajeOk] = useState('');
 
-  useEffect(() => {
-    resultadosApi
+  // Etiqueta APROBADO -- solo imprimible si el dictamen de la muestra (no
+  // del envío, la muestra puede tener varios envíos) está Aprobado. El
+  // backend es quien realmente lo bloquea (ver imprimir_etiqueta_aprobado
+  // en muestras.py); acá solo se refleja el estado para no ofrecer la
+  // acción como si nada cuando claramente no corresponde todavía.
+  const [dictamen, setDictamen] = useState(null);
+  const [impresorasAprobado, setImpresorasAprobado] = useState([]);
+  const [idImpresoraAprobado, setIdImpresoraAprobado] = useState('');
+  const [imprimiendoAprobado, setImprimiendoAprobado] = useState(false);
+  const [mensajeAprobado, setMensajeAprobado] = useState(null);
+
+  function cargar() {
+    return resultadosApi
       .obtenerParaCarga(idEnvio)
       .then((data) => {
         setEnvio(data);
@@ -31,49 +64,88 @@ export default function CargaResultadosPage() {
           };
         });
         setValores(iniciales);
+        if (data.observacion_ia || data.tiene_imagen_comparacion) {
+          // Ya persistido de un guardado anterior -- se muestra, pero
+          // imagenComparacionPath queda en null: si se resguarda sin correr
+          // una comparación nueva, no se reenvía nada (ver handleGuardarResultados)
+          // y el backend deja lo ya persistido tal cual, sin tocarlo.
+          setComparacion({ observacion: data.observacion_ia, iaDisponible: data.observacion_ia != null, imagenComparacionPath: null, comparando: false, error: '' });
+        }
         if (data.protocolo) {
           setNroProtocolo(data.protocolo.nro_protocolo_ext);
           setFechaEmision(data.protocolo.fecha_emision);
         }
       })
-      .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo cargar el envío'))
-      .finally(() => setLoading(false));
+      .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo cargar el envío'));
+  }
+
+  useEffect(() => {
+    cargar().finally(() => setLoading(false));
   }, [idEnvio]);
+
+  useEffect(() => {
+    if (!envio?.id_muestra) return;
+    muestrasApi
+      .obtenerRecorrido(envio.id_muestra)
+      .then((data) => setDictamen(data.dictamen || null))
+      .catch(() => {});
+  }, [envio?.id_muestra]);
+
+  function abrirImprimirAprobado() {
+    setMensajeAprobado(null);
+    if (impresorasAprobado.length === 0) {
+      muestrasApi
+        .listarImpresoras(true)
+        .then((data) => {
+          setImpresorasAprobado(data);
+          if (data.length === 1) setIdImpresoraAprobado(String(data[0].id_impresora));
+        })
+        .catch(() => setMensajeAprobado({ tipo: 'error', texto: 'No se pudo cargar el listado de impresoras' }));
+    }
+  }
+
+  async function confirmarImprimirAprobado() {
+    if (!idImpresoraAprobado || !envio?.id_muestra) return;
+    setImprimiendoAprobado(true);
+    setMensajeAprobado(null);
+    try {
+      const resp = await muestrasApi.imprimirAprobado(envio.id_muestra, Number(idImpresoraAprobado));
+      setMensajeAprobado({ tipo: 'ok', texto: resp.mensaje });
+    } catch (err) {
+      setMensajeAprobado({ tipo: 'error', texto: err instanceof ApiError ? err.message : 'No se pudo imprimir la etiqueta' });
+    } finally {
+      setImprimiendoAprobado(false);
+    }
+  }
 
   function actualizarValor(idEnsayo, campo, valor) {
     setValores((prev) => ({ ...prev, [idEnsayo]: { ...prev[idEnsayo], [campo]: valor } }));
   }
 
-  function faltanObligatorios() {
-    if (!envio) return true;
-    return envio.ensayos.some((e) => {
-      if (!e.obligatorio) return false;
-      const v = valores[e.id_espec_ensayo];
-      if (e.tipo_dato === 'numerico') return !v || v.valor_numerico === '';
-      return !v || !v.valor_cualitativo?.trim();
-    });
+  async function handleCompararEtiqueta(archivo) {
+    setComparacion((prev) => ({ ...prev, comparando: true, error: '' }));
+    try {
+      const resp = await empaqueIaApi.compararEtiqueta(idEnvio, archivo);
+      setComparacion({
+        observacion: resp.observacion_ia,
+        iaDisponible: resp.ia_disponible,
+        imagenComparacionPath: resp.imagen_comparacion_path,
+        comparando: false,
+        error: '',
+      });
+    } catch (err) {
+      setComparacion((prev) => ({ ...prev, comparando: false, error: err instanceof ApiError ? err.message : 'No se pudo comparar la etiqueta' }));
+    }
   }
 
-  async function handleSubmit(e) {
+  // Guardado parcial: se manda lo que haya en cada campo (algunos pueden
+  // quedar vacíos) y el backend guarda ensayo por ensayo -- no hace falta
+  // completar todo el envío en esta misma operación. El protocolo NO viaja
+  // acá: es independiente, se carga aparte (ver handleGuardarProtocolo).
+  async function handleGuardarResultados(e) {
     e.preventDefault();
     setError('');
-
-    if (faltanObligatorios()) {
-      setError('Completá todos los ensayos obligatorios');
-      return;
-    }
-    if (!nroProtocolo.trim() || !fechaEmision) {
-      setError('El número de protocolo y la fecha de emisión son obligatorios');
-      return;
-    }
-    if (!archivo) {
-      setError('El protocolo en PDF es obligatorio');
-      return;
-    }
-    if (archivo.type !== 'application/pdf') {
-      setError('El archivo debe ser un PDF');
-      return;
-    }
+    setMensajeOk('');
 
     const resultados = envio.ensayos.map((en) => {
       const v = valores[en.id_espec_ensayo] || {};
@@ -84,19 +156,54 @@ export default function CargaResultadosPage() {
       };
     });
 
-    setGuardando(true);
+    setGuardandoResultados(true);
     try {
       await resultadosApi.guardarResultados(idEnvio, {
         resultados,
+        imagenComparacionPath: comparacion.imagenComparacionPath,
+        observacionIa: comparacion.observacion,
+      });
+      await cargar();
+      setMensajeOk('Resultados guardados.');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo guardar los resultados');
+    } finally {
+      setGuardandoResultados(false);
+    }
+  }
+
+  async function handleGuardarProtocolo(e) {
+    e.preventDefault();
+    setErrorProtocolo('');
+    setMensajeOk('');
+
+    if (!nroProtocolo.trim() || !fechaEmision) {
+      setErrorProtocolo('El número de protocolo y la fecha de emisión son obligatorios');
+      return;
+    }
+    if (!archivo) {
+      setErrorProtocolo('El protocolo en PDF es obligatorio');
+      return;
+    }
+    if (archivo.type !== 'application/pdf') {
+      setErrorProtocolo('El archivo debe ser un PDF');
+      return;
+    }
+
+    setGuardandoProtocolo(true);
+    try {
+      await resultadosApi.guardarProtocolo(idEnvio, {
         nroProtocoloExt: nroProtocolo.trim(),
         fechaEmision,
         protocoloPdf: archivo,
       });
-      navigate('/carga-resultados', { replace: true });
+      await cargar();
+      setArchivo(null);
+      setMensajeOk('Protocolo guardado.');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo guardar los resultados');
+      setErrorProtocolo(err instanceof ApiError ? err.message : 'No se pudo guardar el protocolo');
     } finally {
-      setGuardando(false);
+      setGuardandoProtocolo(false);
     }
   }
 
@@ -119,6 +226,16 @@ export default function CargaResultadosPage() {
     );
   }
 
+  const totalEnsayos = envio.ensayos.length;
+  const ensayosCargados = envio.ensayos.filter(tieneResultado).length;
+  const estadoCarga =
+    totalEnsayos === 0 ? null : ensayosCargados === 0 ? 'sin_cargar' : ensayosCargados === totalEnsayos ? 'completo' : 'parcial';
+  const BADGE_ESTADO_CARGA = {
+    sin_cargar: { texto: 'Sin cargar', clase: 'badge-neutral' },
+    parcial: { texto: 'Parcial', clase: 'badge-warn' },
+    completo: { texto: 'Completo', clase: 'badge-ok' },
+  };
+
   return (
     <div className="screen">
       <TopBar
@@ -127,9 +244,66 @@ export default function CargaResultadosPage() {
         onBack={() => navigate(-1)}
       />
       <div className="screen-content">
-        <form onSubmit={handleSubmit}>
+        {mensajeOk && <div className="alert alert-ok" style={{ marginBottom: 'var(--sp-4)' }}>{mensajeOk}</div>}
+
+        <form onSubmit={handleGuardarResultados}>
+          {envio.tipo_material === 'material_empaque' && (
+            <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
+              <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-2)' }}>Comparación de etiqueta con IA</h2>
+              <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', marginBottom: 'var(--sp-3)' }}>
+                Subí una foto de la etiqueta recibida en esta inspección -- se compara contra la imagen de referencia del
+                artículo. Es una ayuda visual para los ensayos de abajo (texto legal, colores, código de barras, etc.), no
+                reemplaza tu criterio: el Cumple/No cumple de cada uno lo completás vos.
+              </p>
+
+              <label
+                className="btn btn-secondary"
+                style={{ cursor: comparacion.comparando ? 'default' : 'pointer' }}
+              >
+                {comparacion.comparando ? <span className="spinner" /> : 'Subir foto y comparar'}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  style={{ display: 'none' }}
+                  disabled={comparacion.comparando}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = '';
+                    if (f) handleCompararEtiqueta(f);
+                  }}
+                />
+              </label>
+
+              {comparacion.error && (
+                <div className="alert alert-danger" style={{ marginTop: 'var(--sp-3)' }}>{comparacion.error}</div>
+              )}
+              {comparacion.observacion != null && (
+                <div className="alert alert-info" style={{ marginTop: 'var(--sp-3)' }}>
+                  <strong>Sugerencia IA:</strong> {comparacion.observacion}
+                </div>
+              )}
+              {!comparacion.comparando && comparacion.observacion == null && comparacion.iaDisponible === false && (
+                <div className="alert alert-warn" style={{ marginTop: 'var(--sp-3)' }}>
+                  No se pudo generar la comparación con IA -- podés seguir cargando los resultados igual.
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
-            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Resultados de análisis solicitados</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--sp-3)', flexWrap: 'wrap', gap: 'var(--sp-2)' }}>
+              <h2 style={{ fontSize: 'var(--fs-lg)', margin: 0 }}>Resultados de análisis solicitados</h2>
+              {estadoCarga && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', fontSize: 'var(--fs-sm)' }}>
+                  {ensayosCargados} de {totalEnsayos} ensayos cargados
+                  <span className={`badge ${BADGE_ESTADO_CARGA[estadoCarga].clase}`}>{BADGE_ESTADO_CARGA[estadoCarga].texto}</span>
+                </span>
+              )}
+            </div>
+            <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', marginBottom: 'var(--sp-3)' }}>
+              No hace falta completar todos los ensayos para guardar: podés cargar los que ya tengas y volver más tarde a
+              completar el resto.
+            </p>
             {envio.ensayos.length === 0 ? (
               <div className="alert alert-info">No hay ensayos solicitados para el envío de esta muestra.</div>
             ) : (
@@ -140,14 +314,23 @@ export default function CargaResultadosPage() {
                     <th>Metodología</th>
                     <th>Especificación</th>
                     <th>Resultado</th>
+                    <th>Estado</th>
                   </tr>
                 </thead>
                 <tbody>
                   {envio.ensayos.map((en) => {
                     const v = valores[en.id_espec_ensayo] || {};
+                    const cargado = tieneResultado(en);
                     return (
                       <tr key={en.id_espec_ensayo}>
-                        <td>{en.nombre_ensayo}{en.obligatorio && ' *'}</td>
+                        <td>
+                          {en.nombre_ensayo}{en.obligatorio && ' *'}
+                          {en.especificacion_texto && (
+                            <div style={{ fontSize: 'var(--fs-xs)', color: 'var(--ink-2)', marginTop: 2 }}>
+                              {en.especificacion_texto}
+                            </div>
+                          )}
+                        </td>
                         <td>{en.metodologia || '—'}</td>
                         <td>
                           {en.tipo_dato === 'numerico'
@@ -162,20 +345,25 @@ export default function CargaResultadosPage() {
                               step="any"
                               value={v.valor_numerico}
                               onChange={(e) => actualizarValor(en.id_espec_ensayo, 'valor_numerico', e.target.value)}
-                              disabled={guardando}
+                              disabled={guardandoResultados}
                             />
                           ) : (
                             <select
                               className="field-input"
                               value={v.valor_cualitativo}
                               onChange={(e) => actualizarValor(en.id_espec_ensayo, 'valor_cualitativo', e.target.value)}
-                              disabled={guardando}
+                              disabled={guardandoResultados}
                             >
                               <option value="">Seleccioná...</option>
                               <option value="Cumple">Cumple</option>
                               <option value="No cumple">No cumple</option>
                             </select>
                           )}
+                        </td>
+                        <td>
+                          {cargado
+                            ? <span className="badge badge-ok">Cargado</span>
+                            : <span className="badge badge-neutral">Pendiente</span>}
                         </td>
                       </tr>
                     );
@@ -185,8 +373,25 @@ export default function CargaResultadosPage() {
             )}
           </div>
 
-          <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
-            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Protocolo del laboratorio</h2>
+          {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}
+
+          <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={guardandoResultados}>
+            {guardandoResultados ? <span className="spinner" /> : 'Guardar resultados'}
+          </button>
+        </form>
+
+        <div className="card" style={{ marginTop: 'var(--sp-5)' }}>
+          <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-2)' }}>Protocolo del laboratorio</h2>
+          <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', marginBottom: 'var(--sp-3)' }}>
+            Es independiente de los resultados: se puede cargar antes, después, o nunca en la misma visita a esta pantalla.
+          </p>
+          {envio.protocolo && (
+            <div className="alert alert-info" style={{ marginBottom: 'var(--sp-3)' }}>
+              Ya hay un protocolo cargado ({envio.protocolo.pdf_nombre_original}, {envio.protocolo.fecha_emision}). Subir
+              uno nuevo lo reemplaza.
+            </div>
+          )}
+          <form onSubmit={handleGuardarProtocolo}>
             <div className="field">
               <label className="field-label" htmlFor="nroProtocolo">Número de protocolo externo</label>
               <input
@@ -194,7 +399,7 @@ export default function CargaResultadosPage() {
                 className="field-input"
                 value={nroProtocolo}
                 onChange={(e) => setNroProtocolo(e.target.value)}
-                disabled={guardando}
+                disabled={guardandoProtocolo}
               />
             </div>
             <div className="field">
@@ -205,7 +410,7 @@ export default function CargaResultadosPage() {
                 type="date"
                 value={fechaEmision}
                 onChange={(e) => setFechaEmision(e.target.value)}
-                disabled={guardando}
+                disabled={guardandoProtocolo}
               />
             </div>
             <div className="field">
@@ -216,17 +421,71 @@ export default function CargaResultadosPage() {
                 type="file"
                 accept="application/pdf"
                 onChange={(e) => setArchivo(e.target.files?.[0] || null)}
-                disabled={guardando}
+                disabled={guardandoProtocolo}
               />
             </div>
-          </div>
 
-          {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}
+            {errorProtocolo && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-4)' }}>{errorProtocolo}</div>}
 
-          <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={guardando}>
-            {guardando ? <span className="spinner" /> : 'Guardar resultados'}
-          </button>
-        </form>
+            <button type="submit" className="btn btn-secondary btn-block" disabled={guardandoProtocolo}>
+              {guardandoProtocolo ? <span className="spinner" /> : 'Guardar protocolo'}
+            </button>
+          </form>
+        </div>
+
+        <div className="card" style={{ marginTop: 'var(--sp-5)' }}>
+          <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-2)' }}>Etiqueta APROBADO</h2>
+          <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', marginBottom: 'var(--sp-3)' }}>
+            Solo se puede imprimir cuando el dictamen de esta muestra está Aprobado.
+          </p>
+
+          {dictamen?.estado_dictamen !== 'aprobado' && (
+            <div className="alert alert-warn" style={{ marginBottom: 'var(--sp-3)' }}>
+              {dictamen
+                ? `El dictamen de esta muestra está '${dictamen.estado_dictamen}', no Aprobado -- no se puede imprimir esta etiqueta.`
+                : 'Esta muestra todavía no tiene un dictamen emitido.'}
+            </div>
+          )}
+
+          {impresorasAprobado.length > 0 && (
+            <div className="field">
+              <label className="field-label" htmlFor="impresoraAprobado">Impresora</label>
+              <select
+                id="impresoraAprobado"
+                className="field-input"
+                value={idImpresoraAprobado}
+                onChange={(e) => setIdImpresoraAprobado(e.target.value)}
+                disabled={imprimiendoAprobado}
+              >
+                <option value="">Seleccioná una impresora...</option>
+                {impresorasAprobado.map((imp) => (
+                  <option key={imp.id_impresora} value={imp.id_impresora}>{imp.nombre} ({imp.modelo})</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {mensajeAprobado && (
+            <div className={`alert ${mensajeAprobado.tipo === 'ok' ? 'alert-ok' : 'alert-danger'}`} style={{ marginBottom: 'var(--sp-3)' }}>
+              {mensajeAprobado.texto}
+            </div>
+          )}
+
+          {impresorasAprobado.length === 0 ? (
+            <button type="button" className="btn btn-secondary btn-block" onClick={abrirImprimirAprobado}>
+              Imprimir etiqueta APROBADO →
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-primary btn-block"
+              onClick={confirmarImprimirAprobado}
+              disabled={imprimiendoAprobado || !idImpresoraAprobado}
+            >
+              {imprimiendoAprobado ? <span className="spinner" /> : 'Imprimir'}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

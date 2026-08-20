@@ -327,6 +327,33 @@ export default function ConsultaMuestraDetallePage() {
             </Seccion>
           )}
 
+          {/* 3.5 Checklist de Muestreo: ítems configurables de etapa
+              'muestreo' (ver lims_resultados_muestreo) -- sección propia,
+              separada de las especificaciones de laboratorio (etapa
+              'analisis', sección siguiente). Vacío en muestras muestreadas
+              antes de este cambio o sin especificación con ítems de esta
+              etapa, no se muestra el bloque. */}
+          {recorrido.checklist_muestreo.length > 0 && (
+            <Seccion titulo="Checklist de Muestreo">
+              <table className="data-table data-table-compact">
+                <thead>
+                  <tr>
+                    <th>Ítem</th>
+                    <th>Resultado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recorrido.checklist_muestreo.map((it) => (
+                    <tr key={it.id_espec_ensayo}>
+                      <td>{it.nombre_ensayo}</td>
+                      <td>{badgeCumple(it)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Seccion>
+          )}
+
           {/* 4. Aspecto de la Materia Prima: aspecto/olor/color observados +
               todas las especificaciones (ensayos) definidas para la
               solicitud, con su resultado interno + observaciones del

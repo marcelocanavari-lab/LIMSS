@@ -12,9 +12,11 @@ import pyodbc
 def buscar_articulos(erp: pyodbc.Connection, buscar: str = ""):
     like = f"%{buscar}%"
     cursor = erp.cursor()
+    # RTRIM en CODART/DESART: GIM21ART es CHAR de ancho fijo, ver la nota en
+    # erp_ir.py -- se recorta al leer, único punto de esta consulta.
     cursor.execute(
         """
-        SELECT art.M21Id AS IdM21, art.CODART, art.DESART, umd.ABREV AS unidad
+        SELECT art.M21Id AS IdM21, RTRIM(art.CODART) AS CODART, RTRIM(art.DESART) AS DESART, umd.ABREV AS unidad
         FROM GIM21ART art
         LEFT JOIN GIT21UMD umd ON umd.T21Id = art.IdT21M
         WHERE art.CODART LIKE ? OR art.DESART LIKE ?

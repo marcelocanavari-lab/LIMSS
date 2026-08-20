@@ -6,7 +6,6 @@ import { muestrasApi } from '../../api/muestras';
 import { ApiError, abrirPdfConAuth } from '../../api/client';
 
 const CAMPO_FISICO_VACIO = {
-  aspecto_externo: '', cierre: '', aspecto_interno: '', precintos: '',
   identificacion_contenedor: '', fecha_vencimiento_real: '', fecha_reanalisis_real: '',
   aspecto_mp: '', materias_extranas: '', olor: '', color: '',
   observaciones_muestreo: '', nro_bultos_muestreados: '',
@@ -52,6 +51,7 @@ export default function CargaResultadosOrdenTrabajoPage() {
 
   const [datos, setDatos] = useState(null);
   const [camposFisicos, setCamposFisicos] = useState(CAMPO_FISICO_VACIO);
+  const [checklist, setChecklist] = useState([]); // [{ id_espec_ensayo, orden, nombre_ensayo, especificacion_texto, valor_cualitativo }]
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
@@ -66,10 +66,6 @@ export default function CargaResultadosOrdenTrabajoPage() {
         setDatos(data);
         const df = data.datos_fisicos || {};
         setCamposFisicos({
-          aspecto_externo: df.aspecto_externo || '',
-          cierre: df.cierre || '',
-          aspecto_interno: df.aspecto_interno || '',
-          precintos: df.precintos || '',
           identificacion_contenedor: df.identificacion_contenedor || '',
           fecha_vencimiento_real: df.fecha_vencimiento_real || '',
           fecha_reanalisis_real: df.fecha_reanalisis_real || '',
@@ -80,6 +76,7 @@ export default function CargaResultadosOrdenTrabajoPage() {
           observaciones_muestreo: df.observaciones_muestreo || '',
           nro_bultos_muestreados: df.nro_bultos_muestreados ?? '',
         });
+        setChecklist(data.checklist_muestreo || []);
 
         if (data.estado !== 'pendiente') {
           try {
@@ -103,6 +100,12 @@ export default function CargaResultadosOrdenTrabajoPage() {
     setCamposFisicos((prev) => ({ ...prev, [campo]: valor }));
   }
 
+  function actualizarChecklist(idEspecEnsayo, valor) {
+    setChecklist((prev) => prev.map((it) => (
+      it.id_espec_ensayo === idEspecEnsayo ? { ...it, valor_cualitativo: valor } : it
+    )));
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
@@ -111,10 +114,6 @@ export default function CargaResultadosOrdenTrabajoPage() {
     try {
       const resp = await solicitudesMuestreoApi.confirmarOrdenTrabajo(idSolicitud, {
         datos_fisicos: {
-          aspecto_externo: camposFisicos.aspecto_externo.trim() || null,
-          cierre: camposFisicos.cierre.trim() || null,
-          aspecto_interno: camposFisicos.aspecto_interno.trim() || null,
-          precintos: camposFisicos.precintos.trim() || null,
           identificacion_contenedor: camposFisicos.identificacion_contenedor.trim() || null,
           fecha_vencimiento_real: camposFisicos.fecha_vencimiento_real || null,
           fecha_reanalisis_real: camposFisicos.fecha_reanalisis_real || null,
@@ -125,6 +124,9 @@ export default function CargaResultadosOrdenTrabajoPage() {
           observaciones_muestreo: camposFisicos.observaciones_muestreo.trim() || null,
           nro_bultos_muestreados: camposFisicos.nro_bultos_muestreados !== '' ? Number(camposFisicos.nro_bultos_muestreados) : null,
         },
+        checklist_muestreo: checklist
+          .filter((it) => it.valor_cualitativo)
+          .map((it) => ({ id_espec_ensayo: it.id_espec_ensayo, valor_cualitativo: it.valor_cualitativo })),
       });
       setResultado(resp);
     } catch (err) {
@@ -224,32 +226,35 @@ export default function CargaResultadosOrdenTrabajoPage() {
         )}
         <form onSubmit={handleSubmit}>
           <div className="card" style={{ marginBottom: 'var(--sp-4)' }}>
+            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Checklist de muestreo</h2>
+            {checklist.length === 0 ? (
+              <div className="alert alert-warn" style={{ marginBottom: 'var(--sp-3)' }}>
+                Esta especificación no tiene ítems de etapa muestreo configurados -- no hay nada que revisar acá.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap', marginBottom: 'var(--sp-3)' }}>
+                {checklist.map((item) => (
+                  <div key={item.id_espec_ensayo} style={{ flex: '1 1 260px' }}>
+                    <CampoCumple
+                      label={item.nombre_ensayo}
+                      valor={item.valor_cualitativo}
+                      onChange={(v) => actualizarChecklist(item.id_espec_ensayo, v)}
+                      disabled={guardando || soloLectura}
+                    />
+                    {item.especificacion_texto && (
+                      <p style={{ fontSize: 'var(--fs-xs)', color: 'var(--ink-2)', marginTop: 'var(--sp-1)' }}>
+                        {item.especificacion_texto}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="card" style={{ marginBottom: 'var(--sp-4)' }}>
             <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Datos físicos del muestreo</h2>
             <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
-              <CampoCumple
-                label="Aspecto externo del contenedor"
-                valor={camposFisicos.aspecto_externo}
-                onChange={(v) => actualizarCampoFisico('aspecto_externo', v)}
-                disabled={guardando || soloLectura}
-              />
-              <CampoCumple
-                label="Cierre"
-                valor={camposFisicos.cierre}
-                onChange={(v) => actualizarCampoFisico('cierre', v)}
-                disabled={guardando || soloLectura}
-              />
-              <CampoCumple
-                label="Aspecto interno"
-                valor={camposFisicos.aspecto_interno}
-                onChange={(v) => actualizarCampoFisico('aspecto_interno', v)}
-                disabled={guardando || soloLectura}
-              />
-              <CampoCumple
-                label="Precintos"
-                valor={camposFisicos.precintos}
-                onChange={(v) => actualizarCampoFisico('precintos', v)}
-                disabled={guardando || soloLectura}
-              />
               <div className="field" style={{ flex: '1 1 200px' }}>
                 <label className="field-label">Identificación del contenedor</label>
                 <input className="field-input" value={camposFisicos.identificacion_contenedor} onChange={(e) => actualizarCampoFisico('identificacion_contenedor', e.target.value)} disabled={guardando || soloLectura} />

@@ -40,6 +40,18 @@ function formatFecha(iso) {
   return new Date(iso).toLocaleDateString();
 }
 
+// Trunca con "…" en vez de dejar que el texto largo salte de línea -- una
+// sola fila que se parte en 2 líneas alcanza para desalinear la altura de
+// toda la tabla (los bordes entre filas dejan de estar parejos). display:
+// inline-block + maxWidth trunca sin depender de table-layout: fixed en
+// toda la tabla (que rompería el ancho de Acciones, con contenido variable).
+function celdaTruncada(maxWidth) {
+  return {
+    display: 'inline-block', maxWidth, overflow: 'hidden',
+    textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'middle',
+  };
+}
+
 function formatFechaSimple(fechaISO) {
   if (!fechaISO) return '—';
   // fecha_ingreso/fecha_vencimiento vienen como "YYYY-MM-DD" (sin hora) --
@@ -105,7 +117,7 @@ export default function SolicitudesMuestreoPage() {
   const [fabricante, setFabricante] = useState('');
   const [protocoloProveedor, setProtocoloProveedor] = useState(null);
   // A diferencia del protocolo, es opcional -- se puede omitir acá y
-  // adjuntar después desde el listado (ver abrirAdjuntarDocumentacion).
+  // adjuntar después desde el listado (ver el modal "Completar").
   const [documentacionProveedor, setDocumentacionProveedor] = useState(null);
 
   // ── Modal: anular ────────────────────────────────────────────────
@@ -114,17 +126,28 @@ export default function SolicitudesMuestreoPage() {
   const [errorAnular, setErrorAnular] = useState('');
   const [guardandoAnular, setGuardandoAnular] = useState(false);
 
-  // ── Modal: adjuntar documentación del proveedor (post-creación) ──
-  const [adjuntandoDocId, setAdjuntandoDocId] = useState(null);
-  const [archivoDocumentacion, setArchivoDocumentacion] = useState(null);
-  const [errorDoc, setErrorDoc] = useState('');
-  const [guardandoDoc, setGuardandoDoc] = useState(false);
+  // ── Modal: imprimir CUARENTENA (una etiqueta por bulto) ───────────
+  const [cuarentenaSolicitud, setCuarentenaSolicitud] = useState(null);
+  const [impresorasCuarentena, setImpresorasCuarentena] = useState([]);
+  const [idImpresoraCuarentena, setIdImpresoraCuarentena] = useState('');
+  const [imprimiendoCuarentena, setImprimiendoCuarentena] = useState(false);
+  const [mensajeCuarentena, setMensajeCuarentena] = useState(null); // { tipo: 'ok'|'error', texto }
 
-  // ── Modal: completar laboratorio/muestreador (solicitudes del agente) ──
+  // ── Modal: completar datos (cualquier solicitud pendiente) ──
   const [completandoId, setCompletandoId] = useState(null);
   const [completarLaboratorios, setCompletarLaboratorios] = useState([]);
   const [completarIdLaboratorio, setCompletarIdLaboratorio] = useState('');
   const [completarIdMuestreador, setCompletarIdMuestreador] = useState('');
+  const [completarLoteProveedor, setCompletarLoteProveedor] = useState('');
+  const [completarPaisOrigen, setCompletarPaisOrigen] = useState('');
+  const [completarFechaReanalisis, setCompletarFechaReanalisis] = useState('');
+  const [completarNroBultos, setCompletarNroBultos] = useState('');
+  const [completarMetodologiaAnalisis, setCompletarMetodologiaAnalisis] = useState('');
+  const [completarFabricante, setCompletarFabricante] = useState('');
+  const [completarProtocoloProveedorActual, setCompletarProtocoloProveedorActual] = useState('');
+  const [completarProtocoloProveedor, setCompletarProtocoloProveedor] = useState(null);
+  const [completarDocumentacionProveedorActual, setCompletarDocumentacionProveedorActual] = useState('');
+  const [completarDocumentacionProveedor, setCompletarDocumentacionProveedor] = useState(null);
   const [errorCompletar, setErrorCompletar] = useState('');
   const [guardandoCompletar, setGuardandoCompletar] = useState(false);
 
@@ -312,7 +335,7 @@ export default function SolicitudesMuestreoPage() {
       setErrorForm('El material no tiene proveedor cargado en el ERP');
       return;
     }
-    if (!loteProveedor.trim()) {
+    if (material.CODSAR !== '0006' && !loteProveedor.trim()) {
       setErrorForm('El lote del proveedor es obligatorio');
       return;
     }
@@ -334,6 +357,7 @@ export default function SolicitudesMuestreoPage() {
     try {
       const nueva = await solicitudesMuestreoApi.crear({
         erp_nro_ir: material.referencia,
+        erp_n01id: material.N01Id ?? null,
         id_laboratorio: Number(idLaboratorio),
         id_muestreador: Number(idMuestreador),
         observaciones: observaciones.trim() || null,
@@ -388,53 +412,19 @@ export default function SolicitudesMuestreoPage() {
     }
   }
 
-  async function verProtocoloProveedor(s) {
+  async function verProtocoloProveedor(idSolicitud) {
     try {
-      await abrirPdfConAuth(`/api/solicitudes-muestreo/${s.id_solicitud}/protocolo-proveedor`);
+      await abrirPdfConAuth(`/api/solicitudes-muestreo/${idSolicitud}/protocolo-proveedor`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo abrir el protocolo del proveedor');
+      setErrorCompletar(err instanceof ApiError ? err.message : 'No se pudo abrir el protocolo del proveedor');
     }
   }
 
-  async function verDocumentacionProveedor(s) {
+  async function verDocumentacionProveedor(idSolicitud) {
     try {
-      await abrirPdfConAuth(`/api/solicitudes-muestreo/${s.id_solicitud}/documentacion-proveedor`);
+      await abrirPdfConAuth(`/api/solicitudes-muestreo/${idSolicitud}/documentacion-proveedor`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo abrir la documentación del proveedor');
-    }
-  }
-
-  function abrirAdjuntarDocumentacion(s) {
-    setAdjuntandoDocId(s.id_solicitud);
-    setArchivoDocumentacion(null);
-    setErrorDoc('');
-  }
-
-  function cerrarAdjuntarDocumentacion() {
-    setAdjuntandoDocId(null);
-  }
-
-  async function handleAdjuntarDocumentacion(e) {
-    e.preventDefault();
-    if (!archivoDocumentacion) {
-      setErrorDoc('Elegí un archivo (foto o PDF)');
-      return;
-    }
-    const tiposValidos = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
-    if (!tiposValidos.includes(archivoDocumentacion.type)) {
-      setErrorDoc('El archivo debe ser una imagen (JPG/PNG) o un PDF');
-      return;
-    }
-    setErrorDoc('');
-    setGuardandoDoc(true);
-    try {
-      await solicitudesMuestreoApi.subirDocumentacionProveedor(adjuntandoDocId, archivoDocumentacion);
-      cerrarAdjuntarDocumentacion();
-      cargar();
-    } catch (err) {
-      setErrorDoc(err instanceof ApiError ? err.message : 'No se pudo adjuntar el archivo');
-    } finally {
-      setGuardandoDoc(false);
+      setErrorCompletar(err instanceof ApiError ? err.message : 'No se pudo abrir la documentación del proveedor');
     }
   }
 
@@ -443,6 +433,16 @@ export default function SolicitudesMuestreoPage() {
     setErrorCompletar('');
     setCompletarIdLaboratorio(s.id_laboratorio ? String(s.id_laboratorio) : '');
     setCompletarIdMuestreador(s.id_muestreador ? String(s.id_muestreador) : '');
+    setCompletarLoteProveedor(s.lote_proveedor || '');
+    setCompletarPaisOrigen(s.pais_origen || '');
+    setCompletarFechaReanalisis(s.fecha_reanalisis || '');
+    setCompletarNroBultos(s.nro_bultos != null ? String(s.nro_bultos) : '');
+    setCompletarMetodologiaAnalisis(s.metodologia_analisis || '');
+    setCompletarFabricante(s.fabricante || '');
+    setCompletarProtocoloProveedorActual(s.protocolo_proveedor_nombre_original || '');
+    setCompletarProtocoloProveedor(null);
+    setCompletarDocumentacionProveedorActual(s.documentacion_proveedor_nombre_original || '');
+    setCompletarDocumentacionProveedor(null);
     setCompletarLaboratorios([]);
     try {
       const detalle = await solicitudesMuestreoApi.obtener(s.id_solicitud);
@@ -469,17 +469,29 @@ export default function SolicitudesMuestreoPage() {
 
   async function handleCompletar(e) {
     e.preventDefault();
-    if (!completarIdLaboratorio && !completarIdMuestreador) {
-      setErrorCompletar('Elegí un laboratorio y/o un muestreador para completar');
-      return;
-    }
     setErrorCompletar('');
     setGuardandoCompletar(true);
     try {
-      await solicitudesMuestreoApi.completarLaboratorio(completandoId, {
+      await solicitudesMuestreoApi.completarDatos(completandoId, {
         id_laboratorio: completarIdLaboratorio ? Number(completarIdLaboratorio) : null,
         id_muestreador: completarIdMuestreador ? Number(completarIdMuestreador) : null,
+        lote_proveedor: completarLoteProveedor.trim() || null,
+        pais_origen: completarPaisOrigen.trim() || null,
+        fecha_reanalisis: completarFechaReanalisis || null,
+        nro_bultos: completarNroBultos !== '' ? Number(completarNroBultos) : null,
+        metodologia_analisis: completarMetodologiaAnalisis.trim() || null,
+        fabricante: completarFabricante.trim() || null,
       });
+      // Protocolo y documentación del proveedor van por endpoints aparte (son
+      // archivos, no campos del body de completar-datos) -- se pueden subir
+      // en momentos distintos entre sí y del resto de los datos, cada uno
+      // solo si el usuario eligió un archivo nuevo.
+      if (completarProtocoloProveedor) {
+        await solicitudesMuestreoApi.subirProtocoloProveedor(completandoId, completarProtocoloProveedor);
+      }
+      if (completarDocumentacionProveedor) {
+        await solicitudesMuestreoApi.subirDocumentacionProveedor(completandoId, completarDocumentacionProveedor);
+      }
       cerrarCompletar();
       cargar();
     } catch (err) {
@@ -515,6 +527,38 @@ export default function SolicitudesMuestreoPage() {
       setErrorAnular(err instanceof ApiError ? err.message : 'No se pudo anular la solicitud');
     } finally {
       setGuardandoAnular(false);
+    }
+  }
+
+  function abrirImprimirCuarentena(s) {
+    setCuarentenaSolicitud(s);
+    setMensajeCuarentena(null);
+    if (impresorasCuarentena.length === 0) {
+      muestrasApi
+        .listarImpresoras(true)
+        .then((data) => {
+          setImpresorasCuarentena(data);
+          if (data.length === 1) setIdImpresoraCuarentena(String(data[0].id_impresora));
+        })
+        .catch(() => setMensajeCuarentena({ tipo: 'error', texto: 'No se pudo cargar el listado de impresoras' }));
+    }
+  }
+
+  function cerrarImprimirCuarentena() {
+    setCuarentenaSolicitud(null);
+  }
+
+  async function confirmarImprimirCuarentena() {
+    if (!idImpresoraCuarentena || !cuarentenaSolicitud) return;
+    setImprimiendoCuarentena(true);
+    setMensajeCuarentena(null);
+    try {
+      const resp = await solicitudesMuestreoApi.imprimirCuarentena(cuarentenaSolicitud.id_solicitud, Number(idImpresoraCuarentena));
+      setMensajeCuarentena({ tipo: 'ok', texto: resp.mensaje });
+    } catch (err) {
+      setMensajeCuarentena({ tipo: 'error', texto: err instanceof ApiError ? err.message : 'No se pudo imprimir las etiquetas' });
+    } finally {
+      setImprimiendoCuarentena(false);
     }
   }
 
@@ -558,10 +602,11 @@ export default function SolicitudesMuestreoPage() {
           </div>
         ) : (
           // overflowX: 'auto' además del scroll vertical propio de .table-scroll --
-          // red de seguridad para la fila con más botones de Acciones (hasta 6
-          // según el estado): ya achicados y en una sola línea, si aun así no
-          // entran en el ancho visible, la tabla scrollea horizontal en vez de
-          // partir la fila a una segunda línea.
+          // red de seguridad para la fila con más botones de Acciones (hasta 5
+          // según el estado -- protocolo/documentación del proveedor ya no son
+          // botones sueltos acá, se completan desde "Completar"): ya achicados
+          // y en una sola línea, si aun así no entran en el ancho visible, la
+          // tabla scrollea horizontal en vez de partir la fila a una segunda línea.
           <div className="table-scroll" style={{ overflowX: 'auto' }}>
             <table className="data-table data-table-compact">
               <thead>
@@ -569,6 +614,7 @@ export default function SolicitudesMuestreoPage() {
                   <th>N° Solicitud</th>
                   <th>IR</th>
                   <th>Material</th>
+                  <th>Origen</th>
                   <th>Laboratorio</th>
                   <th>Muestreador</th>
                   <th>Estado</th>
@@ -581,16 +627,28 @@ export default function SolicitudesMuestreoPage() {
                   <tr key={s.id_solicitud}>
                     <td style={{ fontFamily: 'var(--font-mono)' }}>{s.nro_solicitud}</td>
                     <td style={{ fontFamily: 'var(--font-mono)' }}>{s.erp_nro_ir}</td>
+                    <td title={`${s.erp_DESART} (${s.erp_CODART.trim()})`}>
+                      <span style={celdaTruncada(260)}>
+                        {s.erp_DESART} <span style={{ color: 'var(--ink-3)' }}>({s.erp_CODART.trim()})</span>
+                      </span>
+                    </td>
                     <td>
-                      {s.erp_DESART} <span style={{ color: 'var(--ink-3)' }}>({s.erp_CODART.trim()})</span>
-                      {s.origen === 'agente' && (
-                        <span className="badge badge-info" style={{ marginLeft: 4 }} title="Generada automáticamente por el Agente de Muestreo">
-                          Agente IA
-                        </span>
+                      {s.origen === 'agente' ? (
+                        <span className="badge badge-info" title="Generada automáticamente por el Agente de Muestreo">Agente IA</span>
+                      ) : (
+                        <span style={{ color: 'var(--ink-3)' }}>—</span>
                       )}
                     </td>
-                    <td>{s.laboratorio_nombre || <span style={{ color: 'var(--ink-3)' }}>Sin asignar</span>}</td>
-                    <td>{s.muestreador_nombre || '—'}</td>
+                    <td title={s.laboratorio_nombre || ''}>
+                      {s.laboratorio_nombre ? (
+                        <span style={celdaTruncada(190)}>{s.laboratorio_nombre}</span>
+                      ) : (
+                        <span style={{ color: 'var(--ink-3)' }}>Sin asignar</span>
+                      )}
+                    </td>
+                    <td title={s.muestreador_nombre || ''}>
+                      {s.muestreador_nombre ? <span style={celdaTruncada(140)}>{s.muestreador_nombre}</span> : '—'}
+                    </td>
                     <td>
                       <span className={`badge ${BADGE_ESTADO[s.estado] || 'badge-neutral'}`}>{labelEstado(s.estado)}</span>
                       {s.estado === 'pendiente' && s.id_muestra && (
@@ -606,24 +664,10 @@ export default function SolicitudesMuestreoPage() {
                     <td>{formatFecha(s.fecha_solicitud)}</td>
                     <td className="acciones-compactas">
                       <button className="btn btn-ghost" onClick={() => verEtiquetas(s)}>Etiquetas</button>
-                      {s.protocolo_proveedor_nombre_original && (
-                        <button className="btn btn-ghost" onClick={() => verProtocoloProveedor(s)}>Protocolo proveedor</button>
+                      {!!s.nro_bultos && (
+                        <button className="btn btn-ghost" onClick={() => abrirImprimirCuarentena(s)}>Cuarentena</button>
                       )}
-                      {s.documentacion_proveedor_nombre_original ? (
-                        <button className="btn btn-ghost" onClick={() => verDocumentacionProveedor(s)}>Documentación proveedor</button>
-                      ) : (
-                        puedeCrear && (
-                          <button
-                            className="btn btn-ghost"
-                            style={{ color: 'var(--ink-3)' }}
-                            title="Documentación del proveedor (remito y/o factura) todavía no adjuntada"
-                            onClick={() => abrirAdjuntarDocumentacion(s)}
-                          >
-                            + Documentación proveedor
-                          </button>
-                        )
-                      )}
-                      {s.estado === 'pendiente' && puedeCrear && (!s.id_laboratorio || !s.id_muestreador) && (
+                      {s.estado === 'pendiente' && puedeCrear && (
                         <button className="btn btn-ghost" onClick={() => abrirCompletar(s)}>Completar</button>
                       )}
                       {s.estado === 'pendiente' && !s.id_muestra && puedeGenerarEnvio && (
@@ -701,15 +745,25 @@ export default function SolicitudesMuestreoPage() {
             </div>
 
             {lineasMaterial && lineasMaterial.length > 1 && (
-              <div className="select-list" style={{ marginBottom: 'var(--sp-3)' }}>
-                {lineasMaterial.map((l) => (
-                  <button type="button" key={l.IdM21} className="select-item" onClick={() => elegirLinea(l)}>
-                    <span className="select-item-main">
-                      <span className="select-item-title">{l.DESART}</span>
-                      <span className="select-item-sub">{l.CODART}</span>
-                    </span>
-                  </button>
-                ))}
+              <div style={{ marginBottom: 'var(--sp-3)' }}>
+                <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', marginBottom: 'var(--sp-2)' }}>
+                  Hay más de un comprobante para este IR en el ERP -- elegí cuál corresponde:
+                </p>
+                <div className="select-list">
+                  {lineasMaterial.map((l) => (
+                    <button type="button" key={l.N01Id ?? l.IdM21} className="select-item" onClick={() => elegirLinea(l)}>
+                      <span className="select-item-main">
+                        <span className="select-item-title">{l.DESART}</span>
+                        <span className="select-item-sub">
+                          {l.CODART} — Proveedor: {l.proveedor_codigo ? `${l.proveedor_codigo} - ${l.proveedor}` : '—'}
+                        </span>
+                        <span className="select-item-sub">
+                          Fecha del comprobante: {formatFechaSimple(l.fecha_comprobante)} — Vencimiento: {formatFechaSimple(l.fecha_vencimiento)}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -849,7 +903,9 @@ export default function SolicitudesMuestreoPage() {
 
                 <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
                   <div className="field" style={{ flex: 1 }}>
-                    <label className="field-label">Lote del proveedor</label>
+                    <label className="field-label">
+                      Lote del proveedor{material?.CODSAR === '0006' && ' (opcional -- material sin codificar)'}
+                    </label>
                     <input
                       className="field-input"
                       value={loteProveedor}
@@ -958,7 +1014,8 @@ export default function SolicitudesMuestreoPage() {
                 className="btn btn-primary"
                 disabled={
                   guardando || !especificacion
-                  || !idLaboratorio || !idMuestreador || !material?.proveedor_codigo || !loteProveedor.trim()
+                  || !idLaboratorio || !idMuestreador || !material?.proveedor_codigo
+                  || (material?.CODSAR !== '0006' && !loteProveedor.trim())
                   || !protocoloProveedor
                 }
               >
@@ -966,6 +1023,64 @@ export default function SolicitudesMuestreoPage() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {cuarentenaSolicitud && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 'var(--sp-4)',
+          }}
+          onClick={cerrarImprimirCuarentena}
+        >
+          <div className="card" style={{ width: '90%', maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-2)' }}>Imprimir CUARENTENA</h2>
+            <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', marginBottom: 'var(--sp-3)' }}>
+              Se van a imprimir {cuarentenaSolicitud.nro_bultos} etiqueta{cuarentenaSolicitud.nro_bultos === 1 ? '' : 's'} (una
+              por bulto) para {cuarentenaSolicitud.nro_solicitud}.
+            </p>
+
+            {impresorasCuarentena.length === 0 && !mensajeCuarentena ? (
+              <div className="state-block"><span className="spinner" /></div>
+            ) : impresorasCuarentena.length === 0 ? null : (
+              <div className="field">
+                <label className="field-label" htmlFor="impresoraCuarentena">Impresora</label>
+                <select
+                  id="impresoraCuarentena"
+                  className="field-input"
+                  value={idImpresoraCuarentena}
+                  onChange={(e) => setIdImpresoraCuarentena(e.target.value)}
+                  disabled={imprimiendoCuarentena}
+                >
+                  <option value="">Seleccioná una impresora...</option>
+                  {impresorasCuarentena.map((imp) => (
+                    <option key={imp.id_impresora} value={imp.id_impresora}>{imp.nombre} ({imp.modelo})</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {mensajeCuarentena && (
+              <div className={`alert ${mensajeCuarentena.tipo === 'ok' ? 'alert-ok' : 'alert-danger'}`} style={{ marginBottom: 'var(--sp-3)' }}>
+                {mensajeCuarentena.texto}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+              <button type="button" className="btn btn-ghost" onClick={cerrarImprimirCuarentena} disabled={imprimiendoCuarentena}>
+                Cerrar
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={confirmarImprimirCuarentena}
+                disabled={imprimiendoCuarentena || !idImpresoraCuarentena}
+              >
+                {imprimiendoCuarentena ? <span className="spinner" /> : 'Imprimir'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1005,46 +1120,6 @@ export default function SolicitudesMuestreoPage() {
         </div>
       )}
 
-      {adjuntandoDocId && (
-        <div
-          style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 'var(--sp-4)',
-          }}
-          onClick={cerrarAdjuntarDocumentacion}
-        >
-          <form
-            onSubmit={handleAdjuntarDocumentacion}
-            className="card"
-            style={{ width: '90%', maxWidth: 400 }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Documentación del proveedor</h2>
-            <p style={{ color: 'var(--ink-2)', fontSize: 'var(--fs-sm)', marginBottom: 'var(--sp-3)' }}>
-              Remito y/o factura del proveedor (un solo archivo, foto o PDF).
-            </p>
-            <div className="field" style={{ marginBottom: 0 }}>
-              <label className="field-label">Archivo</label>
-              <input
-                className="field-input"
-                type="file"
-                accept="image/*,application/pdf"
-                capture="environment"
-                onChange={(e) => setArchivoDocumentacion(e.target.files?.[0] || null)}
-                disabled={guardandoDoc}
-                autoFocus
-              />
-            </div>
-            {errorDoc && <div className="alert alert-danger" style={{ marginTop: 'var(--sp-3)' }}>{errorDoc}</div>}
-            <div style={{ display: 'flex', gap: 'var(--sp-3)', marginTop: 'var(--sp-4)' }}>
-              <button type="button" className="btn btn-ghost" onClick={cerrarAdjuntarDocumentacion} disabled={guardandoDoc}>Cancelar</button>
-              <button type="submit" className="btn btn-primary" disabled={guardandoDoc}>
-                {guardandoDoc ? <span className="spinner" /> : 'Adjuntar'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
 
       {completandoId && (
         <div
@@ -1057,45 +1132,167 @@ export default function SolicitudesMuestreoPage() {
           <form
             onSubmit={handleCompletar}
             className="card"
-            style={{ width: '90%', maxWidth: 420 }}
+            style={{ width: '98%', maxWidth: 860, maxHeight: '98vh', overflowY: 'auto' }}
             onClick={(e) => e.stopPropagation()}
           >
             <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Completar solicitud</h2>
             <p style={{ color: 'var(--ink-2)', fontSize: 'var(--fs-sm)', marginBottom: 'var(--sp-3)' }}>
-              Solicitud generada por el Agente de Muestreo sin laboratorio y/o muestreador asignado.
-              Completá lo que haga falta.
+              Laboratorio y muestreador son necesarios para poder ejecutar el muestreo. El resto
+              (lote, protocolo, documentación del proveedor, etc.) se puede completar en cualquier
+              momento, incluso después de ejecutado -- no hace falta esperar para que el muestreador
+              haga su parte.
             </p>
 
-            <div className="field">
-              <label className="field-label">Laboratorio</label>
-              <select
-                className="field-input"
-                value={completarIdLaboratorio}
-                onChange={(e) => setCompletarIdLaboratorio(e.target.value)}
-                disabled={guardandoCompletar || completarLaboratorios.length === 0}
-              >
-                <option value="">
-                  {completarLaboratorios.length === 0 ? 'Sin laboratorios disponibles' : 'Seleccioná un laboratorio...'}
-                </option>
-                {completarLaboratorios.map((l) => (
-                  <option key={l.id_laboratorio} value={l.id_laboratorio}>{l.nombre}</option>
-                ))}
-              </select>
+            <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+              <div className="field" style={{ flex: 1 }}>
+                <label className="field-label">Laboratorio</label>
+                <select
+                  className="field-input"
+                  value={completarIdLaboratorio}
+                  onChange={(e) => setCompletarIdLaboratorio(e.target.value)}
+                  disabled={guardandoCompletar || completarLaboratorios.length === 0}
+                >
+                  <option value="">
+                    {completarLaboratorios.length === 0 ? 'Sin laboratorios disponibles' : 'Seleccioná un laboratorio...'}
+                  </option>
+                  {completarLaboratorios.map((l) => (
+                    <option key={l.id_laboratorio} value={l.id_laboratorio}>{l.nombre}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field" style={{ flex: 1 }}>
+                <label className="field-label">Muestreador asignado</label>
+                <select
+                  className="field-input"
+                  value={completarIdMuestreador}
+                  onChange={(e) => setCompletarIdMuestreador(e.target.value)}
+                  disabled={guardandoCompletar}
+                >
+                  <option value="">Seleccioná un muestreador...</option>
+                  {muestreadores.map((m) => (
+                    <option key={m.id_usuario} value={m.id_usuario}>{m.nombre_completo}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            <div className="field" style={{ marginBottom: 0 }}>
-              <label className="field-label">Muestreador asignado</label>
-              <select
-                className="field-input"
-                value={completarIdMuestreador}
-                onChange={(e) => setCompletarIdMuestreador(e.target.value)}
-                disabled={guardandoCompletar}
-              >
-                <option value="">Seleccioná un muestreador...</option>
-                {muestreadores.map((m) => (
-                  <option key={m.id_usuario} value={m.id_usuario}>{m.nombre_completo}</option>
-                ))}
-              </select>
+            <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+              <div className="field" style={{ flex: 1 }}>
+                <label className="field-label">Lote del proveedor</label>
+                <input
+                  className="field-input"
+                  value={completarLoteProveedor}
+                  onChange={(e) => setCompletarLoteProveedor(e.target.value)}
+                  disabled={guardandoCompletar}
+                />
+              </div>
+              <div className="field" style={{ flex: 1 }}>
+                <label className="field-label">N° de bultos (opcional)</label>
+                <input
+                  className="field-input"
+                  type="number"
+                  step="1"
+                  value={completarNroBultos}
+                  onChange={(e) => setCompletarNroBultos(e.target.value)}
+                  disabled={guardandoCompletar}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+              <div className="field" style={{ flex: 1 }}>
+                <label className="field-label">Protocolo del proveedor (foto o PDF)</label>
+                <input
+                  className="field-input"
+                  type="file"
+                  accept="image/*,application/pdf"
+                  capture="environment"
+                  onChange={(e) => setCompletarProtocoloProveedor(e.target.files?.[0] || null)}
+                  disabled={guardandoCompletar}
+                />
+                <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--ink-3)' }}>
+                  {completarProtocoloProveedor ? (
+                    completarProtocoloProveedor.name
+                  ) : completarProtocoloProveedorActual ? (
+                    <>
+                      {completarProtocoloProveedorActual}{' '}
+                      <button type="button" className="btn btn-ghost" style={{ padding: 0, minHeight: 'auto' }} onClick={() => verProtocoloProveedor(completandoId)}>
+                        Ver
+                      </button>
+                    </>
+                  ) : (
+                    'Todavía no tiene protocolo cargado'
+                  )}
+                </span>
+              </div>
+              <div className="field" style={{ flex: 1 }}>
+                <label className="field-label">Documentación del proveedor -- remito y/o factura (opcional)</label>
+                <input
+                  className="field-input"
+                  type="file"
+                  accept="image/*,application/pdf"
+                  capture="environment"
+                  onChange={(e) => setCompletarDocumentacionProveedor(e.target.files?.[0] || null)}
+                  disabled={guardandoCompletar}
+                />
+                <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--ink-3)' }}>
+                  {completarDocumentacionProveedor ? (
+                    completarDocumentacionProveedor.name
+                  ) : completarDocumentacionProveedorActual ? (
+                    <>
+                      {completarDocumentacionProveedorActual}{' '}
+                      <button type="button" className="btn btn-ghost" style={{ padding: 0, minHeight: 'auto' }} onClick={() => verDocumentacionProveedor(completandoId)}>
+                        Ver
+                      </button>
+                    </>
+                  ) : (
+                    'Todavía no tiene documentación cargada'
+                  )}
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+              <div className="field" style={{ flex: 1 }}>
+                <label className="field-label">País de origen (opcional)</label>
+                <input
+                  className="field-input"
+                  value={completarPaisOrigen}
+                  onChange={(e) => setCompletarPaisOrigen(e.target.value)}
+                  disabled={guardandoCompletar}
+                />
+              </div>
+              <div className="field" style={{ flex: 1 }}>
+                <label className="field-label">Fecha de reanálisis (opcional)</label>
+                <input
+                  className="field-input"
+                  type="date"
+                  value={completarFechaReanalisis}
+                  onChange={(e) => setCompletarFechaReanalisis(e.target.value)}
+                  disabled={guardandoCompletar}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+              <div className="field" style={{ flex: 1 }}>
+                <label className="field-label">Metodología de análisis (opcional)</label>
+                <input
+                  className="field-input"
+                  value={completarMetodologiaAnalisis}
+                  onChange={(e) => setCompletarMetodologiaAnalisis(e.target.value)}
+                  disabled={guardandoCompletar}
+                />
+              </div>
+              <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+                <label className="field-label">Fabricante (opcional)</label>
+                <input
+                  className="field-input"
+                  value={completarFabricante}
+                  onChange={(e) => setCompletarFabricante(e.target.value)}
+                  disabled={guardandoCompletar}
+                />
+              </div>
             </div>
 
             {errorCompletar && <div className="alert alert-danger" style={{ marginTop: 'var(--sp-3)' }}>{errorCompletar}</div>}

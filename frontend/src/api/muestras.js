@@ -49,6 +49,25 @@ export const muestrasApi = {
   generarEtiqueta: (id) => api.post(`/api/muestras/${id}/etiqueta`),
   obtenerUltimaEtiqueta: (id) => api.get(`/api/muestras/${id}/etiqueta`),
 
+  // Impresión directa (SATO/SBPL, sin pasar por el PDF)
+  imprimirDirecto: (id, idImpresora) => api.post(`/api/muestras/${id}/imprimir-directo`, { id_impresora: idImpresora }),
+  // Etiqueta APROBADO -- el backend bloquea si el dictamen no está aprobado.
+  imprimirAprobado: (id, idImpresora) => api.post(`/api/muestras/${id}/imprimir-aprobado`, { id_impresora: idImpresora }),
+
+  // Impresión de Etiquetas (acceso general desde el Dashboard): busca
+  // solicitudes/muestras y qué etiquetas corresponden imprimir para cada una.
+  buscarParaEtiquetas: (buscar) => api.get(`/api/muestras/buscar-etiquetas?buscar=${encodeURIComponent(buscar)}`),
+
+  // Impresoras de etiquetas
+  listarImpresoras: (activa) => {
+    const params = new URLSearchParams();
+    if (activa !== undefined && activa !== null) params.set('activa', activa);
+    return api.get(`/api/muestras/impresoras?${params.toString()}`);
+  },
+  crearImpresora: (data) => api.post('/api/muestras/impresoras', data),
+  editarImpresora: (id, data) => api.put(`/api/muestras/impresoras/${id}`, data),
+  cambiarEstadoImpresora: (id, activa) => api.put(`/api/muestras/impresoras/${id}/estado?activa=${activa}`),
+
   // Laboratorios
   listarLaboratorios: (activo) => {
     const params = new URLSearchParams();

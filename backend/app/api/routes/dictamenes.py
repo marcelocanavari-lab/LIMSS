@@ -45,6 +45,13 @@ router = APIRouter(prefix="/api/dictamen", tags=["Dictamen y Liberación"])
 # (si no, los NOT EXISTS de completitud son ciertos por vacuidad y la
 # muestra aparecería como "pendiente" sin tener ningún análisis real
 # cargado).
+#
+# Especificaciones sin NINGÚN ensayo de etapa 'analisis' (solo checklist de
+# 'muestreo' -- ver app/services/especificaciones.py) son un caso aparte: no
+# hay envío ni protocolo posible, así que la condición de completitud de
+# arriba (envíos + OT) no aplica -- para esas, alcanza con que el checklist
+# de 'muestreo' (lims_resultados_muestreo) esté completo. La rama "normal"
+# de abajo queda idéntica a como estaba antes de este cambio.
 
 # Filtro de "apta para dictamen" -- reutilizado tal cual por el conteo del
 # dashboard (dashboard.py) para no duplicar esta lógica de completitud.
@@ -53,28 +60,54 @@ WHERE_MUESTRA_PENDIENTE_DICTAMEN = """
       AND NOT EXISTS (
           SELECT 1 FROM lims_dictamenes d WHERE d.id_muestra = m.id_muestra
       )
-      AND NOT EXISTS (
-          SELECT 1 FROM lims_envios e
-          INNER JOIN lims_envio_ensayos ee ON ee.id_envio = e.id_envio
-          LEFT JOIN lims_resultados r ON r.id_espec_ensayo = ee.id_espec_ensayo
-            AND r.id_envio = ee.id_envio
-          WHERE e.id_muestra = m.id_muestra
-            AND r.id_resultado IS NULL
-      )
-      AND NOT EXISTS (
-          -- Ensayos de la Orden de Trabajo (filtrados por el laboratorio
-          -- elegido al crear la solicitud, igual que ensayos-para-orden).
-          SELECT 1 FROM lims_solicitudes_muestreo s
-          INNER JOIN lims_especificacion_ensayos se ON se.id_especificacion = s.id_especificacion
-            AND se.id_laboratorio = s.id_laboratorio
-          LEFT JOIN lims_orden_trabajo_resultados otr ON otr.id_espec_ensayo = se.id_espec_ensayo
-            AND otr.id_solicitud = s.id_solicitud
-          WHERE s.id_muestra = m.id_muestra
-            AND otr.id_resultado IS NULL
-      )
       AND (
-          EXISTS (SELECT 1 FROM lims_envios e3 WHERE e3.id_muestra = m.id_muestra)
-          OR EXISTS (SELECT 1 FROM lims_solicitudes_muestreo s3 WHERE s3.id_muestra = m.id_muestra)
+          (
+              EXISTS (
+                  SELECT 1 FROM lims_especificacion_ensayos see_a
+                  WHERE see_a.id_especificacion = m.id_especificacion AND see_a.etapa = 'analisis' AND see_a.activo = 1
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM lims_envios e
+                  INNER JOIN lims_envio_ensayos ee ON ee.id_envio = e.id_envio
+                  LEFT JOIN lims_resultados r ON r.id_espec_ensayo = ee.id_espec_ensayo
+                    AND r.id_envio = ee.id_envio
+                  WHERE e.id_muestra = m.id_muestra
+                    AND r.id_resultado IS NULL
+              )
+              AND NOT EXISTS (
+                  -- Ensayos de la Orden de Trabajo (filtrados por el laboratorio
+                  -- elegido al crear la solicitud, igual que ensayos-para-orden).
+                  SELECT 1 FROM lims_solicitudes_muestreo s
+                  INNER JOIN lims_especificacion_ensayos se ON se.id_especificacion = s.id_especificacion
+                    AND se.id_laboratorio = s.id_laboratorio
+                  LEFT JOIN lims_orden_trabajo_resultados otr ON otr.id_espec_ensayo = se.id_espec_ensayo
+                    AND otr.id_solicitud = s.id_solicitud
+                  WHERE s.id_muestra = m.id_muestra
+                    AND otr.id_resultado IS NULL
+              )
+              AND (
+                  EXISTS (SELECT 1 FROM lims_envios e3 WHERE e3.id_muestra = m.id_muestra)
+                  OR EXISTS (SELECT 1 FROM lims_solicitudes_muestreo s3 WHERE s3.id_muestra = m.id_muestra)
+              )
+          )
+          OR
+          (
+              m.id_especificacion IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM lims_especificacion_ensayos see_b
+                  WHERE see_b.id_especificacion = m.id_especificacion AND see_b.etapa = 'analisis' AND see_b.activo = 1
+              )
+              AND EXISTS (
+                  SELECT 1 FROM lims_especificacion_ensayos see_c
+                  WHERE see_c.id_especificacion = m.id_especificacion AND see_c.etapa = 'muestreo' AND see_c.activo = 1
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM lims_especificacion_ensayos see_d
+                  LEFT JOIN lims_resultados_muestreo rm ON rm.id_espec_ensayo = see_d.id_espec_ensayo AND rm.id_muestra = m.id_muestra
+                  WHERE see_d.id_especificacion = m.id_especificacion AND see_d.etapa = 'muestreo' AND see_d.activo = 1
+                    AND rm.id_resultado IS NULL
+              )
+          )
       )
 """
 
@@ -94,7 +127,10 @@ def listar_pendientes(
                +
                (SELECT COUNT(*) FROM lims_orden_trabajo_resultados otr
                 INNER JOIN lims_solicitudes_muestreo s2 ON s2.id_solicitud = otr.id_solicitud
-                WHERE s2.id_muestra = m.id_muestra AND otr.dentro_especificacion = 0) AS cantidad_oos
+                WHERE s2.id_muestra = m.id_muestra AND otr.dentro_especificacion = 0)
+               +
+               (SELECT COUNT(*) FROM lims_resultados_muestreo rm2
+                WHERE rm2.id_muestra = m.id_muestra AND rm2.dentro_especificacion = 0) AS cantidad_oos
         FROM lims_muestras m
         WHERE {WHERE_MUESTRA_PENDIENTE_DICTAMEN}
         ORDER BY m.fecha_muestreo ASC

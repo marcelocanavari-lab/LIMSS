@@ -13,6 +13,12 @@ class EnsayoParaCarga(BaseModel):
     limite_superior: Optional[float] = None
     unidad_medida: Optional[str] = None
     valor_requerido: Optional[str] = None
+    # Criterio concreto de qué hay que verificar en este punto puntual (ej.
+    # "debe decir XYZ en el dorso", "el código de barras debe corresponder
+    # al artículo") -- visible junto al ensayo mientras se completa el
+    # resultado, para no obligar a ir a buscarlo aparte. Opcional, igual
+    # que en el resto del sistema (Especificaciones).
+    especificacion_texto: Optional[str] = None
     obligatorio: bool
     # Valor ya guardado, si lo hay (resumir una carga o vista de solo lectura)
     valor_numerico: Optional[float] = None
@@ -36,8 +42,18 @@ class EnvioParaCarga(BaseModel):
     erp_DESART: str
     laboratorio_nombre: str
     estado_muestra: str
+    # De lims_muestras.tipo_material -- gatea si la pantalla ofrece la
+    # comparación de etiquetas con IA (solo Material de Empaque).
+    tipo_material: Optional[str] = None
     ensayos: list[EnsayoParaCarga]
     protocolo: Optional[ProtocoloResponse] = None
+    # Comparación de etiquetas con IA (solo Material de Empaque) -- UNA sola
+    # foto y observación por ENVÍO, no por ensayo: varios ensayos de un
+    # mismo envío (texto legal, colores, código de barras) se verifican
+    # todos contra la misma foto de la etiqueta recibida. Ver
+    # app/services/comparacion_empaque_ia.py.
+    observacion_ia: Optional[str] = None
+    tiene_imagen_comparacion: bool = False
 
 
 class EnvioPendienteResultados(BaseModel):
@@ -47,6 +63,7 @@ class EnvioPendienteResultados(BaseModel):
     erp_DESART: str
     laboratorio_nombre: str
     ensayos_pendientes: int
+    total_ensayos: int
     fecha_despacho: datetime
 
 

@@ -21,9 +21,11 @@ import pyodbc
 
 def buscar_lote(erp: pyodbc.Connection, codsar: str, nro_lote: str):
     cursor = erp.cursor()
+    # RTRIM en CODART/DESART: GIM21ART es CHAR de ancho fijo, ver la nota en
+    # erp_ir.py -- se recorta al leer, único punto de esta consulta.
     cursor.execute(
         """
-        SELECT art.M21Id AS IdM21, art.CODART, art.DESART, umd.ABREV AS unidad
+        SELECT art.M21Id AS IdM21, RTRIM(art.CODART) AS CODART, RTRIM(art.DESART) AS DESART, umd.ABREV AS unidad
         FROM GIT52DSC dsc
         INNER JOIN GIM25ALT alt ON alt.IdT521 = dsc.T52Id
         INNER JOIN GIM21ART art ON art.M21Id = alt.IdM21

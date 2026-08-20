@@ -19,6 +19,7 @@ from reportlab.lib.units import cm
 from reportlab.pdfgen import canvas
 
 from app.services import storage
+from app.services.formato import formatear_cantidad
 
 
 def _fmt_fecha(valor) -> str:
@@ -35,7 +36,7 @@ def _texto(valor) -> str:
     return str(valor)
 
 
-def _dibujar_copia(c: canvas.Canvas, laboratorio, remito, nro_remito: str, testigos: list, etiqueta_copia: str, contacto=None):
+def _dibujar_copia(c: canvas.Canvas, laboratorio, remito, nro_remito: str, testigos: list, etiqueta_copia: str, fecha_envio, contacto=None):
     _, height = A4
     x = 2 * cm
     y = height - 2 * cm
@@ -83,7 +84,7 @@ def _dibujar_copia(c: canvas.Canvas, laboratorio, remito, nro_remito: str, testi
         if contacto.cargo:
             valor_aa += f" — {contacto.cargo}"
         campo("A/A", valor_aa)
-    campo("Fecha de envío", _fmt_fecha(remito.fecha_envio))
+    campo("Fecha de envío", _fmt_fecha(fecha_envio))
     if remito.observaciones:
         campo("Observaciones", _texto(remito.observaciones))
 
@@ -114,7 +115,7 @@ def _dibujar_copia(c: canvas.Canvas, laboratorio, remito, nro_remito: str, testi
             _texto(testigo.nombre),
             _texto(testigo.nro_lote),
             _fmt_fecha(testigo.fecha_vencimiento),
-            f"{item.cantidad_enviada} {item.unidad}",
+            f"{formatear_cantidad(item.cantidad_enviada)} {item.unidad}",
         ]
         for (etiqueta, cx, ancho), valor in zip(columnas, valores):
             c.drawString(cx, y, valor[: int(ancho / 0.17)])
@@ -134,18 +135,24 @@ def _dibujar_copia(c: canvas.Canvas, laboratorio, remito, nro_remito: str, testi
     c.showPage()
 
 
-def generar_pdf_remito_testigo(laboratorio, remito, nro_remito: str, testigos: list, contacto=None) -> bytes:
+def generar_pdf_remito_testigo(laboratorio, remito, nro_remito: str, testigos: list, contacto=None, fecha_envio=None) -> bytes:
     """`laboratorio`: fila de lims_laboratorios. `remito`: RemitoTestigoCreate.
     `testigos`: lista de tuplas (item: TestigoEnvioRemito, testigo: fila de lims_testigos).
     `contacto`: fila de lims_laboratorio_contactos si se eligió uno, o None.
+    `fecha_envio`: fecha impresa como "Fecha de envío" -- ya resuelta por el
+    caller (prioriza fecha_envio_real de lims_testigo_laboratorios sobre
+    remito.fecha_envio, ver testigos_remitos.py). Si no se pasa, se usa
+    remito.fecha_envio como antes.
 
     El PDF resultante trae, en orden: copia ORIGINAL, copia DUPLICADO, y
     después una página por cada certificado analítico (pdf_certificado) de
     los testigos incluidos que tengan uno cargado."""
+    if fecha_envio is None:
+        fecha_envio = remito.fecha_envio
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
-    _dibujar_copia(c, laboratorio, remito, nro_remito, testigos, "ORIGINAL - Para el laboratorio", contacto)
-    _dibujar_copia(c, laboratorio, remito, nro_remito, testigos, "DUPLICADO - Para archivo interno", contacto)
+    _dibujar_copia(c, laboratorio, remito, nro_remito, testigos, "ORIGINAL - Para el laboratorio", fecha_envio, contacto)
+    _dibujar_copia(c, laboratorio, remito, nro_remito, testigos, "DUPLICADO - Para archivo interno", fecha_envio, contacto)
     c.save()
 
     writer = PdfWriter()

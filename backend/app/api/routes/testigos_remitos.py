@@ -46,6 +46,32 @@ def _a_fecha(valor):
     return date.fromisoformat(str(valor))
 
 
+def _fecha_envio_real_para_pdf(cursor, id_laboratorio: int, ids_testigo: list[int], fecha_envio_default: date) -> date:
+    """La fecha impresa en el remito prioriza fecha_envio_real (cargada a
+    mano en la asignación testigo-laboratorio, ver lims_testigo_laboratorios)
+    sobre la fecha tipeada al crear el remito -- esta última no siempre
+    coincidía con el despacho real. Si ningún testigo tiene fecha_envio_real
+    cargada (columna/tabla sin migrar, o todavía no se cargó), se usa la
+    fecha del remito como hoy."""
+    cursor.execute("SELECT OBJECT_ID('lims_testigo_laboratorios', 'U') AS id")
+    if cursor.fetchone().id is None:
+        return fecha_envio_default
+    cursor.execute("SELECT COL_LENGTH('lims_testigo_laboratorios', 'fecha_envio_real') AS c")
+    if cursor.fetchone().c is None:
+        return fecha_envio_default
+
+    placeholders = ",".join("?" for _ in ids_testigo)
+    cursor.execute(
+        f"""
+        SELECT fecha_envio_real FROM lims_testigo_laboratorios
+        WHERE id_laboratorio = ? AND id_testigo IN ({placeholders}) AND fecha_envio_real IS NOT NULL
+        """,
+        id_laboratorio, *ids_testigo,
+    )
+    row = cursor.fetchone()
+    return _a_fecha(row.fecha_envio_real) if row else fecha_envio_default
+
+
 def _generar_nro_remito(cursor) -> str:
     anio = date.today().year
     cursor.execute(
@@ -192,7 +218,8 @@ def crear_remito_testigos(
 
     nro_remito = _generar_nro_remito(cursor)
 
-    pdf_bytes = generar_pdf_remito_testigo(laboratorio, body, nro_remito, testigos_detalle, contacto)
+    fecha_envio_pdf = _fecha_envio_real_para_pdf(cursor, body.id_laboratorio, ids_pedidos, body.fecha_envio)
+    pdf_bytes = generar_pdf_remito_testigo(laboratorio, body, nro_remito, testigos_detalle, contacto, fecha_envio=fecha_envio_pdf)
     ruta_pdf = storage.guardar_pdf_remito_testigo(pdf_bytes, nro_remito)
 
     cursor.execute(

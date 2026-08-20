@@ -39,6 +39,7 @@ class EnsayoMaestroResponse(BaseModel):
 class EspecificacionEnsayoCreate(BaseModel):
     id_ensayo_maestro: int
     orden: int
+    etapa: str = Field("analisis", pattern=r"^(muestreo|analisis)$")
     metodologia: Optional[str] = Field(None, max_length=100)
     tipo_dato: str = Field(..., pattern=r"^(numerico|cualitativo)$")
     limite_inferior: Optional[float] = None
@@ -61,6 +62,7 @@ class EspecificacionEnsayoResponse(BaseModel):
     id_ensayo_maestro: int
     nombre_ensayo: str
     orden: int
+    etapa: str = "analisis"
     metodologia: Optional[str] = None
     tipo_dato: str
     limite_inferior: Optional[float] = None
@@ -81,7 +83,7 @@ class EspecificacionCreate(BaseModel):
     erp_IdM21: int
     erp_CODART: str = Field(..., min_length=1, max_length=20)
     erp_DESART: str = Field(..., min_length=1, max_length=100)
-    tipo_material: str = Field(..., pattern=r"^(materia_prima|granel|semi_elaborado|producto_terminado)$")
+    tipo_material: str = Field(..., pattern=r"^(materia_prima|granel|semi_elaborado|producto_terminado|material_empaque)$")
     cantidad_muestra: Optional[float] = None
     unidad_muestra: Optional[str] = Field(None, max_length=20)
     cantidad_contramuestra: Optional[float] = None
@@ -103,7 +105,7 @@ class EspecificacionCopiar(BaseModel):
     erp_IdM21: int
     erp_CODART: str = Field(..., min_length=1, max_length=20)
     erp_DESART: str = Field(..., min_length=1, max_length=100)
-    tipo_material: str = Field(..., pattern=r"^(materia_prima|granel|semi_elaborado|producto_terminado)$")
+    tipo_material: str = Field(..., pattern=r"^(materia_prima|granel|semi_elaborado|producto_terminado|material_empaque)$")
     version: str = Field("1.0", max_length=10)
 
 
@@ -113,6 +115,12 @@ class EspecificacionResponse(BaseModel):
     erp_CODART: str
     erp_DESART: str
     tipo_material: str
+    # Subarticulo real del ERP (GIT59SAR.CODSAR) -- determina qué bloques se
+    # muestran en la ficha, ver lims_erp_subarticulo_config y
+    # EspecificacionDetalle.incluye_bloque_*. NULL si no se pudo resolver
+    # contra el ERP (dato de prueba, artículo discontinuado, o pendiente de
+    # backfill).
+    erp_codsar: Optional[str] = None
     # Deprecados desde que existe lims_especificacion_muestras -- se
     # mantienen por compatibilidad pero ya no se cargan/editan.
     cantidad_muestra: Optional[float] = None
@@ -132,6 +140,14 @@ class EspecificacionResponse(BaseModel):
 
 class EspecificacionDetalle(EspecificacionResponse):
     ensayos: list[EspecificacionEnsayoResponse]
+    # Qué bloques mostrar en la ficha, según lims_erp_subarticulo_config del
+    # erp_codsar de esta especificación -- todos en True si erp_codsar es
+    # NULL o no hay una fila de config para ese subarticulo (no se oculta
+    # nada por falta de información, ver _obtener_bloques_config).
+    incluye_bloque_muestras: bool = True
+    incluye_bloque_analisis_laboratorio: bool = True
+    incluye_bloque_muestreo_fisico: bool = True
+    incluye_bloque_testigos: bool = True
 
 
 # ── Muestras definidas por especificación ─────────────────────────
@@ -187,17 +203,20 @@ class LaboratorioAsignado(BaseModel):
     nombre: str
     consumo_estimado: Optional[float] = None
     unidad_consumo: Optional[Literal["mg", "ml"]] = None
+    fecha_envio_real: Optional[date] = None
 
 
 class TestigoLaboratorioCreate(BaseModel):
     id_laboratorio: int
     consumo_estimado: Optional[float] = Field(None, ge=0)
     unidad_consumo: Optional[Literal["mg", "ml"]] = None
+    fecha_envio_real: Optional[date] = None
 
 
 class TestigoLaboratorioConsumoUpdate(BaseModel):
     consumo_estimado: Optional[float] = Field(None, ge=0)
     unidad_consumo: Optional[Literal["mg", "ml"]] = None
+    fecha_envio_real: Optional[date] = None
 
 
 class TestigoResponse(BaseModel):

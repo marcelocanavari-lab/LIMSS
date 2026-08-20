@@ -29,6 +29,7 @@ del formato "NNN/AA", y contempla la colisión de numeración de la carga
 inicial del ERP (2020-04-02) -- repetir esa lógica acá hubiera reintroducido
 esos mismos bugs ya resueltos.
 """
+import logging
 import os
 from datetime import date, datetime
 from typing import Optional
@@ -41,6 +42,7 @@ from pydantic import ValidationError
 from app.core.security import get_current_user, require_rol
 from app.db.connections import erp_db, limss_db
 from app.schemas.solicitudes_muestreo import (
+    ChecklistMuestreoItem,
     DatosFisicosMuestreo,
     EnsayoSolicitudMuestreo,
     EnsayosParaOrdenResponse,
@@ -53,8 +55,12 @@ from app.schemas.solicitudes_muestreo import (
     SolicitudMuestreoDetalle,
     SolicitudMuestreoResponse,
 )
+from app.schemas.muestras import ImprimirDirectoBody, ImprimirDirectoResponse
 from app.services import audit, storage
-from app.services.erp_ir import buscar_lineas_ir, formatear_nro_ir, normalizar_fecha_sentinel
+from app.services.especificaciones import tiene_ensayos_analisis
+from app.services.erp_ir import buscar_lineas_ir, formatear_nro_ir, lineas_comprobante_por_id, normalizar_fecha_sentinel
+from app.services.formato import formatear_cantidad
+from app.services.impresion_sato import generar_sbpl_etiqueta_estado, imprimir_sbpl
 from app.services.pdf_solicitud_muestreo import (
     generar_pdf_etiquetas,
     generar_pdf_etiquetas_v2,
@@ -62,6 +68,8 @@ from app.services.pdf_solicitud_muestreo import (
     generar_pdf_orden_trabajo,
     generar_pdf_planilla_muestreo,
 )
+
+logger = logging.getLogger("solicitudes_muestreo")
 
 router = APIRouter(prefix="/api/solicitudes-muestreo", tags=["Solicitudes de Muestreo"])
 
@@ -79,8 +87,14 @@ def _a_datetime(valor: Optional[date]) -> Optional[datetime]:
 
 
 def _a_fecha(valor) -> Optional[date]:
+    """El driver ODBC no devuelve un tipo consistente para columnas DATE en
+    este entorno (a veces date/datetime, a veces str) -- se normaliza
+    siempre a date antes de operar (mismo problema y mismo fix que
+    testigos_remitos.py/envios.py)."""
     if valor is None:
         return None
+    if isinstance(valor, str):
+        return date.fromisoformat(valor[:10])
     return valor.date() if hasattr(valor, "date") else valor
 
 
@@ -146,6 +160,7 @@ def _fila_a_solicitud(row) -> SolicitudMuestreoResponse:
         protocolo_proveedor_nombre_original=_g(row, "protocolo_proveedor_nombre_original"),
         documentacion_proveedor_nombre_original=_g(row, "documentacion_proveedor_nombre_original"),
         origen=_g(row, "origen") or "manual",
+        erp_n01id=_g(row, "erp_n01id"),
     )
 
 
@@ -155,6 +170,31 @@ def _obtener_solicitud_o_404(cursor, id_solicitud: int):
     if not row:
         raise HTTPException(status_code=404, detail="Solicitud no encontrada")
     return row
+
+
+def _verificar_completa_para_ejecutar(row) -> None:
+    """Antes de generar el envío o confirmar el muestreo, la solicitud tiene
+    que tener laboratorio y muestreador asignados -- son los únicos datos
+    que hacen falta para poder ejecutar (determinan quién muestrea y contra
+    qué ensayos). El lote y el protocolo del proveedor son papeleo que QA
+    puede completar en un momento distinto, incluso después de ejecutado el
+    muestreo (ver PUT .../completar-datos y POST .../protocolo-proveedor) --
+    no tiene sentido hacer esperar al muestreador por eso. El agente puede
+    dejar laboratorio/muestreador en blanco cuando no los puede resolver
+    solo con el ERP (ver app/services/agente_muestreo.py)."""
+    faltantes = []
+    if row.id_laboratorio is None:
+        faltantes.append("laboratorio")
+    if row.id_muestreador is None:
+        faltantes.append("muestreador")
+    if faltantes:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "A la solicitud le falta completar: " + ", ".join(faltantes) +
+                " -- ver PUT .../completar-datos"
+            ),
+        )
 
 
 def _iniciales_muestreador(cursor, id_muestreador: Optional[int]) -> Optional[str]:
@@ -252,7 +292,7 @@ def _obtener_ensayos(cursor, id_solicitud: int, id_especificacion: Optional[int]
         FROM lims_especificacion_ensayos ee
         INNER JOIN lims_ensayos_maestro m ON m.id_ensayo_maestro = ee.id_ensayo_maestro
         LEFT JOIN lims_orden_trabajo_resultados r ON r.id_espec_ensayo = ee.id_espec_ensayo AND r.id_solicitud = ?
-        WHERE ee.id_especificacion = ? AND ee.id_laboratorio = ?
+        WHERE ee.id_especificacion = ? AND ee.id_laboratorio = ? AND ee.etapa = 'analisis' AND ee.activo = 1
         ORDER BY ee.orden
         """,
         id_solicitud, id_especificacion, id_laboratorio,
@@ -268,6 +308,37 @@ def _obtener_ensayos(cursor, id_solicitud: int, id_especificacion: Optional[int]
             valor_numerico=float(e.valor_numerico) if e.valor_numerico is not None else None,
             valor_cualitativo=e.valor_cualitativo,
             dentro_especificacion=bool(e.dentro_especificacion) if e.dentro_especificacion is not None else None,
+        )
+        for e in cursor.fetchall()
+    ]
+
+
+def _obtener_checklist_muestreo(cursor, id_muestra: Optional[int], id_especificacion: Optional[int]) -> list[ChecklistMuestreoItem]:
+    """Ítems de etapa 'muestreo' de la especificación de esta solicitud --
+    el checklist físico configurable que reemplaza al set fijo de 4 campos
+    (aspecto_externo/cierre/aspecto_interno/precintos). Sin id_laboratorio:
+    a diferencia de los ensayos de análisis, estos ítems no dependen del
+    laboratorio elegido. id_muestra puede ser None (todavía no se ejecutó el
+    muestreo -- no hay lims_resultados_muestreo que traer, formulario en
+    blanco)."""
+    if id_especificacion is None:
+        return []
+    cursor.execute(
+        """
+        SELECT se.id_espec_ensayo, se.orden, m.nombre_ensayo, se.especificacion_texto,
+               r.valor_cualitativo
+        FROM lims_especificacion_ensayos se
+        INNER JOIN lims_ensayos_maestro m ON m.id_ensayo_maestro = se.id_ensayo_maestro
+        LEFT JOIN lims_resultados_muestreo r ON r.id_espec_ensayo = se.id_espec_ensayo AND r.id_muestra = ?
+        WHERE se.id_especificacion = ? AND se.etapa = 'muestreo' AND se.activo = 1
+        ORDER BY se.orden
+        """,
+        id_muestra, id_especificacion,
+    )
+    return [
+        ChecklistMuestreoItem(
+            id_espec_ensayo=e.id_espec_ensayo, orden=e.orden, nombre_ensayo=e.nombre_ensayo,
+            especificacion_texto=e.especificacion_texto, valor_cualitativo=e.valor_cualitativo,
         )
         for e in cursor.fetchall()
     ]
@@ -351,6 +422,21 @@ def _generar_codigo_muestra(cursor) -> str:
     return f"SAMP-{anio}-{correlativo:04d}"
 
 
+def _tipo_material_de_especificacion(cursor, id_especificacion: Optional[int]) -> str:
+    """El tipo_material de la muestra generada tiene que coincidir con el de
+    la especificación que la originó -- antes quedaba hardcodeado a
+    'materia_prima' porque, históricamente, era el único tipo que pasaba por
+    Solicitudes de Muestreo; con Material de Empaque deja de ser cierto. Si
+    la solicitud no tiene especificación vinculada (no debería pasar, la
+    creación de la solicitud la exige), se conserva el valor histórico."""
+    if id_especificacion is not None:
+        cursor.execute("SELECT tipo_material FROM lims_especificaciones WHERE id_especificacion = ?", id_especificacion)
+        espec = cursor.fetchone()
+        if espec and espec.tipo_material:
+            return espec.tipo_material
+    return "materia_prima"
+
+
 def _crear_muestra_desde_solicitud(cursor, row, datos_muestreo_pendientes: bool) -> tuple[int, str]:
     """Inserta lims_muestras a partir de los datos ya conocidos de la
     solicitud (y del ERP, ya resueltos al crearla) -- compartido por
@@ -359,21 +445,30 @@ def _crear_muestra_desde_solicitud(cursor, row, datos_muestreo_pendientes: bool)
     generar_envio_anticipado (el envío se genera ANTES del muestreo físico:
     datos_muestreo_pendientes=True y fecha_muestreo queda como placeholder
     -- confirmar_orden_trabajo la reemplaza por la fecha real más
-    adelante en vez de crear una segunda muestra, ver ese endpoint)."""
+    adelante en vez de crear una segunda muestra, ver ese endpoint).
+
+    Si la especificación no tiene ningún ensayo de etapa 'analisis' (solo
+    checklist de muestreo), no hay nada que enviar a un laboratorio -- la
+    muestra arranca directo en 'en_análisis' en vez de 'pendiente_envio',
+    así nunca aparece en la bandeja de Envío ni pide protocolo; queda apta
+    para Dictamen apenas se completa el checklist (ver
+    WHERE_MUESTRA_PENDIENTE_DICTAMEN en dictamenes.py)."""
     cantidades = _obtener_cantidades(cursor, row.id_especificacion)
     codigo_muestra = _generar_codigo_muestra(cursor)
+    tipo_material = _tipo_material_de_especificacion(cursor, row.id_especificacion)
+    estado_inicial = "en_análisis" if not tiene_ensayos_analisis(cursor, row.id_especificacion) else "pendiente_envio"
     cursor.execute(
         """
         INSERT INTO lims_muestras
-            (codigo_muestra, tipo_referencia, tipo_material, nro_referencia, erp_IdM21, erp_CODART, erp_DESART,
+            (codigo_muestra, tipo_referencia, tipo_material, nro_referencia, erp_n01id, erp_IdM21, erp_CODART, erp_DESART,
              erp_cantidad_lote, erp_proveedor, cantidad_enviada, unidad_enviada, id_especificacion, estado,
              id_usuario_muestreo, fecha_muestreo, datos_muestreo_pendientes)
-        VALUES (?, 'ir', 'materia_prima', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente_envio', ?, GETDATE(), ?)
+        VALUES (?, 'ir', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE(), ?)
         """,
-        codigo_muestra, row.erp_nro_ir, row.erp_IdM21, row.erp_CODART, row.erp_DESART,
+        codigo_muestra, tipo_material, row.erp_nro_ir, getattr(row, "erp_n01id", None), row.erp_IdM21, row.erp_CODART, row.erp_DESART,
         row.cantidad_ingresada, row.proveedor_nombre,
         cantidades["cantidad_muestra"], cantidades["unidad_muestra"],
-        row.id_especificacion, row.id_muestreador, 1 if datos_muestreo_pendientes else 0,
+        row.id_especificacion, estado_inicial, row.id_muestreador, 1 if datos_muestreo_pendientes else 0,
     )
     cursor.execute("SELECT @@IDENTITY AS id")
     id_muestra = int(cursor.fetchone().id)
@@ -406,10 +501,34 @@ def crear_solicitud(
             detail="El protocolo del proveedor (foto o PDF) es obligatorio para generar la solicitud",
         )
 
-    lineas = buscar_lineas_ir(erp, body.erp_nro_ir)
-    if not lineas:
-        raise HTTPException(status_code=404, detail=f"No se encontró el IR '{body.erp_nro_ir}' en el ERP")
+    # Si el frontend ya resolvió el N01Id (búsqueda previa, ver
+    # GET /api/muestras/buscar-material) se usa directo -- no vuelve a pasar
+    # por la resolución ambigua de NUMCOMO+año, así que una colisión que
+    # aparezca después para este mismo "NNN/AA" no puede traer el
+    # comprobante equivocado. Sin N01Id (clientes viejos, o el caso normal
+    # sin colisión donde no hizo falta elegir) se resuelve por texto como
+    # siempre -- buscar_lineas_ir ya tiene el desempate mejorado como red de
+    # seguridad (preferir VENCOM real), ver erp_ir.py.
+    if body.erp_n01id is not None:
+        lineas = lineas_comprobante_por_id(erp, body.erp_n01id)
+        if not lineas:
+            raise HTTPException(
+                status_code=404,
+                detail=f"El comprobante elegido (N01Id={body.erp_n01id}) ya no se encuentra en el ERP",
+            )
+    else:
+        lineas = buscar_lineas_ir(erp, body.erp_nro_ir)
+        if not lineas:
+            raise HTTPException(status_code=404, detail=f"No se encontró el IR '{body.erp_nro_ir}' en el ERP")
     linea = lineas[0]
+
+    # Material de Empaque sin codificar (GIT59SAR.CODSAR '0006') es el único
+    # caso donde el lote del proveedor no es exigible -- para cualquier otro
+    # subartículo (incluido '0005', Material de Empaque codificado) se
+    # mantiene el comportamiento de siempre. linea.CODSAR ya viene resuelto
+    # por buscar_lineas_ir, no hace falta una consulta nueva al ERP.
+    if linea.CODSAR != "0006" and not (body.lote_proveedor and body.lote_proveedor.strip()):
+        raise HTTPException(status_code=400, detail="El lote del proveedor es obligatorio para este tipo de material")
 
     cursor = conn.cursor()
 
@@ -492,18 +611,19 @@ def crear_solicitud(
     cursor.execute(
         """
         INSERT INTO lims_solicitudes_muestreo
-            (nro_solicitud, erp_nro_ir, erp_IdM21, erp_CODART, erp_DESART, id_especificacion,
+            (nro_solicitud, erp_nro_ir, erp_n01id, erp_IdM21, erp_CODART, erp_DESART, id_especificacion,
              id_laboratorio, id_muestreador, observaciones, estado, id_usuario_qa,
              proveedor_codigo, proveedor_nombre, lote_proveedor, fecha_ingreso, fecha_vencimiento,
              fecha_reanalisis, pais_origen, cantidad_ingresada, unidad_cantidad, nro_bultos,
              metodologia_analisis, fabricante, protocolo_proveedor_path, protocolo_proveedor_nombre_original,
              documentacion_proveedor_path, documentacion_proveedor_nombre_original)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente', ?,
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente', ?,
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        nro_solicitud, nro_ir_normalizado, linea.IdM21, linea.CODART, linea.DESART, espec.id_especificacion,
+        nro_solicitud, nro_ir_normalizado, linea.N01Id, linea.IdM21, linea.CODART, linea.DESART, espec.id_especificacion,
         body.id_laboratorio, body.id_muestreador, body.observaciones, user["id_usuario"],
-        body.proveedor_codigo, body.proveedor_nombre, body.lote_proveedor, _a_datetime(fecha_ingreso), _a_datetime(fecha_vencimiento),
+        body.proveedor_codigo, body.proveedor_nombre, body.lote_proveedor.strip() if body.lote_proveedor else None,
+        _a_datetime(fecha_ingreso), _a_datetime(fecha_vencimiento),
         _a_datetime(body.fecha_reanalisis), body.pais_origen, cantidad_ingresada, linea.unidad, body.nro_bultos,
         body.metodologia_analisis, body.fabricante, ruta_protocolo_proveedor, protocolo_proveedor.filename,
         ruta_documentacion_proveedor, nombre_documentacion_proveedor,
@@ -539,19 +659,21 @@ def crear_solicitud(
     return _fila_a_solicitud(_obtener_solicitud_o_404(cursor, id_solicitud))
 
 
-@router.put("/{id_solicitud}/completar-laboratorio", response_model=SolicitudMuestreoResponse)
-def completar_laboratorio(
+@router.put("/{id_solicitud}/completar-datos", response_model=SolicitudMuestreoResponse)
+def completar_datos(
     id_solicitud: int,
     body: SolicitudMuestreoCompletar,
     user: dict = Depends(require_rol("qa", "admin")),
     conn: pyodbc.Connection = Depends(limss_db),
 ):
-    """Completa id_laboratorio y/o id_muestreador en una solicitud pendiente
-    que quedó sin alguno de los dos -- pensado para las que generó el
-    agente (origen='agente'): deja el laboratorio en blanco cuando la
-    especificación no resuelve a un único laboratorio, y siempre deja el
-    muestreador en blanco (ver app/services/agente_muestreo.py). Solo toca
-    los campos que vengan con valor -- si un campo no se manda, se
+    """Completa en una solicitud pendiente los datos que el alta manual pide
+    en el momento (obligatorios u opcionales) pero que el agente no puede
+    resolver solo con el ERP -- laboratorio, muestreador, lote del
+    proveedor, país de origen, fecha de reanálisis, bultos, metodología,
+    fabricante (ver app/services/agente_muestreo.py; el protocolo y la
+    documentación del proveedor se completan aparte, por archivo, ver
+    POST .../protocolo-proveedor y POST .../documentacion-proveedor). Solo
+    toca los campos que vengan con valor -- si un campo no se manda, se
     conserva el que ya tenía la solicitud."""
     cursor = conn.cursor()
     row = _obtener_solicitud_o_404(cursor, id_solicitud)
@@ -560,6 +682,12 @@ def completar_laboratorio(
 
     id_laboratorio = body.id_laboratorio if body.id_laboratorio is not None else row.id_laboratorio
     id_muestreador = body.id_muestreador if body.id_muestreador is not None else row.id_muestreador
+    lote_proveedor = body.lote_proveedor if body.lote_proveedor is not None else row.lote_proveedor
+    fecha_reanalisis = body.fecha_reanalisis if body.fecha_reanalisis is not None else row.fecha_reanalisis
+    pais_origen = body.pais_origen if body.pais_origen is not None else row.pais_origen
+    nro_bultos = body.nro_bultos if body.nro_bultos is not None else row.nro_bultos
+    metodologia_analisis = body.metodologia_analisis if body.metodologia_analisis is not None else row.metodologia_analisis
+    fabricante = body.fabricante if body.fabricante is not None else row.fabricante
 
     if body.id_laboratorio is not None:
         cursor.execute("SELECT 1 FROM lims_laboratorios WHERE id_laboratorio = ? AND activo = 1", id_laboratorio)
@@ -585,15 +713,27 @@ def completar_laboratorio(
             raise HTTPException(status_code=400, detail="El usuario asignado no tiene un rol habilitado para muestrear")
 
     cursor.execute(
-        "UPDATE lims_solicitudes_muestreo SET id_laboratorio = ?, id_muestreador = ? WHERE id_solicitud = ?",
-        id_laboratorio, id_muestreador, id_solicitud,
+        """
+        UPDATE lims_solicitudes_muestreo
+        SET id_laboratorio = ?, id_muestreador = ?, lote_proveedor = ?, fecha_reanalisis = ?,
+            pais_origen = ?, nro_bultos = ?, metodologia_analisis = ?, fabricante = ?
+        WHERE id_solicitud = ?
+        """,
+        id_laboratorio, id_muestreador, lote_proveedor, _a_datetime(fecha_reanalisis),
+        pais_origen, nro_bultos, metodologia_analisis, fabricante, id_solicitud,
     )
 
     audit.registrar(
-        conn, entidad="solicitud_muestreo", accion="completar_laboratorio",
+        conn, entidad="solicitud_muestreo", accion="completar_datos",
         id_usuario=user["id_usuario"], id_entidad=id_solicitud,
-        valor_anterior={"id_laboratorio": row.id_laboratorio, "id_muestreador": row.id_muestreador},
-        valor_nuevo={"id_laboratorio": id_laboratorio, "id_muestreador": id_muestreador},
+        valor_anterior={
+            "id_laboratorio": row.id_laboratorio, "id_muestreador": row.id_muestreador,
+            "lote_proveedor": row.lote_proveedor,
+        },
+        valor_nuevo={
+            "id_laboratorio": id_laboratorio, "id_muestreador": id_muestreador,
+            "lote_proveedor": lote_proveedor,
+        },
     )
 
     return _fila_a_solicitud(_obtener_solicitud_o_404(cursor, id_solicitud))
@@ -708,13 +848,25 @@ def _generar_pdf_etiquetas_de_solicitud(cursor, row) -> bytes:
     lims_solicitudes_muestreo) -- función compartida para que "Descargar
     etiquetas" (Solicitudes) y la reimpresión desde Consulta de Muestras
     (ver descargar_etiquetas_de_muestra en muestras.py) generen exactamente
-    el mismo PDF en vez de mantener dos caminos que puedan divergir."""
-    iniciales = _iniciales_muestreador(cursor, row.id_muestreador)
-    muestras_confirmadas = _obtener_muestras_confirmadas(cursor, row.id_solicitud)
-    if muestras_confirmadas:
-        return generar_pdf_etiquetas_v2(row, muestras_confirmadas, iniciales)
-    cantidades = _obtener_cantidades(cursor, row.id_especificacion)
-    return generar_pdf_etiquetas(row, cantidades, iniciales)
+    el mismo PDF en vez de mantener dos caminos que puedan divergir.
+
+    Antes esto podía fallar en silencio (sin traceback en consola) para una
+    muestra de Material de Empaque sin codificar, sin lote de proveedor ni
+    fecha de vencimiento -- se loguea la excepción real acá, en el único
+    lugar donde arman el PDF ambos endpoints, en vez de dejar que se pierda."""
+    try:
+        iniciales = _iniciales_muestreador(cursor, row.id_muestreador)
+        muestras_confirmadas = _obtener_muestras_confirmadas(cursor, row.id_solicitud)
+        if muestras_confirmadas:
+            return generar_pdf_etiquetas_v2(row, muestras_confirmadas, iniciales)
+        cantidades = _obtener_cantidades(cursor, row.id_especificacion)
+        return generar_pdf_etiquetas(row, cantidades, iniciales)
+    except Exception:
+        logger.error(
+            "Error generando el PDF de etiquetas (id_solicitud=%s, nro_solicitud=%s)",
+            row.id_solicitud, row.nro_solicitud, exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="No se pudo generar el PDF de etiquetas -- ver el log del servidor")
 
 
 @router.get("/{id_solicitud}/etiquetas")
@@ -767,6 +919,45 @@ def descargar_protocolo_proveedor(
         ruta, media_type=media_type,
         filename=row.protocolo_proveedor_nombre_original or os.path.basename(ruta),
     )
+
+
+@router.post("/{id_solicitud}/protocolo-proveedor", response_model=SolicitudMuestreoResponse)
+def subir_protocolo_proveedor(
+    id_solicitud: int,
+    protocolo_proveedor: UploadFile = File(
+        ..., description="Protocolo que entrega el proveedor junto con el lote (foto o PDF)",
+    ),
+    user: dict = Depends(require_rol("qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Adjunta (o reemplaza, si ya había uno) el protocolo del proveedor de
+    una solicitud ya creada -- en el alta manual es obligatorio en el
+    momento (ver POST ""), pero las solicitudes que genera el agente no lo
+    tienen disponible en ese flujo automático (ver
+    app/services/agente_muestreo.py), así que hace falta este endpoint
+    aparte para que QA lo cargue después. Sigue siendo obligatorio antes de
+    poder ejecutar el muestreo -- ver los checks en
+    confirmar_orden_trabajo/generar_envio_anticipado."""
+    if not protocolo_proveedor.filename:
+        raise HTTPException(status_code=422, detail="No se recibió ningún archivo")
+
+    cursor = conn.cursor()
+    row = _obtener_solicitud_o_404(cursor, id_solicitud)
+
+    ruta = storage.guardar_protocolo_proveedor(protocolo_proveedor, row.nro_solicitud)
+    cursor.execute(
+        "UPDATE lims_solicitudes_muestreo SET protocolo_proveedor_path = ?, protocolo_proveedor_nombre_original = ? "
+        "WHERE id_solicitud = ?",
+        ruta, protocolo_proveedor.filename, id_solicitud,
+    )
+
+    audit.registrar(
+        conn, entidad="solicitud_muestreo", accion="adjuntar_protocolo_proveedor",
+        id_usuario=user["id_usuario"], id_entidad=id_solicitud,
+        valor_nuevo={"protocolo_proveedor_nombre_original": protocolo_proveedor.filename},
+    )
+
+    return _fila_a_solicitud(_obtener_solicitud_o_404(cursor, id_solicitud))
 
 
 @router.post("/{id_solicitud}/documentacion-proveedor", response_model=SolicitudMuestreoResponse)
@@ -861,6 +1052,7 @@ def ensayos_para_orden(
             observaciones_muestreo=row.observaciones_muestreo,
             nro_bultos_muestreados=row.nro_bultos_muestreados,
         ),
+        checklist_muestreo=_obtener_checklist_muestreo(cursor, row.id_muestra, row.id_especificacion),
     )
 
 
@@ -888,13 +1080,7 @@ def generar_envio_anticipado(
             status_code=409,
             detail=f"La solicitud está '{row.estado}', no se puede generar un envío anticipado",
         )
-    if row.id_muestreador is None:
-        raise HTTPException(status_code=400, detail="La solicitud no tiene un muestreador asignado")
-    if row.id_laboratorio is None:
-        raise HTTPException(
-            status_code=400,
-            detail="La solicitud no tiene laboratorio asignado -- completalo con PUT .../completar-laboratorio",
-        )
+    _verificar_completa_para_ejecutar(row)
 
     id_muestra, codigo_muestra = _crear_muestra_desde_solicitud(cursor, row, datos_muestreo_pendientes=True)
     cursor.execute(
@@ -938,13 +1124,7 @@ def confirmar_orden_trabajo(
             status_code=409,
             detail=f"La solicitud está '{row.estado}', no se puede ejecutar el muestreo",
         )
-    if row.id_muestreador is None:
-        raise HTTPException(status_code=400, detail="La solicitud no tiene un muestreador asignado")
-    if row.id_laboratorio is None:
-        raise HTTPException(
-            status_code=400,
-            detail="La solicitud no tiene laboratorio asignado -- completalo con PUT .../completar-laboratorio",
-        )
+    _verificar_completa_para_ejecutar(row)
 
     df = body.datos_fisicos
     cursor.execute(
@@ -998,6 +1178,27 @@ def confirmar_orden_trabajo(
         id_solicitud,
     )
 
+    # Checklist configurable de etapa 'muestreo' -- solo se guardan ítems que
+    # efectivamente pertenecen a la especificación de esta solicitud (mismo
+    # criterio laxo que guardar_resultados en resultados.py: se ignoran en
+    # silencio los que no corresponden, en vez de bloquear la confirmación).
+    checklist_valido = {
+        item.id_espec_ensayo for item in _obtener_checklist_muestreo(cursor, None, row.id_especificacion)
+    }
+    for respuesta in body.checklist_muestreo:
+        if respuesta.id_espec_ensayo not in checklist_valido:
+            continue
+        valor = respuesta.valor_cualitativo.strip()
+        dentro = valor.lower() == "cumple" if valor else None
+        cursor.execute(
+            """
+            INSERT INTO lims_resultados_muestreo
+                (id_muestra, id_espec_ensayo, valor_cualitativo, dentro_especificacion, id_usuario_carga, fecha_carga)
+            VALUES (?, ?, ?, ?, ?, GETDATE())
+            """,
+            id_muestra, respuesta.id_espec_ensayo, valor, dentro, user["id_usuario"],
+        )
+
     audit.registrar(
         conn, entidad="muestra", accion=accion_auditoria,
         id_usuario=user["id_usuario"], id_entidad=id_muestra,
@@ -1033,6 +1234,68 @@ def anular_solicitud(
     return _fila_a_solicitud(_obtener_solicitud_o_404(cursor, id_solicitud))
 
 
+@router.post("/{id_solicitud}/imprimir-cuarentena", response_model=ImprimirDirectoResponse)
+def imprimir_etiquetas_cuarentena(
+    id_solicitud: int,
+    body: ImprimirDirectoBody,
+    user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Una etiqueta CUARENTENA por cada bulto de la solicitud (nro_bultos,
+    cargado por QA al crear la solicitud -- ver SolicitudMuestreoCreate) --
+    no es automático, lo dispara la persona desde la pantalla de Solicitudes
+    de Muestreo. Solicitudes de Muestreo es siempre por IR (materia prima),
+    nunca por lote, así que la etiqueta de referencia es fija ("IR"), a
+    diferencia de la etiqueta de muestra que sí puede ser IR o LOTE."""
+    cursor = conn.cursor()
+    row = _obtener_solicitud_o_404(cursor, id_solicitud)
+
+    if not row.nro_bultos or row.nro_bultos < 1:
+        raise HTTPException(
+            status_code=400,
+            detail="La solicitud no tiene cargada la cantidad de bultos -- completala antes de imprimir CUARENTENA",
+        )
+
+    cursor.execute("SELECT * FROM lims_impresoras_etiquetas WHERE id_impresora = ? AND activa = 1", body.id_impresora)
+    impresora = cursor.fetchone()
+    if not impresora:
+        raise HTTPException(status_code=404, detail="La impresora indicada no existe o está inactiva")
+
+    cantidad_texto = f"{formatear_cantidad(row.cantidad_ingresada)} {row.unidad_cantidad or ''}".strip()
+    datos_base = {
+        "erp_desart": row.erp_DESART,
+        "erp_codart": row.erp_CODART,
+        "nro_ir": row.erp_nro_ir,
+        "etiqueta_referencia": "IR",
+        "fecha_ingreso": _a_fecha(row.fecha_ingreso),
+        "fecha_vencimiento": _a_fecha(row.fecha_vencimiento),
+        "bulto_total": row.nro_bultos,
+        "cantidad_texto": cantidad_texto,
+    }
+
+    enviadas = 0
+    for bulto in range(1, row.nro_bultos + 1):
+        datos = dict(datos_base, bulto_actual=bulto)
+        sbpl_bytes = generar_sbpl_etiqueta_estado(datos, "CUARENTENA", impresora.ancho_mm, impresora.alto_mm, impresora.resolucion_dpi)
+        try:
+            imprimir_sbpl(impresora, sbpl_bytes, nombre_trabajo=f"Cuarentena {row.nro_solicitud} {bulto}/{row.nro_bultos}")
+        except RuntimeError as e:
+            detalle = str(e)
+            if enviadas:
+                detalle += f" (se enviaron {enviadas} de {row.nro_bultos} etiquetas antes de este error)"
+            raise HTTPException(status_code=502, detail=detalle)
+        enviadas += 1
+
+    audit.registrar(
+        conn, entidad="etiqueta_cuarentena", accion="imprimir",
+        id_usuario=user["id_usuario"], id_entidad=id_solicitud,
+        valor_nuevo={"id_impresora": body.id_impresora, "ruta_red": impresora.ruta_red, "cantidad_etiquetas": enviadas},
+    )
+
+    plural = "s" if enviadas != 1 else ""
+    return ImprimirDirectoResponse(ok=True, mensaje=f"{enviadas} etiqueta{plural} CUARENTENA enviada{plural} a {impresora.nombre}")
+
+
 # Reexport para app/api/routes/integraciones.py: la creación de muestra desde
 # la integración con el eBR usa el mismo generador de código SAMP-AAAA-NNNN
 # que el flujo normal de confirmación de muestreo, en vez de duplicarlo.
@@ -1045,6 +1308,14 @@ generar_nro_solicitud = _generar_nro_solicitud
 
 # Reexport para app/api/routes/muestras.py: la reimpresión de etiquetas desde
 # Consulta de Muestras usa el mismo armado de PDF que "Descargar etiquetas"
-# en Solicitudes, en vez de un template paralelo.
+# en Solicitudes, en vez de un template paralelo. iniciales_muestreador
+# también se reusa ahí para la etiqueta simplificada de una muestra sin
+# Solicitud de Muestreo asociada (ver generar_pdf_etiqueta_muestra).
+# obtener_muestras_confirmadas se reusa para que la impresión directa
+# (SBPL) imprima una etiqueta por cada tipo de muestra confirmado, igual
+# que ya hace generar_pdf_etiquetas_v2 -- misma fuente de datos para los
+# dos caminos, no una lógica de iteración paralela.
 obtener_solicitud_o_404 = _obtener_solicitud_o_404
 generar_pdf_etiquetas_de_solicitud = _generar_pdf_etiquetas_de_solicitud
+iniciales_muestreador = _iniciales_muestreador
+obtener_muestras_confirmadas = _obtener_muestras_confirmadas

@@ -47,6 +47,16 @@ class Settings(BaseSettings):
     # con una justificación genérica en vez de la redactada por Claude.
     anthropic_api_key: str = ""
 
+    # Ruta al ejecutable de Tesseract OCR (motor de comparación de etiquetas
+    # de Material de Empaque, ver app/services/comparacion_empaque_ia.py).
+    # Vacío = pytesseract busca "tesseract" en el PATH del sistema como
+    # respaldo. Esta clase (Settings, con extra="forbid") es la ÚNICA fuente
+    # de configuración del proyecto -- cualquier clave en .env necesita su
+    # campo declarado acá, si no pydantic rechaza el arranque entero con
+    # "Extra inputs are not permitted" (lo que pasó cuando esta variable se
+    # agregó al .env sin este campo).
+    tesseract_path: str = ""
+
     # App
     app_name: str = "LIMSS Laboratorio Lamar"
     app_env: str = "development"

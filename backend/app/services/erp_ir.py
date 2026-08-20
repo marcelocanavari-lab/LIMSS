@@ -44,6 +44,18 @@ _PATRON_IR = re.compile(r"^\s*(\d{1,12})\s*/\s*(\d{2})\s*$")
 
 _FECHA_MIGRACION = "2020-04-02"
 
+# Desempate para cuando hay más de un comprobante para (NUMCOMO, año) --
+# confirmado con datos reales (IR 15/25, 212/26, 214/26) que la colisión NO
+# está limitada al arrastre del 2020-04-02, sigue ocurriendo. Se prioriza el
+# comprobante que tiene VENCOM cargado (no el sentinel 1899-12-30, mismo
+# criterio que normalizar_fecha_sentinel: año > 1900) por sobre uno vacío, y
+# recién ahí FECCOR DESC como antes. No es infalible (si ambos candidatos
+# tienen VENCOM cargado, sigue sin haber forma automática de saber cuál es
+# el correcto) -- es la red de seguridad para los caminos que no pueden
+# preguntarle a una persona (el agente); el alta manual sí le pregunta a un
+# usuario real cuando hay colisión, ver buscar_todos_candidatos_ir más abajo.
+_ORDEN_DESEMPATE_HEADER = "CASE WHEN VENCOM IS NOT NULL AND YEAR(VENCOM) > 1900 THEN 0 ELSE 1 END, FECCOR DESC"
+
 
 def construir_numcomo(numero: str) -> str:
     """Arma el NUMCOMO a buscar en GIN01CPB a partir del correlativo (NNN de
@@ -84,12 +96,20 @@ def tipo_comprobante_ir(erp: pyodbc.Connection) -> int:
 _tipo_comprobante_ir = tipo_comprobante_ir
 
 
+# RTRIM en CODART/DESART/CODSAR/DESSAR: GIM21ART y GIT59SAR son CHAR de ancho
+# fijo (a diferencia de VARCHAR), así que el ERP devuelve estos valores
+# rellenados con espacios hasta completar el largo de columna -- confirmado
+# con un CODART real de 4 caracteres útiles seguido de 7 espacios. Se recorta
+# acá, en el único punto donde se leen estos campos del ERP para todo el
+# flujo de IR, para que ningún consumidor (agente de muestreo, Solicitudes de
+# Muestreo, comparación de etiquetas de empaque, etc.) tenga que parchear el
+# valor por su cuenta más adelante en la cadena.
 _QUERY_LINEAS_POR_N01ID = """
     SELECT cab.N01Id, cab.NUMCOMO, cab.FECCOM, cab.FECCOR, cab.VENCOM,
            its.IdM21, its.CANTID,
-           art.CODART, art.DESART, umd.ABREV AS unidad,
+           RTRIM(art.CODART) AS CODART, RTRIM(art.DESART) AS DESART, umd.ABREV AS unidad,
            ana.CODANA AS proveedor_codigo, ana.DESANA AS proveedor,
-           sar.CODSAR, sar.DESSAR,
+           RTRIM(sar.CODSAR) AS CODSAR, RTRIM(sar.DESSAR) AS DESSAR,
            (SELECT SUM(its2.CANTID) FROM GIN02ITS its2 WHERE its2.IdN01O = cab.N01Id) AS cantidad_total
     FROM GIN01CPB cab
     INNER JOIN GIN02ITS its ON its.IdN01O = cab.N01Id
@@ -187,11 +207,11 @@ def buscar_lineas_ir(erp: pyodbc.Connection, nro_ir: str):
 
     cursor = erp.cursor()
     cursor.execute(
-        """
+        f"""
         SELECT TOP 1 N01Id
         FROM GIN01CPB
         WHERE IdT05O = ? AND LETCOMO = 'X' AND NUMCOMO = ? AND YEAR(FECCOR) = ?
-        ORDER BY FECCOR DESC
+        ORDER BY {_ORDEN_DESEMPATE_HEADER}
         """,
         id_tipo_ir, numcomo, anio,
     )
@@ -202,6 +222,67 @@ def buscar_lineas_ir(erp: pyodbc.Connection, nro_ir: str):
     return _lineas_por_n01id(erp, cabecera.N01Id)
 
 
+def buscar_cabeceras_ir(erp: pyodbc.Connection, nro_ir: str):
+    """Todos los comprobantes que matchean (NUMCOMO, año) para este IR, SIN
+    desempatar -- a diferencia de buscar_lineas_ir, que resuelve a uno solo.
+    Devuelve N01Id/FECCOM/FECCOR/VENCOM de cada candidato, ordenados con el
+    mismo criterio que el desempate automático (mejor candidato primero) por
+    si el llamador solo quiere mostrar la lista sin forzar al usuario a
+    pensar cuál conviene. Lista de 0 o 1 elementos = caso normal, sin
+    colisión."""
+    numcomo, anio = _parsear_nro_ir(nro_ir)
+    id_tipo_ir = _tipo_comprobante_ir(erp)
+
+    cursor = erp.cursor()
+    cursor.execute(
+        f"""
+        SELECT N01Id, NUMCOMO, FECCOM, FECCOR, VENCOM
+        FROM GIN01CPB
+        WHERE IdT05O = ? AND LETCOMO = 'X' AND NUMCOMO = ? AND YEAR(FECCOR) = ?
+        ORDER BY {_ORDEN_DESEMPATE_HEADER}
+        """,
+        id_tipo_ir, numcomo, anio,
+    )
+    return cursor.fetchall()
+
+
+def buscar_todos_candidatos_ir(erp: pyodbc.Connection, nro_ir: str):
+    """Para el alta manual (buscar_ir/buscar_material en muestras.py): si
+    hay colisión de (NUMCOMO, año) -- más de un comprobante candidato --
+    devuelve los ítems de TODOS los candidatos (cada uno con su propio
+    N01Id/FECCOR) en vez de resolver a uno solo, para que la persona elija
+    cuál es el correcto en vez de que el sistema adivine. Sin colisión (0 o
+    1 comprobante), el resultado es idéntico al de buscar_lineas_ir -- no
+    cambia nada del caso normal."""
+    cabeceras = buscar_cabeceras_ir(erp, nro_ir)
+    lineas = []
+    for cab in cabeceras:
+        lineas.extend(_lineas_por_n01id(erp, cab.N01Id))
+    return lineas
+
+
+def resolver_codsar_por_codart(erp: pyodbc.Connection, erp_codart: str) -> Optional[str]:
+    """CODSAR (subarticulo) de un artículo dado su CODART -- mismo JOIN
+    GIM21ART -> GIT59SAR vía IdT59 que ya usa _QUERY_LINEAS_POR_N01ID, pero
+    resuelto directamente por CODART en vez de a través de un comprobante
+    (usado al crear/copiar una especificación, donde todavía no hay ningún
+    IR de por medio). RTRIM en ambos lados de la comparación porque
+    GIM21ART.CODART es CHAR de ancho fijo (ver nota sobre RTRIM más arriba
+    en este archivo) -- no asume que erp_codart ya venga trimeado."""
+    cursor = erp.cursor()
+    cursor.execute(
+        """
+        SELECT RTRIM(sar.CODSAR) AS CODSAR
+        FROM GIM21ART art
+        LEFT JOIN GIT59SAR sar ON sar.T59Id = art.IdT59
+        WHERE RTRIM(art.CODART) = RTRIM(?)
+        """,
+        erp_codart,
+    )
+    fila = cursor.fetchone()
+    return fila.CODSAR if fila and fila.CODSAR else None
+
+
 def obtener_vencimiento_lote(erp: pyodbc.Connection, nro_ir: str):
     """VENCOM del comprobante IR. 1899-12-30 es el sentinel del ERP para
     "sin vencimiento" (igual que en el eBR) -- se normaliza a None."""
@@ -210,13 +291,26 @@ def obtener_vencimiento_lote(erp: pyodbc.Connection, nro_ir: str):
 
     cursor = erp.cursor()
     cursor.execute(
-        """
+        f"""
         SELECT TOP 1 VENCOM
         FROM GIN01CPB
         WHERE IdT05O = ? AND LETCOMO = 'X' AND NUMCOMO = ? AND YEAR(FECCOR) = ?
-        ORDER BY FECCOR DESC
+        ORDER BY {_ORDEN_DESEMPATE_HEADER}
         """,
         id_tipo_ir, numcomo, anio,
     )
     row = cursor.fetchone()
     return normalizar_fecha_sentinel(row.VENCOM) if row else None
+
+
+def obtener_vencimiento_por_n01id(erp: pyodbc.Connection, n01id: int):
+    """Igual que obtener_vencimiento_lote pero resolviendo por N01Id directo
+    -- para volver a consultar el VENCOM de una solicitud/muestra que ya
+    tiene erp_n01id guardado (ver lims_solicitudes_muestreo/lims_muestras),
+    sin pasar de nuevo por la búsqueda ambigua de NUMCOMO+año. Una vez que
+    un IR se resolvió correctamente la primera vez, esta función lo blinda
+    contra cualquier colisión que aparezca después para ese mismo número."""
+    lineas = lineas_comprobante_por_id(erp, n01id)
+    if not lineas:
+        return None
+    return normalizar_fecha_sentinel(lineas[0].VENCOM)
