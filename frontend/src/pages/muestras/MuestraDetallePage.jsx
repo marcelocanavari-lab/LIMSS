@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import TopBar from '../../components/TopBar';
+import ChecklistMuestreo from '../../components/ChecklistMuestreo';
 import { muestrasApi } from '../../api/muestras';
 import { ApiError } from '../../api/client';
 import { BADGE_POR_ESTADO } from './MuestrasPage';
@@ -20,10 +21,21 @@ export default function MuestraDetallePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const puedeEditar = ['analista_qc', 'qa', 'admin'].includes(user?.rol);
+  const puedeCompletarMuestreo = ['muestreador', 'analista_qc', 'qa', 'admin'].includes(user?.rol);
 
   const [muestra, setMuestra] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+
+  // Checklist de etapa 'muestreo' -- mismo mecanismo que Ejecutar Muestreo,
+  // expuesto acá para las muestras creadas con Nueva Muestra (sin
+  // solicitud detrás). Si la especificación no tiene ítems de esta etapa,
+  // checklist queda en [] y la sección ni se muestra.
+  const [checklist, setChecklist] = useState([]);
+  const [checklistLoading, setChecklistLoading] = useState(true);
+  const [checklistGuardando, setChecklistGuardando] = useState(false);
+  const [checklistError, setChecklistError] = useState('');
+  const [checklistOk, setChecklistOk] = useState('');
   // Si ya existe una etiqueta impresa para esta muestra, la próxima
   // impresión queda registrada como reimpresión (lims_etiquetas.reimpresion,
   // ver generar_etiqueta) -- se refleja acá para que el botón lo diga
@@ -52,6 +64,41 @@ export default function MuestraDetallePage() {
       .then(() => setTieneEtiqueta(true))
       .catch(() => setTieneEtiqueta(false));
   }, [id]);
+
+  useEffect(() => {
+    setChecklistLoading(true);
+    muestrasApi
+      .obtenerChecklistMuestreo(id)
+      .then(setChecklist)
+      .catch(() => setChecklist([]))
+      .finally(() => setChecklistLoading(false));
+  }, [id]);
+
+  function actualizarChecklist(idEspecEnsayo, valor) {
+    setChecklist((prev) => prev.map((it) => (
+      it.id_espec_ensayo === idEspecEnsayo ? { ...it, valor_cualitativo: valor } : it
+    )));
+  }
+
+  async function guardarChecklist() {
+    setChecklistError('');
+    setChecklistOk('');
+    setChecklistGuardando(true);
+    try {
+      const actualizado = await muestrasApi.guardarChecklistMuestreo(
+        id,
+        checklist
+          .filter((it) => it.valor_cualitativo)
+          .map((it) => ({ id_espec_ensayo: it.id_espec_ensayo, valor_cualitativo: it.valor_cualitativo })),
+      );
+      setChecklist(actualizado);
+      setChecklistOk('Checklist guardado correctamente');
+    } catch (err) {
+      setChecklistError(err instanceof ApiError ? err.message : 'No se pudo guardar el checklist');
+    } finally {
+      setChecklistGuardando(false);
+    }
+  }
 
   function abrirEdicion() {
     setTipoMaterialEdit(muestra.tipo_material || '');
@@ -204,6 +251,24 @@ export default function MuestraDetallePage() {
             </div>
           </form>
         </div>
+
+        {!checklistLoading && checklist.length > 0 && (
+          <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
+            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Checklist de muestreo</h2>
+            <ChecklistMuestreo
+              checklist={checklist}
+              onChange={actualizarChecklist}
+              disabled={checklistGuardando || !puedeCompletarMuestreo}
+            />
+            {checklistError && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-3)' }}>{checklistError}</div>}
+            {checklistOk && <div className="alert alert-ok" style={{ marginBottom: 'var(--sp-3)' }}>{checklistOk}</div>}
+            {puedeCompletarMuestreo && (
+              <button className="btn btn-primary" onClick={guardarChecklist} disabled={checklistGuardando}>
+                {checklistGuardando ? <span className="spinner" /> : 'Guardar checklist'}
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -42,7 +42,7 @@ from pydantic import ValidationError
 from app.core.security import get_current_user, require_rol
 from app.db.connections import erp_db, limss_db
 from app.schemas.solicitudes_muestreo import (
-    ChecklistMuestreoItem,
+    BultoGrupoResponse,
     DatosFisicosMuestreo,
     EnsayoSolicitudMuestreo,
     EnsayosParaOrdenResponse,
@@ -57,8 +57,15 @@ from app.schemas.solicitudes_muestreo import (
 )
 from app.schemas.muestras import ImprimirDirectoBody, ImprimirDirectoResponse
 from app.services import audit, storage
-from app.services.especificaciones import tiene_ensayos_analisis
-from app.services.erp_ir import buscar_lineas_ir, formatear_nro_ir, lineas_comprobante_por_id, normalizar_fecha_sentinel
+from app.services.bultos import expandir_bultos, guardar_grupos_bultos, obtener_grupos_bultos
+from app.services.especificaciones import guardar_checklist_muestreo, obtener_checklist_muestreo, tiene_ensayos_analisis
+from app.services.erp_ir import (
+    buscar_lineas_ir,
+    formatear_nro_ir,
+    lineas_comprobante_por_id,
+    normalizar_fecha_sentinel,
+    solicitud_activa_existente,
+)
 from app.services.formato import formatear_cantidad
 from app.services.impresion_sato import generar_sbpl_etiqueta_estado, imprimir_sbpl
 from app.services.pdf_solicitud_muestreo import (
@@ -116,8 +123,19 @@ _SELECT_SOLICITUD = """
 """
 
 
-def _fila_a_solicitud(row) -> SolicitudMuestreoResponse:
+def _fila_a_solicitud(row, cursor=None) -> SolicitudMuestreoResponse:
+    grupos_bultos = (
+        [
+            BultoGrupoResponse(
+                id_bulto_grupo=g.id_bulto_grupo, cantidad_bultos=g.cantidad_bultos,
+                cantidad_unidades=float(g.cantidad_unidades), unidad_medida=g.unidad_medida,
+            )
+            for g in obtener_grupos_bultos(cursor, row.id_solicitud)
+        ]
+        if cursor is not None else []
+    )
     return SolicitudMuestreoResponse(
+        grupos_bultos=grupos_bultos,
         id_solicitud=row.id_solicitud,
         nro_solicitud=row.nro_solicitud,
         erp_nro_ir=row.erp_nro_ir,
@@ -313,37 +331,6 @@ def _obtener_ensayos(cursor, id_solicitud: int, id_especificacion: Optional[int]
     ]
 
 
-def _obtener_checklist_muestreo(cursor, id_muestra: Optional[int], id_especificacion: Optional[int]) -> list[ChecklistMuestreoItem]:
-    """Ítems de etapa 'muestreo' de la especificación de esta solicitud --
-    el checklist físico configurable que reemplaza al set fijo de 4 campos
-    (aspecto_externo/cierre/aspecto_interno/precintos). Sin id_laboratorio:
-    a diferencia de los ensayos de análisis, estos ítems no dependen del
-    laboratorio elegido. id_muestra puede ser None (todavía no se ejecutó el
-    muestreo -- no hay lims_resultados_muestreo que traer, formulario en
-    blanco)."""
-    if id_especificacion is None:
-        return []
-    cursor.execute(
-        """
-        SELECT se.id_espec_ensayo, se.orden, m.nombre_ensayo, se.especificacion_texto,
-               r.valor_cualitativo
-        FROM lims_especificacion_ensayos se
-        INNER JOIN lims_ensayos_maestro m ON m.id_ensayo_maestro = se.id_ensayo_maestro
-        LEFT JOIN lims_resultados_muestreo r ON r.id_espec_ensayo = se.id_espec_ensayo AND r.id_muestra = ?
-        WHERE se.id_especificacion = ? AND se.etapa = 'muestreo' AND se.activo = 1
-        ORDER BY se.orden
-        """,
-        id_muestra, id_especificacion,
-    )
-    return [
-        ChecklistMuestreoItem(
-            id_espec_ensayo=e.id_espec_ensayo, orden=e.orden, nombre_ensayo=e.nombre_ensayo,
-            especificacion_texto=e.especificacion_texto, valor_cualitativo=e.valor_cualitativo,
-        )
-        for e in cursor.fetchall()
-    ]
-
-
 @router.get("", response_model=list[SolicitudMuestreoResponse])
 def listar_solicitudes(
     estado: Optional[str] = Query(None, pattern=r"^(pendiente|ejecutada|anulada)$"),
@@ -362,7 +349,7 @@ def listar_solicitudes(
         params.append(id_muestreador)
     where = ("WHERE " + " AND ".join(condiciones)) if condiciones else ""
     cursor.execute(_SELECT_SOLICITUD + f" {where} ORDER BY s.fecha_solicitud DESC", *params)
-    return [_fila_a_solicitud(r) for r in cursor.fetchall()]
+    return [_fila_a_solicitud(r, cursor) for r in cursor.fetchall()]
 
 
 @router.get("/muestreadores", response_model=list[MuestreadorDisponible])
@@ -397,7 +384,7 @@ def listar_mis_solicitudes(
         _SELECT_SOLICITUD + " WHERE s.id_muestreador = ? AND s.estado = 'pendiente' ORDER BY s.fecha_solicitud ASC",
         user["id_usuario"],
     )
-    return [_fila_a_solicitud(r) for r in cursor.fetchall()]
+    return [_fila_a_solicitud(r, cursor) for r in cursor.fetchall()]
 
 
 def _generar_nro_solicitud(cursor) -> str:
@@ -532,6 +519,25 @@ def crear_solicitud(
 
     cursor = conn.cursor()
 
+    # Duplicados por IR (bug real confirmado: la creación manual nunca tuvo
+    # esta validación, a diferencia del agente -- ver
+    # app.services.erp_ir.solicitud_activa_existente, compartida con
+    # agente_muestreo.py). Se calcula acá el nro_ir_normalizado (antes se
+    # calculaba más abajo, después de subir archivos) para poder fallar
+    # rápido, sin dejar un protocolo_proveedor huérfano en storage/ si la
+    # solicitud termina rechazada por duplicado. Criterio conservador: ante
+    # un IR con una solicitud activa (de cualquier origen, no anulada), se
+    # bloquea -- para crear una segunda hay que anular la anterior primero,
+    # mismo criterio que ya usa el índice único filtrado de la base.
+    nro_ir_normalizado = formatear_nro_ir(linea.NUMCOMO, linea.FECCOR)
+    existente = solicitud_activa_existente(cursor, nro_ir_normalizado)
+    if existente:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Ya existe una solicitud activa para el IR '{nro_ir_normalizado}': {existente.nro_solicitud}. "
+                   "Anulala primero si necesitás generar una nueva.",
+        )
+
     cursor.execute("SELECT 1 FROM lims_laboratorios WHERE id_laboratorio = ? AND activo = 1", body.id_laboratorio)
     if not cursor.fetchone():
         raise HTTPException(status_code=404, detail="El laboratorio indicado no existe o está inactivo")
@@ -570,21 +576,6 @@ def crear_solicitud(
             detail="El laboratorio seleccionado no tiene ensayos asignados para la especificación de este artículo",
         )
 
-    if body.muestras:
-        ids_muestra_espec = {m.id_espec_muestra for m in body.muestras}
-        placeholders = ",".join("?" * len(ids_muestra_espec))
-        cursor.execute(
-            f"SELECT id FROM lims_especificacion_muestras WHERE id_especificacion = ? AND id IN ({placeholders})",
-            espec.id_especificacion, *ids_muestra_espec,
-        )
-        ids_validos = {r.id for r in cursor.fetchall()}
-        if ids_validos != ids_muestra_espec:
-            raise HTTPException(
-                status_code=400,
-                detail="Alguna de las muestras indicadas no pertenece a la especificación de este artículo",
-            )
-
-    nro_ir_normalizado = formatear_nro_ir(linea.NUMCOMO, linea.FECCOR)
     nro_solicitud = _generar_nro_solicitud(cursor)
 
     fecha_ingreso = normalizar_fecha_sentinel(linea.FECCOM)
@@ -631,21 +622,21 @@ def crear_solicitud(
     cursor.execute("SELECT @@IDENTITY AS id")
     id_solicitud = int(cursor.fetchone().id)
 
-    if body.muestras:
-        cursor.execute("SELECT OBJECT_ID('lims_solicitud_muestras') AS oid")
-        if cursor.fetchone().oid is not None:
-            for m in body.muestras:
-                cursor.execute(
-                    """
-                    INSERT INTO lims_solicitud_muestras (id_solicitud, id_espec_muestra, cantidad_real, confirmada)
-                    VALUES (?, ?, ?, ?)
-                    """,
-                    id_solicitud, m.id_espec_muestra, m.cantidad_real, 1 if m.confirmada else 0,
-                )
-        # Si la tabla todavía no existe en este entorno (ver migrations_
-        # solicitud_muestras.sql, pendiente de ejecutar), se omite sin
-        # romper la creación de la solicitud -- las etiquetas caen al
-        # modelo legacy de 2 fijas (ver descargar_etiquetas).
+    # Grupos de bultos (cantidad de bultos x cantidad de unidades cada uno) --
+    # con al menos un grupo, nro_bultos pasa a ser la suma calculada en vez
+    # del valor cargado a mano en body.nro_bultos (mismo criterio "no romper
+    # lo que ya depende de nro_bultos" pedido para esta feature). Sin
+    # grupos, se sigue usando el nro_bultos simple de siempre.
+    total_bultos_grupos = guardar_grupos_bultos(cursor, id_solicitud, body.grupos_bultos)
+    if total_bultos_grupos is not None:
+        cursor.execute(
+            "UPDATE lims_solicitudes_muestreo SET nro_bultos = ? WHERE id_solicitud = ?",
+            total_bultos_grupos, id_solicitud,
+        )
+
+    # La confirmación de "Muestras a tomar" ya no se guarda acá -- se movió
+    # a confirmar_orden_trabajo (Ejecutar Muestreo), el único paso común a
+    # solicitudes manuales y del agente. Ver OrdenTrabajoDigitalBody.muestras.
 
     audit.registrar(
         conn, entidad="solicitud_muestreo", accion="crear",
@@ -656,7 +647,7 @@ def crear_solicitud(
         },
     )
 
-    return _fila_a_solicitud(_obtener_solicitud_o_404(cursor, id_solicitud))
+    return _fila_a_solicitud(_obtener_solicitud_o_404(cursor, id_solicitud), cursor)
 
 
 @router.put("/{id_solicitud}/completar-datos", response_model=SolicitudMuestreoResponse)
@@ -712,6 +703,16 @@ def completar_datos(
         if muestreador.rol not in _ROLES_MUESTREADOR_O_SUPERIOR:
             raise HTTPException(status_code=400, detail="El usuario asignado no tiene un rol habilitado para muestrear")
 
+    # Grupos de bultos: con al menos un grupo, reemplaza los grupos ya
+    # cargados (completar-datos se puede llamar más de una vez sobre la
+    # misma solicitud pendiente) y nro_bultos pasa a ser la suma calculada
+    # en vez de lo que haya venido en body.nro_bultos/lo que ya tenía la
+    # solicitud -- mismo criterio "no romper lo que ya depende de
+    # nro_bultos" pedido para esta feature.
+    total_bultos_grupos = guardar_grupos_bultos(cursor, id_solicitud, body.grupos_bultos)
+    if total_bultos_grupos is not None:
+        nro_bultos = total_bultos_grupos
+
     cursor.execute(
         """
         UPDATE lims_solicitudes_muestreo
@@ -736,7 +737,7 @@ def completar_datos(
         },
     )
 
-    return _fila_a_solicitud(_obtener_solicitud_o_404(cursor, id_solicitud))
+    return _fila_a_solicitud(_obtener_solicitud_o_404(cursor, id_solicitud), cursor)
 
 
 @router.get("/{id_solicitud}", response_model=SolicitudMuestreoDetalle)
@@ -750,7 +751,7 @@ def detalle_solicitud(
     cantidades = _obtener_cantidades(cursor, row.id_especificacion)
     ensayos = _obtener_ensayos(cursor, id_solicitud, row.id_especificacion, row.id_laboratorio)
 
-    base = _fila_a_solicitud(row)
+    base = _fila_a_solicitud(row, cursor)
     return SolicitudMuestreoDetalle(
         **base.model_dump(),
         erp_IdM21=row.erp_IdM21,
@@ -818,28 +819,113 @@ def descargar_planilla_muestreo(
     )
 
 
+def _tiene_columnas_muestra_adhoc(cursor) -> bool:
+    """tipo_muestra/unidad/ad_hoc en lims_solicitud_muestras (y
+    id_espec_muestra vuelto nullable) son de la migración que soporta
+    muestras ad-hoc -- puede no haberse corrido todavía en este entorno."""
+    cursor.execute("SELECT COL_LENGTH('lims_solicitud_muestras', 'ad_hoc') AS c")
+    return cursor.fetchone().c is not None
+
+
+def _guardar_muestras_confirmadas(cursor, id_solicitud: int, id_especificacion: int, muestras) -> None:
+    """Reemplaza (DELETE + INSERT) la confirmación de "Muestras a tomar" de
+    una solicitud -- estándar (id_espec_muestra de la especificación) o
+    ad-hoc (sin id_espec_muestra, con tipo_muestra/unidad propios -- no
+    modifica lims_especificacion_muestras, queda asociada solo a esta
+    solicitud). Sin la tabla en este entorno, no hace nada (etiquetas caen
+    al modelo legacy)."""
+    cursor.execute("SELECT OBJECT_ID('lims_solicitud_muestras') AS oid")
+    if cursor.fetchone().oid is None:
+        return
+    tiene_adhoc = _tiene_columnas_muestra_adhoc(cursor)
+
+    # Toda fila estándar (id_espec_muestra no nulo) tiene que pertenecer a
+    # la especificación de ESTA solicitud -- si no, un cliente podría mandar
+    # el id_espec_muestra de otro producto y terminaría con tipo_muestra/
+    # unidad/laboratorio de una especificación ajena (ver el COALESCE del
+    # JOIN en _obtener_muestras_confirmadas). Mismo chequeo que ya hacía el
+    # código anterior a la refactorización de este flujo (antes en
+    # crear_solicitud), ahora acá porque la confirmación se hace en este
+    # endpoint (ver docstring de SolicitudMuestreoCreate).
+    ids_espec_muestra = {m.id_espec_muestra for m in muestras if m.id_espec_muestra is not None}
+    if ids_espec_muestra:
+        placeholders = ",".join("?" * len(ids_espec_muestra))
+        cursor.execute(
+            f"SELECT id FROM lims_especificacion_muestras WHERE id_especificacion = ? AND id IN ({placeholders})",
+            id_especificacion, *ids_espec_muestra,
+        )
+        ids_validos = {r.id for r in cursor.fetchall()}
+        ids_invalidos = ids_espec_muestra - ids_validos
+        if ids_invalidos:
+            raise HTTPException(
+                status_code=400,
+                detail=f"id_espec_muestra inválido para esta solicitud: {sorted(ids_invalidos)}",
+            )
+
+    cursor.execute("DELETE FROM lims_solicitud_muestras WHERE id_solicitud = ?", id_solicitud)
+    for m in muestras:
+        if m.id_espec_muestra is None and not tiene_adhoc:
+            raise HTTPException(
+                status_code=503,
+                detail="Las muestras ad-hoc todavía no están disponibles en este entorno -- "
+                       "falta correr la migración de lims_solicitud_muestras.",
+            )
+        if tiene_adhoc:
+            cursor.execute(
+                """
+                INSERT INTO lims_solicitud_muestras
+                    (id_solicitud, id_espec_muestra, cantidad_real, confirmada, tipo_muestra, unidad, ad_hoc)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                id_solicitud, m.id_espec_muestra, m.cantidad_real, 1 if m.confirmada else 0,
+                m.tipo_muestra, m.unidad, 0 if m.id_espec_muestra is not None else 1,
+            )
+        else:
+            cursor.execute(
+                "INSERT INTO lims_solicitud_muestras (id_solicitud, id_espec_muestra, cantidad_real, confirmada) VALUES (?, ?, ?, ?)",
+                id_solicitud, m.id_espec_muestra, m.cantidad_real, 1 if m.confirmada else 0,
+            )
+
+
 def _obtener_muestras_confirmadas(cursor, id_solicitud: int):
     """Filas de lims_solicitud_muestras confirmadas para esta solicitud, con
-    los datos de la muestra definida (tipo/unidad/laboratorio) -- una
-    etiqueta por fila. Lista vacía si la tabla todavía no existe en este
-    entorno (ver migrations_solicitud_muestras.sql, pendiente de ejecutar) o
-    si la solicitud no tiene ninguna fila (solicitudes creadas antes de esta
+    los datos de la muestra (tipo/unidad/laboratorio) -- una etiqueta por
+    fila. LEFT JOIN (no INNER) a lims_especificacion_muestras: una fila
+    ad-hoc no tiene id_espec_muestra, así que toma tipo_muestra/unidad de
+    sus propias columnas en vez de la especificación (COALESCE). Lista
+    vacía si la tabla todavía no existe en este entorno (ver
+    migrations_solicitud_muestras.sql, pendiente de ejecutar) o si la
+    solicitud no tiene ninguna fila (solicitudes creadas antes de esta
     funcionalidad): en ambos casos, descargar_etiquetas cae al modelo legacy
     de 2 etiquetas fijas."""
     cursor.execute("SELECT OBJECT_ID('lims_solicitud_muestras') AS oid")
     if cursor.fetchone().oid is None:
         return []
-    cursor.execute(
-        """
-        SELECT sm.cantidad_real, em.tipo_muestra, em.unidad, lab.nombre AS laboratorio_nombre
-        FROM lims_solicitud_muestras sm
-        INNER JOIN lims_especificacion_muestras em ON em.id = sm.id_espec_muestra
-        LEFT JOIN lims_laboratorios lab ON lab.id_laboratorio = em.id_laboratorio
-        WHERE sm.id_solicitud = ? AND sm.confirmada = 1
-        ORDER BY em.orden
-        """,
-        id_solicitud,
-    )
+    if _tiene_columnas_muestra_adhoc(cursor):
+        cursor.execute(
+            """
+            SELECT sm.cantidad_real, COALESCE(sm.tipo_muestra, em.tipo_muestra) AS tipo_muestra,
+                   COALESCE(sm.unidad, em.unidad) AS unidad, lab.nombre AS laboratorio_nombre
+            FROM lims_solicitud_muestras sm
+            LEFT JOIN lims_especificacion_muestras em ON em.id = sm.id_espec_muestra
+            LEFT JOIN lims_laboratorios lab ON lab.id_laboratorio = em.id_laboratorio
+            WHERE sm.id_solicitud = ? AND sm.confirmada = 1
+            ORDER BY CASE WHEN em.orden IS NULL THEN 1 ELSE 0 END, em.orden
+            """,
+            id_solicitud,
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT sm.cantidad_real, em.tipo_muestra, em.unidad, lab.nombre AS laboratorio_nombre
+            FROM lims_solicitud_muestras sm
+            INNER JOIN lims_especificacion_muestras em ON em.id = sm.id_espec_muestra
+            LEFT JOIN lims_laboratorios lab ON lab.id_laboratorio = em.id_laboratorio
+            WHERE sm.id_solicitud = ? AND sm.confirmada = 1
+            ORDER BY em.orden
+            """,
+            id_solicitud,
+        )
     return cursor.fetchall()
 
 
@@ -957,7 +1043,7 @@ def subir_protocolo_proveedor(
         valor_nuevo={"protocolo_proveedor_nombre_original": protocolo_proveedor.filename},
     )
 
-    return _fila_a_solicitud(_obtener_solicitud_o_404(cursor, id_solicitud))
+    return _fila_a_solicitud(_obtener_solicitud_o_404(cursor, id_solicitud), cursor)
 
 
 @router.post("/{id_solicitud}/documentacion-proveedor", response_model=SolicitudMuestreoResponse)
@@ -992,7 +1078,7 @@ def subir_documentacion_proveedor(
         valor_nuevo={"documentacion_proveedor_nombre_original": documentacion_proveedor.filename},
     )
 
-    return _fila_a_solicitud(_obtener_solicitud_o_404(cursor, id_solicitud))
+    return _fila_a_solicitud(_obtener_solicitud_o_404(cursor, id_solicitud), cursor)
 
 
 @router.get("/{id_solicitud}/documentacion-proveedor")
@@ -1041,6 +1127,7 @@ def ensayos_para_orden(
     return EnsayosParaOrdenResponse(
         id_solicitud=row.id_solicitud, nro_solicitud=row.nro_solicitud,
         erp_CODART=row.erp_CODART, erp_DESART=row.erp_DESART, estado=row.estado,
+        id_especificacion=row.id_especificacion,
         datos_fisicos=DatosFisicosMuestreo(
             aspecto_externo=row.aspecto_externo, cierre=row.cierre,
             aspecto_interno=row.aspecto_interno, precintos=row.precintos,
@@ -1052,7 +1139,7 @@ def ensayos_para_orden(
             observaciones_muestreo=row.observaciones_muestreo,
             nro_bultos_muestreados=row.nro_bultos_muestreados,
         ),
-        checklist_muestreo=_obtener_checklist_muestreo(cursor, row.id_muestra, row.id_especificacion),
+        checklist_muestreo=obtener_checklist_muestreo(cursor, row.id_muestra, row.id_especificacion),
     )
 
 
@@ -1178,26 +1265,17 @@ def confirmar_orden_trabajo(
         id_solicitud,
     )
 
-    # Checklist configurable de etapa 'muestreo' -- solo se guardan ítems que
-    # efectivamente pertenecen a la especificación de esta solicitud (mismo
-    # criterio laxo que guardar_resultados en resultados.py: se ignoran en
-    # silencio los que no corresponden, en vez de bloquear la confirmación).
-    checklist_valido = {
-        item.id_espec_ensayo for item in _obtener_checklist_muestreo(cursor, None, row.id_especificacion)
-    }
-    for respuesta in body.checklist_muestreo:
-        if respuesta.id_espec_ensayo not in checklist_valido:
-            continue
-        valor = respuesta.valor_cualitativo.strip()
-        dentro = valor.lower() == "cumple" if valor else None
-        cursor.execute(
-            """
-            INSERT INTO lims_resultados_muestreo
-                (id_muestra, id_espec_ensayo, valor_cualitativo, dentro_especificacion, id_usuario_carga, fecha_carga)
-            VALUES (?, ?, ?, ?, ?, GETDATE())
-            """,
-            id_muestra, respuesta.id_espec_ensayo, valor, dentro, user["id_usuario"],
-        )
+    # Checklist configurable de etapa 'muestreo' -- misma función que usa el
+    # checklist de Nueva Muestra (creación directa), ver
+    # app/services/especificaciones.py.
+    guardar_checklist_muestreo(cursor, id_muestra, row.id_especificacion, body.checklist_muestreo, user["id_usuario"])
+
+    # Confirmación de "Muestras a tomar" -- estándar (de la especificación) o
+    # ad-hoc (agregada a mano para esta solicitud puntual, ver
+    # MuestraConfirmadaInput). Mismo momento para solicitudes manuales y del
+    # agente (antes solo se pedía al crear, y el agente nunca pasa por ese
+    # formulario -- ver docstring de SolicitudMuestreoCreate).
+    _guardar_muestras_confirmadas(cursor, id_solicitud, row.id_especificacion, body.muestras)
 
     audit.registrar(
         conn, entidad="muestra", accion=accion_auditoria,
@@ -1231,7 +1309,7 @@ def anular_solicitud(
         valor_nuevo={"estado": "anulada"}, motivo=body.motivo,
     )
 
-    return _fila_a_solicitud(_obtener_solicitud_o_404(cursor, id_solicitud))
+    return _fila_a_solicitud(_obtener_solicitud_o_404(cursor, id_solicitud), cursor)
 
 
 @router.post("/{id_solicitud}/imprimir-cuarentena", response_model=ImprimirDirectoResponse)
@@ -1241,12 +1319,18 @@ def imprimir_etiquetas_cuarentena(
     user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
     conn: pyodbc.Connection = Depends(limss_db),
 ):
-    """Una etiqueta CUARENTENA por cada bulto de la solicitud (nro_bultos,
-    cargado por QA al crear la solicitud -- ver SolicitudMuestreoCreate) --
-    no es automático, lo dispara la persona desde la pantalla de Solicitudes
-    de Muestreo. Solicitudes de Muestreo es siempre por IR (materia prima),
-    nunca por lote, así que la etiqueta de referencia es fija ("IR"), a
-    diferencia de la etiqueta de muestra que sí puede ser IR o LOTE."""
+    """Una etiqueta CUARENTENA por cada bulto de la solicitud -- no es
+    automático, lo dispara la persona desde la pantalla de Solicitudes de
+    Muestreo. Si la solicitud tiene grupos de bultos cargados (cantidad de
+    bultos x cantidad de unidades cada uno, ver lims_solicitud_bultos /
+    app/services/bultos.py), cada etiqueta muestra la cantidad de SU grupo
+    en vez de la cantidad general del ingreso (ej. "4 x 50kg" + "1 x 30kg"
+    -- 4 etiquetas con "50kg" y una con "30kg", contador 1/5 a 5/5 continuo
+    a través de ambos grupos). Sin grupos cargados, se comporta igual que
+    antes de esta feature (nro_bultos etiquetas idénticas). Solicitudes de
+    Muestreo es siempre por IR (materia prima), nunca por lote, así que la
+    etiqueta de referencia es fija ("IR"), a diferencia de la etiqueta de
+    muestra que sí puede ser IR o LOTE."""
     cursor = conn.cursor()
     row = _obtener_solicitud_o_404(cursor, id_solicitud)
 
@@ -1269,20 +1353,32 @@ def imprimir_etiquetas_cuarentena(
         "etiqueta_referencia": "IR",
         "fecha_ingreso": _a_fecha(row.fecha_ingreso),
         "fecha_vencimiento": _a_fecha(row.fecha_vencimiento),
-        "bulto_total": row.nro_bultos,
-        "cantidad_texto": cantidad_texto,
     }
 
+    # Grupos de bultos (cantidad de bultos x cantidad de unidades cada uno) --
+    # sin grupos cargados (solicitud vieja, de antes de esta feature), se
+    # arma un único grupo implícito de nro_bultos etiquetas con la cantidad
+    # general del ingreso, igual que el comportamiento de siempre.
+    grupos = obtener_grupos_bultos(cursor, id_solicitud)
+    bultos = expandir_bultos(grupos, row.nro_bultos, cantidad_texto, cantidad_valor_fallback=row.cantidad_ingresada)
+    total_bultos = bultos[0].bulto_total
+
     enviadas = 0
-    for bulto in range(1, row.nro_bultos + 1):
-        datos = dict(datos_base, bulto_actual=bulto)
-        sbpl_bytes = generar_sbpl_etiqueta_estado(datos, "CUARENTENA", impresora.ancho_mm, impresora.alto_mm, impresora.resolucion_dpi)
+    for b in bultos:
+        datos = dict(
+            datos_base, bulto_actual=b.bulto_actual, bulto_total=b.bulto_total,
+            cantidad_texto=b.cantidad_texto, cantidad_valor=b.cantidad_valor,
+        )
+        sbpl_bytes = generar_sbpl_etiqueta_estado(
+            datos, "CUARENTENA", impresora.ancho_mm, impresora.alto_mm, impresora.resolucion_dpi,
+            cantidad_copias=body.cantidad,
+        )
         try:
-            imprimir_sbpl(impresora, sbpl_bytes, nombre_trabajo=f"Cuarentena {row.nro_solicitud} {bulto}/{row.nro_bultos}")
+            imprimir_sbpl(impresora, sbpl_bytes, nombre_trabajo=f"Cuarentena {row.nro_solicitud} {b.bulto_actual}/{b.bulto_total}")
         except RuntimeError as e:
             detalle = str(e)
             if enviadas:
-                detalle += f" (se enviaron {enviadas} de {row.nro_bultos} etiquetas antes de este error)"
+                detalle += f" (se enviaron {enviadas} de {total_bultos} etiquetas antes de este error)"
             raise HTTPException(status_code=502, detail=detalle)
         enviadas += 1
 

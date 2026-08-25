@@ -262,6 +262,18 @@ def _tiene_tabla_testigo_laboratorios(cursor) -> bool:
     return cursor.fetchone().id is not None
 
 
+def _a_datetime(valor: Optional[date]) -> Optional[datetime]:
+    """El driver ODBC "SQL Server" (legacy, configurado en .env) no puede
+    bindear objetos date de Python -- SQLBindParameter falla con
+    'Característica opcional no implementada' (HYC00), confirmado
+    reproduciendo el error real contra LIMSS_DEV. Se convierte a datetime,
+    que sí soporta -- mismo problema y mismo fix ya aplicados en
+    solicitudes_muestreo.py y agente_muestreo.py."""
+    if valor is None:
+        return None
+    return datetime.combine(valor, datetime.min.time())
+
+
 def _tiene_columna_fecha_envio_real(cursor) -> bool:
     """fecha_envio_real en lims_testigo_laboratorios puede no existir todavía
     (ver migrations_testigo_laboratorios_fecha_envio_real.sql, pendiente de
@@ -1907,7 +1919,7 @@ def asignar_laboratorio_testigo(
     if _tiene_columna_fecha_envio_real(cursor):
         cursor.execute(
             "INSERT INTO lims_testigo_laboratorios (id_testigo, id_laboratorio, consumo_estimado, unidad_consumo, fecha_envio_real) VALUES (?, ?, ?, ?, ?)",
-            id_testigo, body.id_laboratorio, body.consumo_estimado, unidad_consumo, body.fecha_envio_real,
+            id_testigo, body.id_laboratorio, body.consumo_estimado, unidad_consumo, _a_datetime(body.fecha_envio_real),
         )
     else:
         cursor.execute(
@@ -1955,7 +1967,7 @@ def editar_consumo_laboratorio_testigo(
     if _tiene_columna_fecha_envio_real(cursor):
         cursor.execute(
             "UPDATE lims_testigo_laboratorios SET consumo_estimado = ?, unidad_consumo = ?, fecha_envio_real = ? WHERE id_testigo = ? AND id_laboratorio = ?",
-            body.consumo_estimado, unidad_consumo, body.fecha_envio_real, id_testigo, id_laboratorio,
+            body.consumo_estimado, unidad_consumo, _a_datetime(body.fecha_envio_real), id_testigo, id_laboratorio,
         )
     else:
         cursor.execute(

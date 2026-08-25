@@ -96,6 +96,18 @@
   background: rgba(21, 101, 192, 0.08);
 }
 
+/* Flecha de "Volver" -- área de toque más cómoda y el ícono bien visible
+   (antes heredaba el tamaño de texto normal del botón, muy chico para un
+   ícono). min-width/min-height iguales para que quede un botón cuadrado,
+   no una franja angosta. */
+.topbar-back {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  font-size: var(--fs-2xl);
+  line-height: 1;
+}
+
 .topbar-user {
   display: flex;
   align-items: center;
@@ -556,8 +568,14 @@
 .printable .card { background: #f4f4f5; border: 1px solid #ddd; box-shadow: none; }
 .printable .badge { border: 1px solid currentColor; background: transparent; }
 
+/* Inverso de .no-print: contenido que solo existe para la vista de
+   impresión (p.ej. la variante densa de un reporte cuya pantalla normal
+   ahora es interactiva) -- oculto en pantalla, visible solo al imprimir. */
+.print-only { display: none; }
+
 @media print {
   .no-print, .topbar { display: none !important; }
+  .print-only { display: block; }
   body, .screen, .screen-content { background: #fff !important; }
   .screen { height: auto; }
   .screen-content { overflow: visible; height: auto; }

@@ -182,6 +182,10 @@ class ImpresoraEtiquetaResponse(ImpresoraEtiquetaCreate):
 
 class ImprimirDirectoBody(BaseModel):
     id_impresora: int
+    # Cantidad de copias a imprimir -- el operador la confirma en pantalla
+    # antes de mandar el trabajo (ver <Q> en impresion_sato.py). Default 1
+    # para no romper llamadas viejas que todavía no manden este campo.
+    cantidad: int = Field(1, ge=1, le=99)
 
 
 class ImprimirDirectoResponse(BaseModel):
@@ -202,8 +206,8 @@ class ItemImpresionEtiquetas(BaseModel):
     erp_CODART: str
     erp_DESART: str
     estado: str
-    # Subconjunto de ['muestra', 'cuarentena', 'aprobado'] -- lo que
-    # corresponde imprimir para este ítem según su estado actual.
+    # Subconjunto de ['muestra', 'cuarentena', 'aprobado', 'rechazado'] --
+    # lo que corresponde imprimir para este ítem según su estado actual.
     etiquetas_disponibles: list[str]
 
 
@@ -320,6 +324,15 @@ class EnvioResponse(BaseModel):
     protocolo: Optional[ProtocoloEnvio] = None
     completo: bool = False
     factura: Optional[FacturaResumenEnvio] = None
+    # Al menos un ensayo de este envío tiene una fila en lims_factura_detalle
+    # -- indicador simple de "Facturado"/"Sin Facturar" para la pantalla de
+    # Envío de Muestras (distinto de `factura`, que trae el resumen de la
+    # factura si existe vía lims_factura_envios).
+    facturado: bool = False
+    # Ya existe un remito en PDF generado para este envío (lims_remitos) --
+    # gatea si corresponde ofrecer el acceso directo a "Constancia de
+    # Recepción" (no tiene sentido antes de que exista el remito).
+    tiene_remito: bool = False
 
 
 class RemitoResponse(BaseModel):

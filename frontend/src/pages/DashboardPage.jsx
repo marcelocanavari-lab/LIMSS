@@ -17,7 +17,6 @@ const QUICK_LINKS = [
   { label: 'Envíos de Muestras', ruta: '/envios', roles: GESTION },
   { label: 'Carga de Resultados', ruta: '/carga-resultados', roles: GESTION },
   { label: 'Dictámenes de QA', ruta: '/dictamenes', roles: QA_ADMIN },
-  { label: 'Agente de Muestreo', ruta: '/agente-muestreo', roles: QA_ADMIN },
   { label: 'Definiciones', ruta: '/menu-definiciones', roles: GESTION },
   { label: 'Facturación', ruta: '/facturas', roles: GESTION },
   { label: 'Novedades de Empaque', ruta: '/maestros/novedades-empaque', roles: GESTION },

@@ -58,8 +58,15 @@ class EnvioFacturaItem(BaseModel):
     fecha_despacho: datetime
     erp_CODART: Optional[str] = None
     erp_DESART: Optional[str] = None
-    erp_nro_ir: Optional[str] = None
-    lote_proveedor: Optional[str] = None
+    # tipo_referencia/nro_referencia (lims_muestras) en vez de
+    # erp_nro_ir/lote_proveedor: estos últimos solo se completan para
+    # muestras de materia prima creadas vía Solicitud de Muestreo -- para
+    # cualquier otra (ej. producto terminado/granel, tipo_referencia='lote',
+    # sin solicitud asociada) quedaban los dos en NULL y no se mostraba nada.
+    # Mismo campo dinámico que ya usa el resto de la app (ver
+    # app.services.formato.etiqueta_referencia).
+    tipo_referencia: Optional[str] = None
+    nro_referencia: Optional[str] = None
     cantidad_ensayos: int = 0
     ensayos: list[EnsayoFacturaItem] = []
 
@@ -97,8 +104,9 @@ class EnvioSinFacturar(BaseModel):
     laboratorio_nombre: str
     erp_CODART: Optional[str] = None
     erp_DESART: Optional[str] = None
-    erp_nro_ir: Optional[str] = None
-    lote_proveedor: Optional[str] = None
+    # Ver comentario en EnvioFacturaItem.
+    tipo_referencia: Optional[str] = None
+    nro_referencia: Optional[str] = None
     cantidad_ensayos: int = 0
     ensayos: list[EnsayoFacturaItem] = []
 

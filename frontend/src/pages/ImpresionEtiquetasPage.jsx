@@ -9,6 +9,17 @@ const LABEL_ETIQUETA = {
   muestra: 'Muestra',
   cuarentena: 'Cuarentena',
   aprobado: 'Aprobado',
+  rechazado: 'Rechazado',
+};
+
+// Color de rollo físico que el operador debe tener cargado en la SATO --
+// el sistema no imprime en color, lo determina el papel. La etiqueta de
+// Muestra no tiene un color propio asignado (no es un dictamen), así que no
+// entra acá -- no se muestra ningún aviso de color para ese caso.
+const COLOR_PAPEL_POR_ETIQUETA = {
+  cuarentena: 'AMARILLAS',
+  aprobado: 'VERDES',
+  rechazado: 'ROJAS',
 };
 
 const BADGE_ESTADO = {
@@ -24,9 +35,10 @@ const BADGE_ESTADO = {
 // Cada acción de impresión llama a un endpoint distinto según el tipo de
 // etiqueta y de dónde sale el id (solicitud para cuarentena, muestra para
 // el resto) -- un solo lugar para no repetir esta correspondencia en el JSX.
-function llamarImprimir(item, tipoEtiqueta, idImpresora) {
+function llamarImprimir(item, tipoEtiqueta, idImpresora, cantidad) {
   if (tipoEtiqueta === 'cuarentena') return solicitudesMuestreoApi.imprimirCuarentena(item.id, idImpresora);
-  if (tipoEtiqueta === 'aprobado') return muestrasApi.imprimirAprobado(item.id, idImpresora);
+  if (tipoEtiqueta === 'aprobado') return muestrasApi.imprimirAprobado(item.id, idImpresora, cantidad);
+  if (tipoEtiqueta === 'rechazado') return muestrasApi.imprimirRechazado(item.id, idImpresora, cantidad);
   return muestrasApi.imprimirDirecto(item.id, idImpresora);
 }
 
@@ -42,6 +54,7 @@ export default function ImpresionEtiquetasPage() {
   const [imprimiendoItem, setImprimiendoItem] = useState(null); // { item, tipoEtiqueta }
   const [impresoras, setImpresoras] = useState([]);
   const [idImpresora, setIdImpresora] = useState('');
+  const [cantidad, setCantidad] = useState(1);
   const [enviando, setEnviando] = useState(false);
   const [mensaje, setMensaje] = useState(null); // { tipo: 'ok'|'error', texto }
 
@@ -62,6 +75,7 @@ export default function ImpresionEtiquetasPage() {
 
   function abrirImprimir(item, tipoEtiqueta) {
     setImprimiendoItem({ item, tipoEtiqueta });
+    setCantidad(1);
     setMensaje(null);
     if (impresoras.length === 0) {
       muestrasApi
@@ -83,7 +97,7 @@ export default function ImpresionEtiquetasPage() {
     setEnviando(true);
     setMensaje(null);
     try {
-      const resp = await llamarImprimir(imprimiendoItem.item, imprimiendoItem.tipoEtiqueta, Number(idImpresora));
+      const resp = await llamarImprimir(imprimiendoItem.item, imprimiendoItem.tipoEtiqueta, Number(idImpresora), cantidad);
       setMensaje({ tipo: 'ok', texto: resp.mensaje });
     } catch (err) {
       setMensaje({ tipo: 'error', texto: err instanceof ApiError ? err.message : 'No se pudo imprimir la etiqueta' });
@@ -174,21 +188,44 @@ export default function ImpresionEtiquetasPage() {
             {impresoras.length === 0 && !mensaje ? (
               <div className="state-block"><span className="spinner" /></div>
             ) : impresoras.length === 0 ? null : (
-              <div className="field">
-                <label className="field-label" htmlFor="impresora">Impresora</label>
-                <select
-                  id="impresora"
-                  className="field-input"
-                  value={idImpresora}
-                  onChange={(e) => setIdImpresora(e.target.value)}
-                  disabled={enviando}
-                >
-                  <option value="">Seleccioná una impresora...</option>
-                  {impresoras.map((imp) => (
-                    <option key={imp.id_impresora} value={imp.id_impresora}>{imp.nombre} ({imp.modelo})</option>
-                  ))}
-                </select>
-              </div>
+              <>
+                {COLOR_PAPEL_POR_ETIQUETA[imprimiendoItem.tipoEtiqueta] && (
+                  <div className="alert alert-warn" style={{ marginBottom: 'var(--sp-3)' }}>
+                    Verificá que la impresora tenga cargado el rollo de etiquetas {COLOR_PAPEL_POR_ETIQUETA[imprimiendoItem.tipoEtiqueta]} antes de continuar.
+                  </div>
+                )}
+                <div className="field">
+                  <label className="field-label" htmlFor="impresora">Impresora</label>
+                  <select
+                    id="impresora"
+                    className="field-input"
+                    value={idImpresora}
+                    onChange={(e) => setIdImpresora(e.target.value)}
+                    disabled={enviando}
+                  >
+                    <option value="">Seleccioná una impresora...</option>
+                    {impresoras.map((imp) => (
+                      <option key={imp.id_impresora} value={imp.id_impresora}>{imp.nombre} ({imp.modelo})</option>
+                    ))}
+                  </select>
+                </div>
+                {(imprimiendoItem.tipoEtiqueta === 'aprobado' || imprimiendoItem.tipoEtiqueta === 'rechazado') && (
+                  <div className="field">
+                    <label className="field-label" htmlFor="cantidad">Cantidad de copias</label>
+                    <input
+                      id="cantidad"
+                      className="field-input"
+                      type="number"
+                      min="1"
+                      max="99"
+                      style={{ maxWidth: 120 }}
+                      value={cantidad}
+                      onChange={(e) => setCantidad(Math.min(99, Math.max(1, Number(e.target.value) || 1)))}
+                      disabled={enviando}
+                    />
+                  </div>
+                )}
+              </>
             )}
 
             {mensaje && (

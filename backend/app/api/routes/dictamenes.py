@@ -55,8 +55,13 @@ router = APIRouter(prefix="/api/dictamen", tags=["Dictamen y Liberación"])
 
 # Filtro de "apta para dictamen" -- reutilizado tal cual por el conteo del
 # dashboard (dashboard.py) para no duplicar esta lógica de completitud.
+# Incluye 'aprobado_sin_dictamen' además de 'en_análisis': esas muestras ya
+# pasaron el filtro de completitud de abajo automáticamente al guardar
+# resultados (ver guardar_resultados en resultados.py) y siguen esperando
+# el dictamen FORMAL -- no hay que perderlas de la bandeja de QA solo
+# porque ya se les dejó imprimir la etiqueta de Aprobado.
 WHERE_MUESTRA_PENDIENTE_DICTAMEN = """
-    m.estado = 'en_análisis'
+    m.estado IN ('en_análisis', 'aprobado_sin_dictamen')
       AND NOT EXISTS (
           SELECT 1 FROM lims_dictamenes d WHERE d.id_muestra = m.id_muestra
       )
@@ -77,13 +82,31 @@ WHERE_MUESTRA_PENDIENTE_DICTAMEN = """
               AND NOT EXISTS (
                   -- Ensayos de la Orden de Trabajo (filtrados por el laboratorio
                   -- elegido al crear la solicitud, igual que ensayos-para-orden).
+                  -- Excluye los id_espec_ensayo que ya tienen resultado por la vía
+                  -- de un envío de esta misma muestra: si la solicitud y un envío
+                  -- coinciden en el mismo laboratorio (mismo id_espec_ensayo
+                  -- asignado a ambos caminos), el resultado que ya llegó por envío
+                  -- cuenta como cumplido -- no hay que cargarlo dos veces. Bug real
+                  -- confirmado con la muestra SAMP-2026-0026 (id_muestra=87):
+                  -- quedaba con el envío 100% completo pero nunca elegible para
+                  -- Dictamen porque este NOT EXISTS exigía además un resultado en
+                  -- lims_orden_trabajo_resultados para el mismo ensayo, tabla que
+                  -- hoy no tiene ningún INSERT/UPDATE en todo el backend.
                   SELECT 1 FROM lims_solicitudes_muestreo s
                   INNER JOIN lims_especificacion_ensayos se ON se.id_especificacion = s.id_especificacion
-                    AND se.id_laboratorio = s.id_laboratorio
+                    AND se.id_laboratorio = s.id_laboratorio AND se.activo = 1
                   LEFT JOIN lims_orden_trabajo_resultados otr ON otr.id_espec_ensayo = se.id_espec_ensayo
                     AND otr.id_solicitud = s.id_solicitud
                   WHERE s.id_muestra = m.id_muestra
                     AND otr.id_resultado IS NULL
+                    AND NOT EXISTS (
+                        SELECT 1 FROM lims_envios e4
+                        INNER JOIN lims_envio_ensayos ee4 ON ee4.id_envio = e4.id_envio
+                          AND ee4.id_espec_ensayo = se.id_espec_ensayo
+                        INNER JOIN lims_resultados r4 ON r4.id_espec_ensayo = ee4.id_espec_ensayo
+                          AND r4.id_envio = ee4.id_envio
+                        WHERE e4.id_muestra = m.id_muestra
+                    )
               )
               AND (
                   EXISTS (SELECT 1 FROM lims_envios e3 WHERE e3.id_muestra = m.id_muestra)
@@ -177,7 +200,12 @@ def emitir_dictamen(
     muestra = cursor.fetchone()
     if not muestra:
         raise HTTPException(status_code=404, detail="Muestra no encontrada")
-    if muestra.estado != "en_análisis":
+    # 'aprobado_sin_dictamen' (ver guardar_resultados en resultados.py) sigue
+    # necesitando el dictamen FORMAL más adelante -- ese estado solo evita
+    # esperar el papeleo para poder imprimir la etiqueta e ir a por él
+    # físicamente, no lo reemplaza. Se acepta como punto de partida acá
+    # igual que 'en_análisis'.
+    if muestra.estado not in ("en_análisis", "aprobado_sin_dictamen"):
         raise HTTPException(
             status_code=409,
             detail=f"La muestra está en estado '{muestra.estado}', no está pendiente de dictamen",

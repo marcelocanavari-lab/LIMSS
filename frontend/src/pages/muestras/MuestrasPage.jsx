@@ -9,6 +9,7 @@ const ESTADOS = [
   { value: '', label: 'Todos los estados' },
   { value: 'pendiente_envio', label: 'Pendiente de envío' },
   { value: 'en_análisis', label: 'En análisis' },
+  { value: 'aprobado_sin_dictamen', label: 'Aprobado sin Dictamen' },
   { value: 'aprobado', label: 'Aprobado' },
   { value: 'rechazado', label: 'Rechazado' },
   { value: 'cuarentena', label: 'Cuarentena' },
@@ -17,6 +18,11 @@ const ESTADOS = [
 const BADGE_POR_ESTADO = {
   pendiente_envio: 'badge-neutral',
   en_análisis: 'badge-info',
+  // Mismo verde que 'aprobado' (ya puede salir de cuarentena), pero es un
+  // estado distinto -- se distingue por el texto ("aprobado sin dictamen"
+  // vs "aprobado"), no por el color, ya que el color acá comunica
+  // "resultado favorable", que en ambos casos es cierto.
+  aprobado_sin_dictamen: 'badge-ok',
   aprobado: 'badge-ok',
   rechazado: 'badge-danger',
   cuarentena: 'badge-warn',

@@ -72,8 +72,8 @@ export default function FacturaFormPage({ modo }) {
               id_envio: e.id_envio, nro_remito: e.nro_remito, codigo_muestra: e.codigo_muestra,
               fecha_despacho: e.fecha_despacho, id_laboratorio: facturaActual.id_laboratorio,
               laboratorio_nombre: facturaActual.laboratorio_nombre,
-              erp_CODART: e.erp_CODART, erp_DESART: e.erp_DESART, erp_nro_ir: e.erp_nro_ir,
-              lote_proveedor: e.lote_proveedor,
+              erp_CODART: e.erp_CODART, erp_DESART: e.erp_DESART, tipo_referencia: e.tipo_referencia,
+              nro_referencia: e.nro_referencia,
               cantidad_ensayos: e.cantidad_ensayos, ensayos: e.ensayos || [],
             }))
           : [];
@@ -296,8 +296,7 @@ export default function FacturaFormPage({ modo }) {
                       <th></th>
                       <th>N° Remito</th>
                       <th>Muestra</th>
-                      <th>IR</th>
-                      <th>Lote</th>
+                      <th>IR/Lote</th>
                       <th>Material</th>
                       <th>Fecha</th>
                       <th>Ensayos</th>
@@ -314,8 +313,7 @@ export default function FacturaFormPage({ modo }) {
                             </td>
                             <td style={{ fontFamily: 'var(--font-mono)' }}>{en.nro_remito || '—'}</td>
                             <td>{en.codigo_muestra || '—'}</td>
-                            <td>{en.erp_nro_ir || '—'}</td>
-                            <td>{en.lote_proveedor || '—'}</td>
+                            <td>{en.nro_referencia ? `${en.tipo_referencia === 'ir' ? 'IR' : 'Lote'}: ${en.nro_referencia}` : '—'}</td>
                             <td>{en.erp_DESART ? `${en.erp_DESART}${en.erp_CODART ? ` (${en.erp_CODART})` : ''}` : '—'}</td>
                             <td>{new Date(en.fecha_despacho).toLocaleDateString()}</td>
                             <td className="num">{en.cantidad_ensayos}</td>
@@ -323,7 +321,7 @@ export default function FacturaFormPage({ modo }) {
                           {elegido && en.ensayos && en.ensayos.length > 0 && (
                             <tr>
                               <td></td>
-                              <td colSpan={7} style={{ paddingTop: 0 }}>
+                              <td colSpan={6} style={{ paddingTop: 0 }}>
                                 <table className="data-table" style={{ marginBottom: 'var(--sp-2)' }}>
                                   <thead>
                                     <tr>

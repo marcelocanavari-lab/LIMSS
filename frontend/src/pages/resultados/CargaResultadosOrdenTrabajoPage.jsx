@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import TopBar from '../../components/TopBar';
+import ChecklistMuestreo from '../../components/ChecklistMuestreo';
 import { solicitudesMuestreoApi } from '../../api/solicitudesMuestreo';
+import { maestrosApi } from '../../api/maestros';
 import { muestrasApi } from '../../api/muestras';
 import { ApiError, abrirPdfConAuth } from '../../api/client';
 
@@ -11,38 +13,22 @@ const CAMPO_FISICO_VACIO = {
   observaciones_muestreo: '', nro_bultos_muestreados: '',
 };
 
-// Inspección visual del contenedor al tomar la muestra -- Cumple/No cumple
-// en vez de texto libre. El valor que viaja al backend sigue siendo el
-// string "Cumple" / "No cumple" en el mismo campo VARCHAR de siempre (sin
-// cambio de modelo de datos), así que un muestreo viejo con texto libre
-// cargado (ej. "Correcto") se sigue mostrando tal cual, solo que ningún
-// botón queda marcado como seleccionado para ese valor.
-function CampoCumple({ label, valor, onChange, disabled }) {
-  return (
-    <div className="field" style={{ flex: '1 1 200px' }}>
-      <label className="field-label">{label}</label>
-      <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
-        <button
-          type="button"
-          className="btn btn-secondary"
-          style={valor === 'Cumple' ? { background: 'var(--ok)', borderColor: 'var(--ok)', color: '#fff' } : undefined}
-          onClick={() => onChange('Cumple')}
-          disabled={disabled}
-        >
-          Cumple
-        </button>
-        <button
-          type="button"
-          className="btn btn-secondary"
-          style={valor === 'No cumple' ? { background: 'var(--danger)', borderColor: 'var(--danger)', color: '#fff' } : undefined}
-          onClick={() => onChange('No cumple')}
-          disabled={disabled}
-        >
-          No cumple
-        </button>
-      </div>
-    </div>
-  );
+const BADGE_TIPO_MUESTRA = {
+  analisis: 'badge-info',
+  contramuestra: 'badge-warn',
+  testigo: 'badge-ok',
+};
+
+const LABEL_TIPO_MUESTRA = {
+  analisis: 'Análisis',
+  contramuestra: 'Contramuestra',
+  testigo: 'Testigo',
+};
+
+let contadorAdHoc = 0;
+function nuevaMuestraAdHoc() {
+  contadorAdHoc += 1;
+  return { key: `adhoc-${contadorAdHoc}`, tipo_muestra: '', cantidad_real: '', unidad: '' };
 }
 
 export default function CargaResultadosOrdenTrabajoPage() {
@@ -57,7 +43,25 @@ export default function CargaResultadosOrdenTrabajoPage() {
   const [guardando, setGuardando] = useState(false);
   const [resultado, setResultado] = useState(null); // OrdenTrabajoDigitalResponse tras confirmar
   const [codigoMuestraReadOnly, setCodigoMuestraReadOnly] = useState(null);
+  const [idMuestraReadOnly, setIdMuestraReadOnly] = useState(null);
   const [descargando, setDescargando] = useState('');
+
+  // "Muestras a tomar" -- confirmación al Ejecutar Muestreo, común a
+  // solicitudes manuales y del agente (antes solo se pedía al crear una
+  // solicitud manual). muestrasEspec son las definidas en la especificación
+  // del producto; muestrasAdhoc son filas agregadas a mano solo para esta
+  // solicitud puntual (no modifican la especificación).
+  const [muestrasEspec, setMuestrasEspec] = useState([]);
+  const [muestrasConfirmadas, setMuestrasConfirmadas] = useState({});
+  const [muestrasAdhoc, setMuestrasAdhoc] = useState([]);
+
+  // Impresión directa (SATO/SBPL) de las etiquetas generadas -- alternativa
+  // al PDF, mismo patrón que MuestraEtiquetaPage.jsx.
+  const [impresoras, setImpresoras] = useState([]);
+  const [idImpresora, setIdImpresora] = useState('');
+  const [mostrarImprimirDirecto, setMostrarImprimirDirecto] = useState(false);
+  const [imprimiendo, setImprimiendo] = useState(false);
+  const [mensajeDirecto, setMensajeDirecto] = useState(null); // { tipo: 'ok'|'error', texto }
 
   useEffect(() => {
     solicitudesMuestreoApi
@@ -78,10 +82,25 @@ export default function CargaResultadosOrdenTrabajoPage() {
         });
         setChecklist(data.checklist_muestreo || []);
 
+        if (data.id_especificacion) {
+          try {
+            const muestrasDeEspec = await maestrosApi.listarMuestrasEspecificacion(data.id_especificacion);
+            setMuestrasEspec(muestrasDeEspec);
+            const confirmadasIniciales = {};
+            muestrasDeEspec.forEach((m) => {
+              confirmadasIniciales[m.id] = { confirmada: m.genera_etiqueta, cantidad_real: String(m.cantidad) };
+            });
+            setMuestrasConfirmadas(confirmadasIniciales);
+          } catch {
+            setMuestrasEspec([]);
+          }
+        }
+
         if (data.estado !== 'pendiente') {
           try {
             const solicitud = await solicitudesMuestreoApi.obtener(idSolicitud);
             if (solicitud.id_muestra) {
+              setIdMuestraReadOnly(solicitud.id_muestra);
               const muestra = await muestrasApi.obtenerMuestra(solicitud.id_muestra);
               setCodigoMuestraReadOnly(muestra.codigo_muestra);
             }
@@ -106,12 +125,66 @@ export default function CargaResultadosOrdenTrabajoPage() {
     )));
   }
 
+  function toggleMuestraConfirmada(idMuestra) {
+    setMuestrasConfirmadas((prev) => ({
+      ...prev,
+      [idMuestra]: { ...prev[idMuestra], confirmada: !prev[idMuestra]?.confirmada },
+    }));
+  }
+
+  function actualizarCantidadRealMuestra(idMuestra, valor) {
+    setMuestrasConfirmadas((prev) => ({
+      ...prev,
+      [idMuestra]: { ...prev[idMuestra], cantidad_real: valor },
+    }));
+  }
+
+  function agregarMuestraAdhoc() {
+    setMuestrasAdhoc((prev) => [...prev, nuevaMuestraAdHoc()]);
+  }
+
+  function actualizarMuestraAdhoc(key, campo, valor) {
+    setMuestrasAdhoc((prev) => prev.map((m) => (m.key === key ? { ...m, [campo]: valor } : m)));
+  }
+
+  function quitarMuestraAdhoc(key) {
+    setMuestrasAdhoc((prev) => prev.filter((m) => m.key !== key));
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
 
+    for (const m of muestrasEspec) {
+      const conf = muestrasConfirmadas[m.id];
+      if (conf?.confirmada && !(Number(conf.cantidad_real) > 0)) {
+        setError('La cantidad real de las muestras confirmadas tiene que ser mayor a 0');
+        return;
+      }
+    }
+    for (const m of muestrasAdhoc) {
+      if (!m.tipo_muestra || !m.unidad.trim() || !(Number(m.cantidad_real) > 0)) {
+        setError('Completá tipo, unidad y cantidad (mayor a 0) de todas las muestras ad-hoc agregadas (o quitá la fila)');
+        return;
+      }
+    }
+
     setGuardando(true);
     try {
+      const muestrasBody = [
+        ...muestrasEspec.map((m) => ({
+          id_espec_muestra: m.id,
+          cantidad_real: Number(muestrasConfirmadas[m.id]?.cantidad_real || m.cantidad),
+          confirmada: !!muestrasConfirmadas[m.id]?.confirmada,
+        })),
+        ...muestrasAdhoc.map((m) => ({
+          id_espec_muestra: null,
+          tipo_muestra: m.tipo_muestra,
+          unidad: m.unidad.trim() || null,
+          cantidad_real: Number(m.cantidad_real),
+          confirmada: true,
+        })),
+      ];
       const resp = await solicitudesMuestreoApi.confirmarOrdenTrabajo(idSolicitud, {
         datos_fisicos: {
           identificacion_contenedor: camposFisicos.identificacion_contenedor.trim() || null,
@@ -127,12 +200,41 @@ export default function CargaResultadosOrdenTrabajoPage() {
         checklist_muestreo: checklist
           .filter((it) => it.valor_cualitativo)
           .map((it) => ({ id_espec_ensayo: it.id_espec_ensayo, valor_cualitativo: it.valor_cualitativo })),
+        muestras: muestrasBody,
       });
       setResultado(resp);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo confirmar el muestreo');
     } finally {
       setGuardando(false);
+    }
+  }
+
+  function abrirImprimirDirecto() {
+    setMensajeDirecto(null);
+    setMostrarImprimirDirecto(true);
+    if (impresoras.length === 0) {
+      muestrasApi
+        .listarImpresoras(true)
+        .then((data) => {
+          setImpresoras(data);
+          if (data.length === 1) setIdImpresora(String(data[0].id_impresora));
+        })
+        .catch(() => setMensajeDirecto({ tipo: 'error', texto: 'No se pudo cargar el listado de impresoras' }));
+    }
+  }
+
+  async function confirmarImprimirDirecto(idMuestra) {
+    if (!idImpresora) return;
+    setImprimiendo(true);
+    setMensajeDirecto(null);
+    try {
+      const resp = await muestrasApi.imprimirDirecto(idMuestra, Number(idImpresora));
+      setMensajeDirecto({ tipo: 'ok', texto: resp.mensaje });
+    } catch (err) {
+      setMensajeDirecto({ tipo: 'error', texto: err instanceof ApiError ? err.message : 'No se pudo imprimir la etiqueta' });
+    } finally {
+      setImprimiendo(false);
     }
   }
 
@@ -167,6 +269,7 @@ export default function CargaResultadosOrdenTrabajoPage() {
   }
 
   const codigoMuestra = resultado?.codigo_muestra || codigoMuestraReadOnly;
+  const idMuestraConfirmada = resultado?.id_muestra || idMuestraReadOnly;
 
   if (soloLectura && codigoMuestra) {
     return (
@@ -184,8 +287,61 @@ export default function CargaResultadosOrdenTrabajoPage() {
               onClick={() => handleDescargar('etiquetas', `/api/solicitudes-muestreo/${idSolicitud}/etiquetas`)}
               disabled={!!descargando}
             >
-              {descargando === 'etiquetas' ? <span className="spinner" /> : 'Descargar etiquetas'}
+              {descargando === 'etiquetas' ? <span className="spinner" /> : 'Descargar etiquetas (PDF)'}
             </button>
+            {idMuestraConfirmada && !mostrarImprimirDirecto && (
+              <button
+                className="btn btn-secondary btn-block"
+                style={{ marginBottom: 'var(--sp-2)' }}
+                onClick={abrirImprimirDirecto}
+              >
+                Imprimir directo (impresora SATO) →
+              </button>
+            )}
+            {idMuestraConfirmada && mostrarImprimirDirecto && (
+              <div className="card" style={{ marginBottom: 'var(--sp-3)', textAlign: 'left' }}>
+                <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Imprimir directo</h2>
+                {impresoras.length === 0 && !mensajeDirecto ? (
+                  <div className="state-block"><span className="spinner" /></div>
+                ) : impresoras.length === 0 ? null : (
+                  <div className="field">
+                    <label className="field-label" htmlFor="impresora">Impresora</label>
+                    <select
+                      id="impresora"
+                      className="field-input"
+                      value={idImpresora}
+                      onChange={(e) => setIdImpresora(e.target.value)}
+                      disabled={imprimiendo}
+                    >
+                      <option value="">Seleccioná una impresora...</option>
+                      {impresoras.map((imp) => (
+                        <option key={imp.id_impresora} value={imp.id_impresora}>{imp.nombre} ({imp.modelo})</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {mensajeDirecto && (
+                  <div className={`alert ${mensajeDirecto.tipo === 'ok' ? 'alert-ok' : 'alert-danger'}`} style={{ marginBottom: 'var(--sp-3)' }}>
+                    {mensajeDirecto.texto}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+                  <button type="button" className="btn btn-ghost" onClick={() => setMostrarImprimirDirecto(false)} disabled={imprimiendo}>
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => confirmarImprimirDirecto(idMuestraConfirmada)}
+                    disabled={imprimiendo || !idImpresora}
+                  >
+                    {imprimiendo ? <span className="spinner" /> : 'Imprimir'}
+                  </button>
+                </div>
+              </div>
+            )}
             <button
               className="btn btn-secondary btn-block"
               style={{ marginBottom: 'var(--sp-2)' }}
@@ -227,29 +383,7 @@ export default function CargaResultadosOrdenTrabajoPage() {
         <form onSubmit={handleSubmit}>
           <div className="card" style={{ marginBottom: 'var(--sp-4)' }}>
             <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Checklist de muestreo</h2>
-            {checklist.length === 0 ? (
-              <div className="alert alert-warn" style={{ marginBottom: 'var(--sp-3)' }}>
-                Esta especificación no tiene ítems de etapa muestreo configurados -- no hay nada que revisar acá.
-              </div>
-            ) : (
-              <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap', marginBottom: 'var(--sp-3)' }}>
-                {checklist.map((item) => (
-                  <div key={item.id_espec_ensayo} style={{ flex: '1 1 260px' }}>
-                    <CampoCumple
-                      label={item.nombre_ensayo}
-                      valor={item.valor_cualitativo}
-                      onChange={(v) => actualizarChecklist(item.id_espec_ensayo, v)}
-                      disabled={guardando || soloLectura}
-                    />
-                    {item.especificacion_texto && (
-                      <p style={{ fontSize: 'var(--fs-xs)', color: 'var(--ink-2)', marginTop: 'var(--sp-1)' }}>
-                        {item.especificacion_texto}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+            <ChecklistMuestreo checklist={checklist} onChange={actualizarChecklist} disabled={guardando || soloLectura} />
           </div>
 
           <div className="card" style={{ marginBottom: 'var(--sp-4)' }}>
@@ -298,6 +432,128 @@ export default function CargaResultadosOrdenTrabajoPage() {
                 disabled={guardando || soloLectura}
               />
             </div>
+          </div>
+
+          <div className="card" style={{ marginBottom: 'var(--sp-4)' }}>
+            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Muestras a tomar</h2>
+            {muestrasEspec.length === 0 && muestrasAdhoc.length === 0 ? (
+              <div className="alert alert-warn">
+                Esta especificación no tiene muestras definidas. Podés agregar una muestra ad-hoc abajo.
+              </div>
+            ) : (
+              <div className="table-scroll">
+                <table className="data-table data-table-compact">
+                  <thead>
+                    <tr>
+                      <th></th>
+                      <th>Tipo</th>
+                      <th>Cantidad</th>
+                      <th>Unidad</th>
+                      <th>Laboratorio</th>
+                      <th>Cant. real</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {muestrasEspec.map((m) => {
+                      const conf = muestrasConfirmadas[m.id] || { confirmada: false, cantidad_real: String(m.cantidad) };
+                      return (
+                        <tr key={m.id}>
+                          <td>
+                            <input
+                              type="checkbox"
+                              checked={conf.confirmada}
+                              onChange={() => toggleMuestraConfirmada(m.id)}
+                              disabled={guardando || soloLectura}
+                            />
+                          </td>
+                          <td>
+                            <span className={`badge ${BADGE_TIPO_MUESTRA[m.tipo_muestra] || 'badge-neutral'}`}>
+                              {LABEL_TIPO_MUESTRA[m.tipo_muestra] || m.tipo_muestra}
+                            </span>
+                          </td>
+                          <td className="num">{m.cantidad}</td>
+                          <td>{m.unidad}</td>
+                          <td>{m.laboratorio_nombre || 'Sin asignar'}</td>
+                          <td>
+                            <input
+                              className="field-input"
+                              type="number"
+                              step="any"
+                              style={{ maxWidth: 110 }}
+                              value={conf.cantidad_real}
+                              onChange={(e) => actualizarCantidadRealMuestra(m.id, e.target.value)}
+                              disabled={!conf.confirmada || guardando || soloLectura}
+                            />
+                          </td>
+                          <td></td>
+                        </tr>
+                      );
+                    })}
+                    {muestrasAdhoc.map((m) => (
+                      <tr key={m.key}>
+                        <td></td>
+                        <td>
+                          <select
+                            className="field-input"
+                            style={{ maxWidth: 150 }}
+                            value={m.tipo_muestra}
+                            onChange={(e) => actualizarMuestraAdhoc(m.key, 'tipo_muestra', e.target.value)}
+                            disabled={guardando || soloLectura}
+                          >
+                            <option value="">Elegí un tipo...</option>
+                            <option value="analisis">Análisis</option>
+                            <option value="contramuestra">Contramuestra</option>
+                            <option value="testigo">Testigo</option>
+                          </select>
+                        </td>
+                        <td colSpan={2}>
+                          <span className="badge badge-neutral">Ad-hoc (no está en la especificación)</span>
+                        </td>
+                        <td></td>
+                        <td>
+                          <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
+                            <input
+                              className="field-input"
+                              type="number"
+                              step="any"
+                              style={{ maxWidth: 90 }}
+                              placeholder="Cant."
+                              value={m.cantidad_real}
+                              onChange={(e) => actualizarMuestraAdhoc(m.key, 'cantidad_real', e.target.value)}
+                              disabled={guardando || soloLectura}
+                            />
+                            <input
+                              className="field-input"
+                              style={{ maxWidth: 90 }}
+                              placeholder="Unidad"
+                              value={m.unidad}
+                              onChange={(e) => actualizarMuestraAdhoc(m.key, 'unidad', e.target.value)}
+                              disabled={guardando || soloLectura}
+                            />
+                          </div>
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => quitarMuestraAdhoc(m.key)}
+                            disabled={guardando || soloLectura}
+                          >
+                            Quitar
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {!soloLectura && (
+              <button type="button" className="btn btn-secondary" style={{ marginTop: 'var(--sp-3)' }} onClick={agregarMuestraAdhoc} disabled={guardando}>
+                + Agregar muestra ad-hoc
+              </button>
+            )}
           </div>
 
           {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}

@@ -26,6 +26,7 @@ from fastapi.responses import FileResponse
 from pydantic import ValidationError
 
 from app.api.routes import empaque_ia
+from app.api.routes.dictamenes import WHERE_MUESTRA_PENDIENTE_DICTAMEN
 from app.core.security import get_current_user, require_rol
 from app.db.connections import limss_db
 from app.schemas.empaque_ia import CompararEtiquetaResponse
@@ -143,6 +144,23 @@ def _calcular_dentro_especificacion(ensayo_row, valor_numerico, valor_cualitativ
 
 def _tiene_valor(r: ResultadoInput) -> bool:
     return r.valor_numerico is not None or bool((r.valor_cualitativo or "").strip())
+
+
+def _muestra_sin_oos(cursor, id_muestra: int) -> bool:
+    """True si ningún resultado ya guardado para esta muestra quedó fuera de
+    especificación -- condición para 'aprobado_sin_dictamen' (ver
+    guardar_resultados). No se chequea lims_orden_trabajo_resultados: hoy no
+    tiene ningún INSERT/UPDATE en todo el backend, así que siempre está
+    vacía -- chequearla sería código muerto."""
+    cursor.execute(
+        """
+        SELECT 1 FROM lims_resultados r
+        INNER JOIN lims_envios e ON e.id_envio = r.id_envio
+        WHERE e.id_muestra = ? AND r.dentro_especificacion = 0
+        """,
+        id_muestra,
+    )
+    return cursor.fetchone() is None
 
 
 def _guardar_protocolo(cursor, envio, nro_protocolo_ext: str, fecha_emision: date, protocolo_pdf: UploadFile, id_usuario: int) -> ProtocoloResponse:
@@ -359,6 +377,31 @@ def guardar_resultados(
         id_usuario=user["id_usuario"], id_entidad=id_envio,
         valor_nuevo={"hay_oos": hay_oos, "nro_protocolo_ext": nro_protocolo_ext},
     )
+
+    # "Aprobado sin Dictamen" -- decisión consciente, relaja la validación
+    # de imprimir-aprobado agregada en una sesión anterior: el material
+    # tiene que poder salir de cuarentena físicamente apenas los resultados
+    # dan bien, sin esperar el papeleo formal del dictamen. Si con este
+    # guardado la muestra queda con TODOS los ensayos de análisis cargados
+    # (mismo criterio que habilita Dictamen, WHERE_MUESTRA_PENDIENTE_
+    # DICTAMEN -- reusado tal cual para no duplicar esa lógica de
+    # completitud) y NINGUNO quedó fuera de especificación, pasa directo a
+    # 'aprobado_sin_dictamen'. Si hay algún OOS, se queda en 'en_análisis'
+    # -- eso sigue necesitando la revisión y justificación formal de QA (ver
+    # emitir_dictamen en dictamenes.py). No compite con eso: emitir_dictamen
+    # exige estado == 'en_análisis', así que una muestra que ya pasó a
+    # 'aprobado_sin_dictamen' no se puede dictaminar por ese camino -- si
+    # hiciera falta, primero habría que volver a poner el estado en
+    # 'en_análisis' (no hay ningún endpoint para eso todavía).
+    cursor.execute(
+        f"SELECT 1 FROM lims_muestras m WHERE m.id_muestra = ? AND ({WHERE_MUESTRA_PENDIENTE_DICTAMEN})",
+        envio.id_muestra,
+    )
+    if cursor.fetchone() and _muestra_sin_oos(cursor, envio.id_muestra):
+        cursor.execute(
+            "UPDATE lims_muestras SET estado = 'aprobado_sin_dictamen' WHERE id_muestra = ? AND estado = 'en_análisis'",
+            envio.id_muestra,
+        )
 
     return GuardarResultadosResponse(id_envio=id_envio, hay_oos=hay_oos)
 

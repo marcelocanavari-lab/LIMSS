@@ -141,12 +141,11 @@ def _obtener_envios_de_factura(cursor, id_factura: int) -> list[EnvioFacturaItem
     cursor.execute(
         """
         SELECT e.id_envio, rem.nro_remito_interno AS nro_remito, e.fecha_despacho,
-               m.codigo_muestra, m.erp_CODART, m.erp_DESART, m.erp_nro_ir, sm.lote_proveedor,
+               m.codigo_muestra, m.erp_CODART, m.erp_DESART, m.tipo_referencia, m.nro_referencia,
                (SELECT COUNT(*) FROM lims_envio_ensayos ee WHERE ee.id_envio = e.id_envio) AS cant_ensayos
         FROM lims_factura_envios fe
         INNER JOIN lims_envios e ON e.id_envio = fe.id_envio
         LEFT JOIN lims_muestras m ON m.id_muestra = e.id_muestra
-        LEFT JOIN lims_solicitudes_muestreo sm ON sm.id_muestra = m.id_muestra
         OUTER APPLY (
             SELECT TOP 1 r.nro_remito_interno
             FROM lims_remitos r
@@ -163,7 +162,7 @@ def _obtener_envios_de_factura(cursor, id_factura: int) -> list[EnvioFacturaItem
         EnvioFacturaItem(
             id_envio=r.id_envio, nro_remito=r.nro_remito, codigo_muestra=r.codigo_muestra,
             fecha_despacho=r.fecha_despacho, erp_CODART=r.erp_CODART, erp_DESART=r.erp_DESART,
-            erp_nro_ir=r.erp_nro_ir, lote_proveedor=r.lote_proveedor, cantidad_ensayos=r.cant_ensayos,
+            tipo_referencia=r.tipo_referencia, nro_referencia=r.nro_referencia, cantidad_ensayos=r.cant_ensayos,
             ensayos=_ensayos_de_envio(cursor, r.id_envio, id_factura),
         )
         for r in filas

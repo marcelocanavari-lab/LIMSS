@@ -45,8 +45,9 @@ from app.schemas.muestras import (
     TestigoEnviado,
     TestigoRemito,
 )
-from app.api.routes.facturas import ensayos_de_envio
+from app.api.routes.facturas import _tiene_tabla_factura_detalle, ensayos_de_envio
 from app.api.routes.solicitudes_muestreo import (
+    _ROLES_MUESTREADOR_O_SUPERIOR,
     generar_pdf_etiquetas_de_solicitud,
     iniciales_muestreador,
     obtener_muestras_confirmadas,
@@ -56,9 +57,11 @@ from app.services.impresion_sato import generar_sbpl_etiqueta, generar_sbpl_etiq
 from app.services.pdf_solicitud_muestreo import generar_pdf_etiqueta_muestra
 from app.schemas.facturas import EnvioSinFacturar
 from app.schemas.recorrido import RecorridoResponse
+from app.schemas.solicitudes_muestreo import ChecklistMuestreoItem, ChecklistMuestreoRespuesta
 from app.services import audit, storage
-from app.services.formato import etiqueta_referencia, formatear_cantidad
-from app.services.especificaciones import tiene_ensayos_analisis
+from app.services.bultos import expandir_bultos, obtener_grupos_bultos
+from app.services.formato import etiqueta_referencia, formatear_cantidad, titulo_etiqueta_por_tipo
+from app.services.especificaciones import guardar_checklist_muestreo, obtener_checklist_muestreo, tiene_ensayos_analisis
 from app.services.erp_ir import buscar_todos_candidatos_ir, formatear_nro_ir, normalizar_fecha_sentinel
 from app.services.erp_lotes import buscar_lote
 from app.services.erp_materiales import obtener_codsar_por_tipo
@@ -411,13 +414,12 @@ def envios_sin_facturar(
     cursor.execute(
         """
         SELECT e.id_envio, rem.nro_remito_interno AS nro_remito, e.fecha_despacho, e.id_laboratorio,
-               m.codigo_muestra, m.erp_CODART, m.erp_DESART, m.erp_nro_ir, sm.lote_proveedor,
+               m.codigo_muestra, m.erp_CODART, m.erp_DESART, m.tipo_referencia, m.nro_referencia,
                lab.nombre AS laboratorio_nombre,
                (SELECT COUNT(*) FROM lims_envio_ensayos ee WHERE ee.id_envio = e.id_envio) AS cant_ensayos
         FROM lims_envios e
         INNER JOIN lims_muestras m ON m.id_muestra = e.id_muestra
         INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = e.id_laboratorio
-        LEFT JOIN lims_solicitudes_muestreo sm ON sm.id_muestra = m.id_muestra
         OUTER APPLY (
             SELECT TOP 1 r.nro_remito_interno
             FROM lims_remitos r
@@ -435,8 +437,8 @@ def envios_sin_facturar(
         EnvioSinFacturar(
             id_envio=r.id_envio, nro_remito=r.nro_remito, codigo_muestra=r.codigo_muestra,
             fecha_despacho=r.fecha_despacho, id_laboratorio=r.id_laboratorio, laboratorio_nombre=r.laboratorio_nombre,
-            erp_CODART=r.erp_CODART, erp_DESART=r.erp_DESART, erp_nro_ir=r.erp_nro_ir,
-            lote_proveedor=r.lote_proveedor,
+            erp_CODART=r.erp_CODART, erp_DESART=r.erp_DESART, tipo_referencia=r.tipo_referencia,
+            nro_referencia=r.nro_referencia,
             cantidad_ensayos=r.cant_ensayos,
             ensayos=ensayos_de_envio(cursor, r.id_envio),
         )
@@ -581,8 +583,10 @@ def buscar_para_etiquetas(
     )
     for m in cursor.fetchall()[:20]:
         etiquetas = ["muestra"]
-        if m.estado == "aprobado":
+        if m.estado in ("aprobado", "aprobado_sin_dictamen"):
             etiquetas.append("aprobado")
+        elif m.estado == "rechazado":
+            etiquetas.append("rechazado")
         resultados.append(ItemImpresionEtiquetas(
             tipo="muestra", id=m.id_muestra, identificador=m.codigo_muestra,
             erp_CODART=(m.erp_CODART or "").strip(), erp_DESART=m.erp_DESART or "",
@@ -958,6 +962,54 @@ def editar_muestra(
     return _fila_a_muestra(cursor.fetchone())
 
 
+# ── Checklist de muestreo (etapa 'muestreo' de la especificación) ──
+#
+# Mismo mecanismo que usa Ejecutar Muestreo (Solicitud de Muestreo ->
+# orden-trabajo-digital, ver solicitudes_muestreo.py), expuesto acá
+# directo por id_muestra para las muestras creadas con Nueva Muestra, que
+# no tienen una solicitud detrás. Reutiliza los mismos helpers
+# (app/services/especificaciones.py) y los mismos schemas
+# (ChecklistMuestreoItem/Respuesta) -- no hay una segunda implementación
+# del checklist, solo un segundo punto de entrada.
+
+@router.get("/{id_muestra}/checklist-muestreo", response_model=list[ChecklistMuestreoItem])
+def checklist_muestreo_muestra(
+    id_muestra: int,
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    cursor.execute("SELECT id_especificacion FROM lims_muestras WHERE id_muestra = ?", id_muestra)
+    muestra = cursor.fetchone()
+    if not muestra:
+        raise HTTPException(status_code=404, detail="Muestra no encontrada")
+    return obtener_checklist_muestreo(cursor, id_muestra, muestra.id_especificacion)
+
+
+@router.post("/{id_muestra}/checklist-muestreo", response_model=list[ChecklistMuestreoItem])
+def guardar_checklist_muestreo_muestra(
+    id_muestra: int,
+    body: list[ChecklistMuestreoRespuesta],
+    user: dict = Depends(require_rol(*_ROLES_MUESTREADOR_O_SUPERIOR)),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    cursor = conn.cursor()
+    cursor.execute("SELECT id_especificacion FROM lims_muestras WHERE id_muestra = ?", id_muestra)
+    muestra = cursor.fetchone()
+    if not muestra:
+        raise HTTPException(status_code=404, detail="Muestra no encontrada")
+
+    guardar_checklist_muestreo(cursor, id_muestra, muestra.id_especificacion, body, user["id_usuario"])
+
+    audit.registrar(
+        conn, entidad="muestra", accion="completar_checklist_muestreo",
+        id_usuario=user["id_usuario"], id_entidad=id_muestra,
+        valor_nuevo={"items_enviados": len(body)},
+    )
+
+    return obtener_checklist_muestreo(cursor, id_muestra, muestra.id_especificacion)
+
+
 # ── Envío a laboratorio externo (REQ-ENV-004/005) ─────────────────
 
 @router.get("/{id_muestra}/ensayos-para-envio", response_model=list[EnsayoSolicitado])
@@ -984,7 +1036,7 @@ def ensayos_para_envio(
         FROM lims_especificacion_ensayos se
         INNER JOIN lims_ensayos_maestro m ON m.id_ensayo_maestro = se.id_ensayo_maestro
         INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = se.id_laboratorio
-        WHERE se.id_especificacion = ? AND se.id_laboratorio = ?
+        WHERE se.id_especificacion = ? AND se.id_laboratorio = ? AND se.activo = 1
         ORDER BY se.orden
         """,
         muestra.id_especificacion, id_laboratorio,
@@ -1047,7 +1099,7 @@ def confirmar_envio(
             FROM lims_especificacion_ensayos se
             INNER JOIN lims_ensayos_maestro m ON m.id_ensayo_maestro = se.id_ensayo_maestro
             LEFT JOIN lims_laboratorios lab ON lab.id_laboratorio = se.id_laboratorio
-            WHERE se.id_especificacion = ? AND se.id_espec_ensayo IN ({placeholders})
+            WHERE se.id_especificacion = ? AND se.id_espec_ensayo IN ({placeholders}) AND se.activo = 1
             """,
             muestra.id_especificacion, *ids_espec_ensayo,
         )
@@ -1069,7 +1121,7 @@ def confirmar_envio(
             FROM lims_especificacion_ensayos se
             INNER JOIN lims_ensayos_maestro m ON m.id_ensayo_maestro = se.id_ensayo_maestro
             LEFT JOIN lims_laboratorios lab ON lab.id_laboratorio = se.id_laboratorio
-            WHERE se.id_especificacion = ? AND se.id_laboratorio = ?
+            WHERE se.id_especificacion = ? AND se.id_laboratorio = ? AND se.activo = 1
             """,
             muestra.id_especificacion, body.id_laboratorio,
         )
@@ -1323,6 +1375,34 @@ def _obtener_factura_de_envio(cursor, id_envio: int) -> Optional[FacturaResumenE
     return FacturaResumenEnvio(id_factura=row.id_factura, nro_factura=row.nro_factura, estado_pago=row.estado_pago)
 
 
+def _envio_facturado(cursor, id_envio: int) -> bool:
+    """True si al menos uno de los ensayos de este envío tiene una fila en
+    lims_factura_detalle (facturación por ensayo) -- ver app/api/routes/
+    facturas.py, guardar_desglose. Se puebla junto con lims_factura_envios
+    en la misma transacción de crear_factura, pero acá se chequea puntual
+    contra lims_factura_detalle porque es el criterio pedido para este
+    indicador (independiente del resumen de factura en `factura`, que usa
+    lims_factura_envios). lims_factura_detalle puede no existir todavía
+    (ver _tiene_tabla_factura_detalle en facturas.py, migración pendiente
+    de ejecutar en algunos entornos) -- sin la tabla, ningún envío puede
+    estar facturado por ensayo."""
+    if not _tiene_tabla_factura_detalle(cursor):
+        return False
+    cursor.execute(
+        """
+        SELECT 1 FROM lims_envio_ensayos ee
+        WHERE ee.id_envio = ? AND EXISTS (SELECT 1 FROM lims_factura_detalle fd WHERE fd.id_envio_ensayo = ee.id)
+        """,
+        id_envio,
+    )
+    return cursor.fetchone() is not None
+
+
+def _envio_tiene_remito(cursor, id_envio: int) -> bool:
+    cursor.execute("SELECT 1 FROM lims_remitos WHERE id_envio = ?", id_envio)
+    return cursor.fetchone() is not None
+
+
 def _obtener_testigos_enviados(cursor, id_envio: int) -> list[TestigoEnviado]:
     cursor.execute(
         """
@@ -1387,6 +1467,8 @@ def listar_envios(
             protocolo=_obtener_protocolo_envio(cursor, row.id_envio),
             completo=_envio_completo(ensayos),
             factura=_obtener_factura_de_envio(cursor, row.id_envio),
+            facturado=_envio_facturado(cursor, row.id_envio),
+            tiene_remito=_envio_tiene_remito(cursor, row.id_envio),
         ))
     return envios
 
@@ -1667,15 +1749,6 @@ def descargar_etiquetas_de_muestra(
     )
 
 
-# Análisis/Testigo tienen su propio texto; cualquier otro tipo (hoy solo
-# "contramuestra") cae en el mismo texto genérico -- misma correspondencia
-# que ya usa generar_pdf_etiquetas_v2 en solicitudes_muestreo.py para el
-# título de cada etiqueta del PDF (acá es un campo de texto aparte, no un
-# título, porque el título ya no se imprime -- ver Punto 1 de un pedido
-# anterior).
-_LABEL_TIPO_MUESTRA_ETIQUETA = {"analisis": "Análisis", "testigo": "Testigo"}
-
-
 def _datos_etiqueta_para_impresion(cursor, id_muestra: int) -> dict:
     """Mismos datos que ya muestra la etiqueta en PDF (ver
     descargar_etiquetas_de_muestra arriba) pero como dict de campos planos,
@@ -1759,7 +1832,10 @@ def imprimir_etiqueta_directo(
     if tipos_confirmados:
         for t in tipos_confirmados:
             d = dict(datos_base)
-            d["tipo_muestra"] = _LABEL_TIPO_MUESTRA_ETIQUETA.get(t.tipo_muestra, "Contramuestra")
+            # Título por tipo (mismo texto que usa el PDF para cada etiqueta
+            # individual, ver generar_pdf_etiquetas_v2) -- reemplaza al
+            # título genérico de datos_base.
+            d["titulo"] = titulo_etiqueta_por_tipo(t.tipo_muestra)
             d["cantidad_muestra_texto"] = (
                 f"{formatear_cantidad(t.cantidad_real)} {t.unidad or ''}".strip() if t.cantidad_real is not None else None
             )
@@ -1773,7 +1849,9 @@ def imprimir_etiqueta_directo(
 
     enviadas = 0
     for d in etiquetas:
-        sbpl_bytes = generar_sbpl_etiqueta(d, impresora.ancho_mm, impresora.alto_mm, impresora.resolucion_dpi)
+        sbpl_bytes = generar_sbpl_etiqueta(
+            d, impresora.ancho_mm, impresora.alto_mm, impresora.resolucion_dpi, cantidad_copias=body.cantidad,
+        )
         try:
             imprimir_sbpl(impresora, sbpl_bytes, nombre_trabajo=f"Etiqueta {d['identificador']}")
         except RuntimeError as e:
@@ -1793,27 +1871,32 @@ def imprimir_etiqueta_directo(
     return ImprimirDirectoResponse(ok=True, mensaje=f"{enviadas} etiqueta{plural} enviada{plural} a {impresora.nombre}")
 
 
-@router.post("/{id_muestra}/imprimir-aprobado", response_model=ImprimirDirectoResponse)
-def imprimir_etiqueta_aprobado(
-    id_muestra: int,
-    body: ImprimirDirectoBody,
-    user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
-    conn: pyodbc.Connection = Depends(limss_db),
-):
-    """Etiqueta APROBADO -- validación de cumplimiento real, no solo de UX:
-    lims_muestras.estado queda igual al estado_dictamen emitido (ver
-    emitir_dictamen en dictamenes.py, UPDATE ... SET estado = ?), así que
-    'aprobado' acá significa que el dictamen de QA realmente aprobó esta
-    muestra -- no se imprime "APROBADO" sobre nada que no lo esté."""
+def _imprimir_etiqueta_estado_muestra(
+    id_muestra: int, body: ImprimirDirectoBody, user: dict, conn: pyodbc.Connection,
+    estados_permitidos: tuple[str, ...], titulo: str, entidad_auditoria: str,
+) -> ImprimirDirectoResponse:
+    """Etiqueta APROBADO/RECHAZADO -- reutiliza el mismo generador de layout
+    (generar_sbpl_etiqueta_estado) que ya usa CUARENTENA, solo cambia el
+    título.
+
+    APROBADO acepta tanto 'aprobado' (dictamen formal ya emitido) como
+    'aprobado_sin_dictamen' (decisión consciente, ver guardar_resultados en
+    resultados.py: todos los ensayos ya dieron dentro de especificación, el
+    material puede salir de cuarentena sin esperar el papeleo formal).
+    RECHAZADO sigue exigiendo el dictamen formal ('rechazado') -- no hay
+    estado "sin dictamen" equivalente para el caso de rechazo, esa decisión
+    sí necesita la revisión y justificación de QA antes de imprimir nada.
+    En cualquier caso, mientras la muestra esté 'en_análisis' (resultados
+    todavía incompletos), ninguna de las dos etiquetas está disponible."""
     cursor = conn.cursor()
     cursor.execute(_SELECT_MUESTRA + " WHERE m.id_muestra = ?", id_muestra)
     muestra = cursor.fetchone()
     if not muestra:
         raise HTTPException(status_code=404, detail="Muestra no encontrada")
-    if muestra.estado != "aprobado":
+    if muestra.estado not in estados_permitidos:
         raise HTTPException(
             status_code=400,
-            detail=f"No se puede imprimir la etiqueta APROBADO: el dictamen de esta muestra no está aprobado (estado actual: '{muestra.estado}')",
+            detail=f"No se puede imprimir la etiqueta {titulo}: estado actual de la muestra '{muestra.estado}'",
         )
 
     cursor.execute("SELECT * FROM lims_impresoras_etiquetas WHERE id_impresora = ? AND activa = 1", body.id_impresora)
@@ -1822,42 +1905,75 @@ def imprimir_etiqueta_aprobado(
         raise HTTPException(status_code=404, detail="La impresora indicada no existe o está inactiva")
 
     cursor.execute(
-        "SELECT fecha_ingreso, fecha_vencimiento, nro_bultos FROM lims_solicitudes_muestreo WHERE id_muestra = ?",
+        "SELECT id_solicitud, fecha_ingreso, fecha_vencimiento, nro_bultos FROM lims_solicitudes_muestreo WHERE id_muestra = ?",
         id_muestra,
     )
     solicitud = cursor.fetchone()
-    bultos = solicitud.nro_bultos if solicitud and solicitud.nro_bultos else 1
 
     if muestra.cantidad_enviada is not None:
         cantidad_texto = f"{formatear_cantidad(muestra.cantidad_enviada)} {muestra.unidad_enviada or ''}".strip()
     else:
         cantidad_texto = None
 
-    datos = {
+    datos_base = {
         "erp_desart": muestra.erp_DESART,
         "erp_codart": muestra.erp_CODART,
         "nro_ir": muestra.nro_referencia,
         "etiqueta_referencia": etiqueta_referencia(muestra.tipo_referencia),
         "fecha_ingreso": _a_fecha(solicitud.fecha_ingreso) if solicitud else None,
         "fecha_vencimiento": _a_fecha(solicitud.fecha_vencimiento) if solicitud else None,
-        # Sin concepto de "bulto individual" para esta etiqueta (se imprime
-        # una sola vez, no una por bulto como CUARENTENA) -- se muestra el
-        # total contra sí mismo (ej. "3/3") para reflejar que TODOS los
-        # bultos del lote quedaron aprobados, no uno en particular.
-        "bulto_actual": bultos,
-        "bulto_total": bultos,
-        "cantidad_texto": cantidad_texto,
     }
-    sbpl_bytes = generar_sbpl_etiqueta_estado(datos, "APROBADO", impresora.ancho_mm, impresora.alto_mm, impresora.resolucion_dpi)
-    try:
-        imprimir_sbpl(impresora, sbpl_bytes, nombre_trabajo=f"Aprobado {muestra.codigo_muestra}")
-    except RuntimeError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+
+    grupos = obtener_grupos_bultos(cursor, solicitud.id_solicitud) if solicitud else []
+    bultos_fallback = solicitud.nro_bultos if solicitud and solicitud.nro_bultos else 1
+    bultos = expandir_bultos(grupos, bultos_fallback, cantidad_texto, cantidad_valor_fallback=muestra.cantidad_enviada)
+
+    enviadas = 0
+    for b in bultos:
+        datos = dict(
+            datos_base, bulto_actual=b.bulto_actual, bulto_total=b.bulto_total,
+            cantidad_texto=b.cantidad_texto, cantidad_valor=b.cantidad_valor,
+        )
+        sbpl_bytes = generar_sbpl_etiqueta_estado(
+            datos, titulo, impresora.ancho_mm, impresora.alto_mm, impresora.resolucion_dpi,
+            cantidad_copias=body.cantidad,
+        )
+        try:
+            imprimir_sbpl(impresora, sbpl_bytes, nombre_trabajo=f"{titulo.capitalize()} {muestra.codigo_muestra} {b.bulto_actual}/{b.bulto_total}")
+        except RuntimeError as e:
+            detalle = str(e)
+            if enviadas:
+                detalle += f" (se enviaron {enviadas} de {len(bultos)} etiquetas antes de este error)"
+            raise HTTPException(status_code=502, detail=detalle)
+        enviadas += 1
 
     audit.registrar(
-        conn, entidad="etiqueta_aprobado", accion="imprimir",
+        conn, entidad=entidad_auditoria, accion="imprimir",
         id_usuario=user["id_usuario"], id_entidad=id_muestra,
-        valor_nuevo={"id_impresora": body.id_impresora, "ruta_red": impresora.ruta_red},
+        valor_nuevo={"id_impresora": body.id_impresora, "ruta_red": impresora.ruta_red, "cantidad": body.cantidad, "cantidad_etiquetas": enviadas},
     )
 
-    return ImprimirDirectoResponse(ok=True, mensaje=f"Etiqueta APROBADO enviada a {impresora.nombre}")
+    plural = "s" if enviadas != 1 else ""
+    return ImprimirDirectoResponse(ok=True, mensaje=f"{enviadas} etiqueta{plural} {titulo} enviada{plural} a {impresora.nombre}")
+
+
+@router.post("/{id_muestra}/imprimir-aprobado", response_model=ImprimirDirectoResponse)
+def imprimir_etiqueta_aprobado(
+    id_muestra: int,
+    body: ImprimirDirectoBody,
+    user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    return _imprimir_etiqueta_estado_muestra(
+        id_muestra, body, user, conn, ("aprobado", "aprobado_sin_dictamen"), "APROBADO", "etiqueta_aprobado",
+    )
+
+
+@router.post("/{id_muestra}/imprimir-rechazado", response_model=ImprimirDirectoResponse)
+def imprimir_etiqueta_rechazado(
+    id_muestra: int,
+    body: ImprimirDirectoBody,
+    user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    return _imprimir_etiqueta_estado_muestra(id_muestra, body, user, conn, ("rechazado",), "RECHAZADO", "etiqueta_rechazado")

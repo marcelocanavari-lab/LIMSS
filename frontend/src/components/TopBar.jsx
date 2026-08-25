@@ -15,8 +15,7 @@ export default function TopBar({ titulo, subtitulo, onBack }) {
       <div className="topbar-brand">
         {onBack && (
           <button
-            className="btn btn-ghost"
-            style={{ padding: '0 var(--sp-2)', minHeight: 40 }}
+            className="btn btn-ghost topbar-back"
             onClick={onBack}
             aria-label="Volver"
           >

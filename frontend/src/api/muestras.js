@@ -39,6 +39,12 @@ export const muestrasApi = {
   editarMuestra: (id, data) => api.patch(`/api/muestras/${id}`, data),
   obtenerRecorrido: (id) => api.get(`/api/muestras/${id}/recorrido`),
 
+  // Checklist de muestreo (etapa 'muestreo' de la especificación) -- mismo
+  // mecanismo que usa Ejecutar Muestreo, expuesto acá directo por
+  // id_muestra para las muestras creadas con Nueva Muestra (sin solicitud).
+  obtenerChecklistMuestreo: (id) => api.get(`/api/muestras/${id}/checklist-muestreo`),
+  guardarChecklistMuestreo: (id, checklist) => api.post(`/api/muestras/${id}/checklist-muestreo`, checklist),
+
   // Envíos (una muestra puede tener varios, a distintos laboratorios)
   confirmarEnvio: (id, data) => api.post(`/api/muestras/${id}/envios`, data),
   listarEnvios: (id) => api.get(`/api/muestras/${id}/envios`),
@@ -51,8 +57,10 @@ export const muestrasApi = {
 
   // Impresión directa (SATO/SBPL, sin pasar por el PDF)
   imprimirDirecto: (id, idImpresora) => api.post(`/api/muestras/${id}/imprimir-directo`, { id_impresora: idImpresora }),
-  // Etiqueta APROBADO -- el backend bloquea si el dictamen no está aprobado.
-  imprimirAprobado: (id, idImpresora) => api.post(`/api/muestras/${id}/imprimir-aprobado`, { id_impresora: idImpresora }),
+  // Etiquetas APROBADO/RECHAZADO -- el backend bloquea si el dictamen no
+  // coincide con el estado de la etiqueta que se quiere imprimir.
+  imprimirAprobado: (id, idImpresora, cantidad = 1) => api.post(`/api/muestras/${id}/imprimir-aprobado`, { id_impresora: idImpresora, cantidad }),
+  imprimirRechazado: (id, idImpresora, cantidad = 1) => api.post(`/api/muestras/${id}/imprimir-rechazado`, { id_impresora: idImpresora, cantidad }),
 
   // Impresión de Etiquetas (acceso general desde el Dashboard): busca
   // solicitudes/muestras y qué etiquetas corresponden imprimir para cada una.

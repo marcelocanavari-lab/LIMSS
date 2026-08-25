@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional
 from datetime import date, datetime
 
@@ -8,13 +8,47 @@ class MuestreadorDisponible(BaseModel):
     nombre_completo: str
 
 
+class BultoGrupoInput(BaseModel):
+    """Un grupo de bultos (cantidad de bultos x cantidad de unidades cada
+    uno -- ver lims_solicitud_bultos), cargado en el formulario de crear o
+    completar una Solicitud de Muestreo. Ejemplo real: "4 x 50 kg" + "1 x 30
+    kg" -- dos grupos, cada uno imprime esa cantidad de etiquetas
+    CUARENTENA/APROBADO/RECHAZADO con SU cantidad_unidades particular (ver
+    app/services/bultos.py)."""
+    cantidad_bultos: int = Field(..., gt=0)
+    cantidad_unidades: float = Field(..., gt=0)
+    unidad_medida: Optional[str] = Field(None, max_length=20)
+
+
+class BultoGrupoResponse(BultoGrupoInput):
+    id_bulto_grupo: int
+
+
 class MuestraConfirmadaInput(BaseModel):
-    """Una fila de la tabla "Muestras a tomar" del formulario de nueva
-    solicitud -- ver lims_solicitud_muestras. cantidad_real puede diferir de
-    lims_especificacion_muestras.cantidad si el usuario la ajustó."""
-    id_espec_muestra: int
+    """Una fila de la tabla "Muestras a tomar", confirmada al Ejecutar
+    Muestreo (Orden de Trabajo digital) -- ver lims_solicitud_muestras.
+    cantidad_real puede diferir de lims_especificacion_muestras.cantidad si
+    el usuario la ajustó.
+
+    Dos formas:
+    - Estándar (viene de la especificación): id_espec_muestra con valor,
+      tipo_muestra/unidad en None -- se toman de la especificación al
+      guardar (ver confirmar_orden_trabajo).
+    - Ad-hoc (agregada a mano para esta solicitud puntual, no está en la
+      especificación del producto): id_espec_muestra=None, tipo_muestra y
+      unidad SÍ tienen que venir. No modifica la especificación -- queda
+      asociada solo a esta solicitud/muestra."""
+    id_espec_muestra: Optional[int] = None
+    tipo_muestra: Optional[str] = Field(None, pattern=r"^(analisis|contramuestra|testigo)$")
+    unidad: Optional[str] = Field(None, max_length=20)
     cantidad_real: float = Field(..., gt=0)
     confirmada: bool = True
+
+    @model_validator(mode="after")
+    def _validar_ad_hoc(self):
+        if self.id_espec_muestra is None and not (self.tipo_muestra and self.unidad):
+            raise ValueError("Una muestra ad-hoc (sin id_espec_muestra) necesita indicar tipo_muestra y unidad")
+        return self
 
 
 class SolicitudMuestreoCreate(BaseModel):
@@ -47,11 +81,18 @@ class SolicitudMuestreoCreate(BaseModel):
     fecha_reanalisis: Optional[date] = None
     pais_origen: Optional[str] = Field(None, max_length=100)
     nro_bultos: Optional[int] = None
+    # Grupos de bultos (opcional) -- si viene con al menos un grupo, nro_bultos
+    # de arriba se ignora y se recalcula solo como la suma de cantidad_bultos
+    # de todos los grupos (ver crear_solicitud). Sin grupos, se sigue usando
+    # nro_bultos tal cual (caso simple, compatibilidad con lo de siempre).
+    grupos_bultos: list[BultoGrupoInput] = []
     metodologia_analisis: Optional[str] = Field(None, max_length=200)
     fabricante: Optional[str] = Field(None, max_length=200)
-    # Confirmación de la tabla "Muestras a tomar" (lims_especificacion_
-    # muestras de la especificación resuelta) -- ver lims_solicitud_muestras.
-    muestras: list[MuestraConfirmadaInput] = []
+    # La confirmación de la tabla "Muestras a tomar" se movió a Ejecutar
+    # Muestreo (OrdenTrabajoDigitalBody.muestras, más abajo) -- antes se
+    # pedía acá, al crear, pero eso dejaba a las solicitudes del agente sin
+    # este paso (el agente nunca pasa por este formulario). Ahora es un
+    # solo lugar para los dos orígenes, justo antes de generar la muestra.
 
 
 class SolicitudMuestreoResponse(BaseModel):
@@ -86,6 +127,7 @@ class SolicitudMuestreoResponse(BaseModel):
     fecha_reanalisis: Optional[date] = None
     pais_origen: Optional[str] = None
     nro_bultos: Optional[int] = None
+    grupos_bultos: list[BultoGrupoResponse] = []
     metodologia_analisis: Optional[str] = None
     fabricante: Optional[str] = None
     # Datos físicos cargados por el muestreador al ejecutar (Etapa 2), NULL
@@ -142,6 +184,12 @@ class SolicitudMuestreoCompletar(BaseModel):
     fecha_reanalisis: Optional[date] = None
     pais_origen: Optional[str] = Field(None, max_length=100)
     nro_bultos: Optional[int] = None
+    # Igual que en SolicitudMuestreoCreate: con al menos un grupo, reemplaza
+    # los grupos existentes de la solicitud (no acumula) y recalcula
+    # nro_bultos como la suma. Lista vacía (default) = no tocar los grupos
+    # ya cargados, mismo criterio "solo lo que venga con valor" del resto de
+    # este schema.
+    grupos_bultos: list[BultoGrupoInput] = []
     metodologia_analisis: Optional[str] = Field(None, max_length=200)
     fabricante: Optional[str] = Field(None, max_length=200)
 
@@ -229,6 +277,11 @@ class EnsayosParaOrdenResponse(BaseModel):
     erp_CODART: str
     erp_DESART: str
     estado: str
+    # Para que el frontend pueda pedir las muestras definidas en la
+    # especificación (GET /api/maestros/especificaciones/{id}/muestras, ya
+    # existente) y armar acá la confirmación de "Muestras a tomar" -- sin
+    # esto no hay forma de saber contra qué especificación consultar.
+    id_especificacion: Optional[int] = None
     datos_fisicos: DatosFisicosMuestreo
     checklist_muestreo: list[ChecklistMuestreoItem] = []
 
@@ -236,6 +289,11 @@ class EnsayosParaOrdenResponse(BaseModel):
 class OrdenTrabajoDigitalBody(BaseModel):
     datos_fisicos: DatosFisicosMuestreo
     checklist_muestreo: list[ChecklistMuestreoRespuesta] = []
+    # Confirmación de "Muestras a tomar" (estándar de la especificación +
+    # eventuales filas ad-hoc) -- se guarda en lims_solicitud_muestras al
+    # confirmar el muestreo, mismo momento para solicitudes manuales y del
+    # agente (ver MuestraConfirmadaInput).
+    muestras: list[MuestraConfirmadaInput] = []
 
 
 class OrdenTrabajoDigitalResponse(BaseModel):

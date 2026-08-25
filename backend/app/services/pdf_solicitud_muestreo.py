@@ -28,7 +28,7 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 from reportlab.platypus import Paragraph
 
-from app.services.formato import etiqueta_referencia, formatear_cantidad
+from app.services.formato import etiqueta_referencia, formatear_cantidad, titulo_etiqueta_por_tipo
 
 _ESTILO_ESPECIFICACION = ParagraphStyle(
     "especificacion_solicitud", fontName="Helvetica", fontSize=8, leading=9.5,
@@ -407,12 +407,7 @@ def generar_pdf_etiquetas_v2(solicitud, muestras: list, iniciales_muestreador: s
     filas en vez de las 2 fijas (análisis/contramuestra)."""
     items = []
     for m in muestras:
-        if m.tipo_muestra == "analisis":
-            titulo = "MUESTRA PARA ANÁLISIS"
-        elif m.tipo_muestra == "testigo":
-            titulo = "TESTIGO"
-        else:
-            titulo = "CONTRAMUESTRA"
+        titulo = titulo_etiqueta_por_tipo(m.tipo_muestra)
         items.append((titulo, _cantidad_texto(float(m.cantidad_real), m.unidad), m.laboratorio_nombre))
     return _generar_hoja_etiquetas(solicitud, items, iniciales_muestreador)
 

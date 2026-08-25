@@ -191,6 +191,33 @@ def formatear_nro_ir(numcomo: str, feccor) -> str:
     return f"{numero}/{anio % 100:02d}"
 
 
+def solicitud_activa_existente(cursor, erp_nro_ir: str):
+    """¿Ya hay una Solicitud de Muestreo (de cualquier origen: manual o
+    agente) para este IR que no esté anulada? Vive acá (no en
+    agente_muestreo.py, donde se usó originalmente, ni en
+    solicitudes_muestreo.py) para que ambos módulos puedan reutilizarla sin
+    import circular (agente_muestreo.py ya importa generar_nro_solicitud
+    desde solicitudes_muestreo.py -- si esta función viviera en cualquiera
+    de los dos, el otro no podría importarla). `cursor` es de LIMSS, no del
+    ERP -- pese a vivir en este archivo, no consulta el ERP.
+
+    Ni el agente ni la creación manual deben generar una segunda solicitud
+    para un IR que ya tiene una activa -- ni contra otra que generó el
+    agente en una evaluación anterior, ni contra una que un analista ya
+    haya cargado a mano. Anuladas quedan afuera a propósito: anular libera
+    el IR para que se pueda generar una solicitud válida después (mismo
+    criterio que el índice único filtrado de la base, ver
+    migrations_solicitudes_ir_unico_agente.sql, que solo cubre
+    origen='agente' -- esta función es el respaldo a nivel aplicación para
+    el resto de los casos)."""
+    cursor.execute(
+        "SELECT TOP 1 id_solicitud, nro_solicitud FROM lims_solicitudes_muestreo "
+        "WHERE erp_nro_ir = ? AND estado <> 'anulada' ORDER BY id_solicitud DESC",
+        erp_nro_ir,
+    )
+    return cursor.fetchone()
+
+
 def normalizar_fecha_sentinel(valor):
     """1899-12-30 es el sentinel del ERP para "sin fecha cargada" (igual en
     el eBR) -- se normaliza a None. Sirve tanto para VENCOM como para

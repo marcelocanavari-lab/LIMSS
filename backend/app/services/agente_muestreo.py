@@ -30,6 +30,7 @@ from app.services.erp_ir import (
     lineas_comprobante_por_id,
     max_n01id_nuevo,
     normalizar_fecha_sentinel,
+    solicitud_activa_existente as _solicitud_activa_existente,
     tipo_comprobante_ir,
 )
 
@@ -226,23 +227,6 @@ def _id_usuario_agente(cursor) -> int:
     if not row:
         raise RuntimeError("El usuario de sistema AGENTE_IA no existe -- correr migrations_agente_muestreo.sql")
     return row.id_usuario
-
-
-def _solicitud_activa_existente(cursor, erp_nro_ir: str):
-    """¿Ya hay una solicitud (de cualquier origen: manual o agente) para
-    este IR que no esté anulada? El agente nunca debe generar una segunda
-    -- ni contra otra que generó él mismo en una evaluación anterior, ni
-    contra una que un analista ya haya cargado a mano desde
-    '+ Nueva solicitud'. Anuladas quedan afuera a propósito: anular libera
-    el IR para que se pueda generar una solicitud válida después (mismo
-    criterio que el índice único filtrado de la base, ver
-    migrations_solicitudes_ir_unico_agente.sql)."""
-    cursor.execute(
-        "SELECT TOP 1 id_solicitud, nro_solicitud FROM lims_solicitudes_muestreo "
-        "WHERE erp_nro_ir = ? AND estado <> 'anulada' ORDER BY id_solicitud DESC",
-        erp_nro_ir,
-    )
-    return cursor.fetchone()
 
 
 def _crear_solicitud_desde_agente(cursor, linea, id_especificacion: int, nro_ir_normalizado: str,

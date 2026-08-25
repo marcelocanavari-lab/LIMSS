@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import TopBar from '../components/TopBar';
+import GruposBultos from '../components/GruposBultos';
 import { solicitudesMuestreoApi } from '../api/solicitudesMuestreo';
 import { maestrosApi } from '../api/maestros';
 import { muestrasApi } from '../api/muestras';
@@ -20,24 +21,26 @@ const BADGE_ESTADO = {
   anulada: 'badge-danger',
 };
 
-const BADGE_TIPO_MUESTRA = {
-  analisis: 'badge-info',
-  contramuestra: 'badge-warn',
-  testigo: 'badge-ok',
-};
-
-const LABEL_TIPO_MUESTRA = {
-  analisis: 'Análisis',
-  contramuestra: 'Contramuestra',
-  testigo: 'Testigo',
-};
-
 function labelEstado(estado) {
   return FILTROS_ESTADO.find((f) => f.value === estado)?.label?.replace(/s$/, '') || estado;
 }
 
 function formatFecha(iso) {
   return new Date(iso).toLocaleDateString();
+}
+
+// Filtra filas incompletas (el usuario tocó "+ Agregar grupo" pero no
+// llegó a completarla) y convierte los valores de texto de los inputs a
+// número antes de mandarlos al backend (ver BultoGrupoInput en
+// app/schemas/solicitudes_muestreo.py).
+function gruposBultosParaApi(grupos) {
+  return grupos
+    .filter((g) => g.cantidad_bultos !== '' && g.cantidad_unidades !== '')
+    .map((g) => ({
+      cantidad_bultos: Number(g.cantidad_bultos),
+      cantidad_unidades: Number(g.cantidad_unidades),
+      unidad_medida: g.unidad_medida.trim() || null,
+    }));
 }
 
 // Trunca con "…" en vez de dejar que el texto largo salte de línea -- una
@@ -91,8 +94,6 @@ export default function SolicitudesMuestreoPage() {
   const [material, setMaterial] = useState(null);
   const [lineasMaterial, setLineasMaterial] = useState(null);
   const [especificacion, setEspecificacion] = useState(null);
-  const [muestrasDefinidas, setMuestrasDefinidas] = useState([]);
-  const [muestrasConfirmadas, setMuestrasConfirmadas] = useState({});
   const [laboratorios, setLaboratorios] = useState([]);
   const [idLaboratorio, setIdLaboratorio] = useState('');
   const [muestreadores, setMuestreadores] = useState([]);
@@ -113,6 +114,7 @@ export default function SolicitudesMuestreoPage() {
   const [fechaReanalisis, setFechaReanalisis] = useState('');
   const [paisOrigen, setPaisOrigen] = useState('');
   const [nroBultos, setNroBultos] = useState('');
+  const [gruposBultos, setGruposBultos] = useState([]);
   const [metodologiaAnalisis, setMetodologiaAnalisis] = useState('');
   const [fabricante, setFabricante] = useState('');
   const [protocoloProveedor, setProtocoloProveedor] = useState(null);
@@ -142,6 +144,7 @@ export default function SolicitudesMuestreoPage() {
   const [completarPaisOrigen, setCompletarPaisOrigen] = useState('');
   const [completarFechaReanalisis, setCompletarFechaReanalisis] = useState('');
   const [completarNroBultos, setCompletarNroBultos] = useState('');
+  const [completarGruposBultos, setCompletarGruposBultos] = useState([]);
   const [completarMetodologiaAnalisis, setCompletarMetodologiaAnalisis] = useState('');
   const [completarFabricante, setCompletarFabricante] = useState('');
   const [completarProtocoloProveedorActual, setCompletarProtocoloProveedorActual] = useState('');
@@ -190,6 +193,7 @@ export default function SolicitudesMuestreoPage() {
     setFechaReanalisis('');
     setPaisOrigen('');
     setNroBultos('');
+    setGruposBultos([]);
     setMetodologiaAnalisis('');
     setFabricante('');
     setProtocoloProveedor(null);
@@ -251,40 +255,21 @@ export default function SolicitudesMuestreoPage() {
       setAdvertenciaEspec('Ningún laboratorio tiene ensayos asignados para la especificación de este material.');
     }
 
+    // Preselecciona el laboratorio de análisis con el que ya está configurado
+    // en la especificación (lims_especificacion_muestras, tipo_muestra =
+    // 'analisis') -- el usuario lo puede cambiar igual, es solo un default.
+    // La confirmación de "Muestras a tomar" (incluida la posibilidad de
+    // agregar una ad-hoc) se hace en "Ejecutar Muestreo", no acá.
     let muestrasEspec = [];
     try {
       muestrasEspec = await maestrosApi.listarMuestrasEspecificacion(spec.id_especificacion);
     } catch {
       muestrasEspec = [];
     }
-    setMuestrasDefinidas(muestrasEspec);
-    const confirmadasIniciales = {};
-    muestrasEspec.forEach((m) => {
-      confirmadasIniciales[m.id] = { confirmada: m.genera_etiqueta, cantidad_real: String(m.cantidad) };
-    });
-    setMuestrasConfirmadas(confirmadasIniciales);
-
-    // Preselecciona el laboratorio de análisis con el que ya está configurado
-    // en la especificación (lims_especificacion_muestras, tipo_muestra =
-    // 'analisis') -- el usuario lo puede cambiar igual, es solo un default.
     const muestraAnalisis = muestrasEspec.find((m) => m.tipo_muestra === 'analisis');
     if (muestraAnalisis?.id_laboratorio) {
       setIdLaboratorio(String(muestraAnalisis.id_laboratorio));
     }
-  }
-
-  function toggleMuestraConfirmada(idMuestra) {
-    setMuestrasConfirmadas((prev) => ({
-      ...prev,
-      [idMuestra]: { ...prev[idMuestra], confirmada: !prev[idMuestra]?.confirmada },
-    }));
-  }
-
-  function actualizarCantidadRealMuestra(idMuestra, valor) {
-    setMuestrasConfirmadas((prev) => ({
-      ...prev,
-      [idMuestra]: { ...prev[idMuestra], cantidad_real: valor },
-    }));
   }
 
   async function handleBuscarIr(e) {
@@ -368,13 +353,9 @@ export default function SolicitudesMuestreoPage() {
         fecha_reanalisis: fechaReanalisis || null,
         pais_origen: paisOrigen.trim() || null,
         nro_bultos: nroBultos !== '' ? Number(nroBultos) : null,
+        grupos_bultos: gruposBultosParaApi(gruposBultos),
         metodologia_analisis: metodologiaAnalisis.trim() || null,
         fabricante: fabricante.trim() || null,
-        muestras: muestrasDefinidas.map((m) => ({
-          id_espec_muestra: m.id,
-          cantidad_real: Number(muestrasConfirmadas[m.id]?.cantidad_real || m.cantidad),
-          confirmada: !!muestrasConfirmadas[m.id]?.confirmada,
-        })),
       }, protocoloProveedor, documentacionProveedor);
       cerrarModal();
       cargar();
@@ -437,6 +418,7 @@ export default function SolicitudesMuestreoPage() {
     setCompletarPaisOrigen(s.pais_origen || '');
     setCompletarFechaReanalisis(s.fecha_reanalisis || '');
     setCompletarNroBultos(s.nro_bultos != null ? String(s.nro_bultos) : '');
+    setCompletarGruposBultos([]);
     setCompletarMetodologiaAnalisis(s.metodologia_analisis || '');
     setCompletarFabricante(s.fabricante || '');
     setCompletarProtocoloProveedorActual(s.protocolo_proveedor_nombre_original || '');
@@ -446,6 +428,13 @@ export default function SolicitudesMuestreoPage() {
     setCompletarLaboratorios([]);
     try {
       const detalle = await solicitudesMuestreoApi.obtener(s.id_solicitud);
+      if (detalle.grupos_bultos?.length) {
+        setCompletarGruposBultos(detalle.grupos_bultos.map((g) => ({
+          cantidad_bultos: String(g.cantidad_bultos),
+          cantidad_unidades: String(g.cantidad_unidades),
+          unidad_medida: g.unidad_medida || '',
+        })));
+      }
       if (detalle.id_especificacion) {
         const ensayos = await maestrosApi.listarEnsayosEspecificacion(detalle.id_especificacion);
         const labs = [];
@@ -479,6 +468,7 @@ export default function SolicitudesMuestreoPage() {
         pais_origen: completarPaisOrigen.trim() || null,
         fecha_reanalisis: completarFechaReanalisis || null,
         nro_bultos: completarNroBultos !== '' ? Number(completarNroBultos) : null,
+        grupos_bultos: gruposBultosParaApi(completarGruposBultos),
         metodologia_analisis: completarMetodologiaAnalisis.trim() || null,
         fabricante: completarFabricante.trim() || null,
       });
@@ -842,65 +832,6 @@ export default function SolicitudesMuestreoPage() {
                   </select>
                 </div>
 
-                <div className="field">
-                  <label className="field-label">Muestras a tomar</label>
-                  {muestrasDefinidas.length === 0 ? (
-                    <div className="alert alert-warn">
-                      Esta especificación no tiene muestras definidas. Configurá las muestras en Datos Maestros.
-                    </div>
-                  ) : (
-                    <div className="table-scroll">
-                      <table className="data-table data-table-compact">
-                        <thead>
-                          <tr>
-                            <th></th>
-                            <th>Tipo</th>
-                            <th>Cantidad</th>
-                            <th>Unidad</th>
-                            <th>Laboratorio</th>
-                            <th>Cant. real</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {muestrasDefinidas.map((m) => {
-                            const conf = muestrasConfirmadas[m.id] || { confirmada: false, cantidad_real: String(m.cantidad) };
-                            return (
-                              <tr key={m.id}>
-                                <td>
-                                  <input
-                                    type="checkbox"
-                                    checked={conf.confirmada}
-                                    onChange={() => toggleMuestraConfirmada(m.id)}
-                                  />
-                                </td>
-                                <td>
-                                  <span className={`badge ${BADGE_TIPO_MUESTRA[m.tipo_muestra] || 'badge-neutral'}`}>
-                                    {LABEL_TIPO_MUESTRA[m.tipo_muestra] || m.tipo_muestra}
-                                  </span>
-                                </td>
-                                <td className="num">{m.cantidad}</td>
-                                <td>{m.unidad}</td>
-                                <td>{m.laboratorio_nombre || 'Sin asignar'}</td>
-                                <td>
-                                  <input
-                                    className="field-input"
-                                    type="number"
-                                    step="any"
-                                    style={{ maxWidth: 110 }}
-                                    value={conf.cantidad_real}
-                                    onChange={(e) => actualizarCantidadRealMuestra(m.id, e.target.value)}
-                                    disabled={!conf.confirmada}
-                                  />
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-
                 <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
                   <div className="field" style={{ flex: 1 }}>
                     <label className="field-label">
@@ -974,6 +905,8 @@ export default function SolicitudesMuestreoPage() {
                   </div>
                 </div>
 
+                <GruposBultos grupos={gruposBultos} onChange={setGruposBultos} disabled={guardando} />
+
                 <div className="field">
                   <label className="field-label">Metodología de análisis (opcional)</label>
                   <input
@@ -1044,21 +977,26 @@ export default function SolicitudesMuestreoPage() {
             {impresorasCuarentena.length === 0 && !mensajeCuarentena ? (
               <div className="state-block"><span className="spinner" /></div>
             ) : impresorasCuarentena.length === 0 ? null : (
-              <div className="field">
-                <label className="field-label" htmlFor="impresoraCuarentena">Impresora</label>
-                <select
-                  id="impresoraCuarentena"
-                  className="field-input"
-                  value={idImpresoraCuarentena}
-                  onChange={(e) => setIdImpresoraCuarentena(e.target.value)}
-                  disabled={imprimiendoCuarentena}
-                >
-                  <option value="">Seleccioná una impresora...</option>
-                  {impresorasCuarentena.map((imp) => (
-                    <option key={imp.id_impresora} value={imp.id_impresora}>{imp.nombre} ({imp.modelo})</option>
-                  ))}
-                </select>
-              </div>
+              <>
+                <div className="alert alert-warn" style={{ marginBottom: 'var(--sp-3)' }}>
+                  Verificá que la impresora tenga cargado el rollo de etiquetas AMARILLAS antes de continuar.
+                </div>
+                <div className="field">
+                  <label className="field-label" htmlFor="impresoraCuarentena">Impresora</label>
+                  <select
+                    id="impresoraCuarentena"
+                    className="field-input"
+                    value={idImpresoraCuarentena}
+                    onChange={(e) => setIdImpresoraCuarentena(e.target.value)}
+                    disabled={imprimiendoCuarentena}
+                  >
+                    <option value="">Seleccioná una impresora...</option>
+                    {impresorasCuarentena.map((imp) => (
+                      <option key={imp.id_impresora} value={imp.id_impresora}>{imp.nombre} ({imp.modelo})</option>
+                    ))}
+                  </select>
+                </div>
+              </>
             )}
 
             {mensajeCuarentena && (
@@ -1198,6 +1136,8 @@ export default function SolicitudesMuestreoPage() {
                 />
               </div>
             </div>
+
+            <GruposBultos grupos={completarGruposBultos} onChange={setCompletarGruposBultos} disabled={guardandoCompletar} />
 
             <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
               <div className="field" style={{ flex: 1 }}>

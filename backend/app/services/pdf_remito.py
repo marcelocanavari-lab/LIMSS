@@ -21,7 +21,7 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 from reportlab.platypus import Paragraph
 
-from app.services.formato import etiqueta_referencia
+from app.services.formato import etiqueta_referencia, formatear_decimal_significativo
 
 _ESTILO_CELDA = ParagraphStyle(
     "celda_tabla_ensayos", fontName="Helvetica", fontSize=8, leading=9.5,
@@ -50,12 +50,21 @@ def _fmt_fecha_hora(valor) -> str:
     return valor.strftime("%d/%m/%Y %H:%M")
 
 
-def _fmt_vencimiento_lote(valor) -> str:
+def _fmt_vencimiento_lote(valor, tipo_referencia: Optional[str] = None) -> str:
     """A diferencia de _fmt_fecha, acá "sin dato" tiene un significado propio
     (el ERP no tiene vencimiento cargado para ese lote/IR) y se distingue del
-    "—" genérico de otros campos vacíos."""
+    "—" genérico de otros campos vacíos.
+
+    Para tipo_referencia='lote' (lote de producción interna) se imprime
+    solo mes/año -- a diferencia de un IR (materia prima), donde la fecha
+    completa sigue siendo relevante (día de recepción del lote del
+    proveedor)."""
     if not valor:
         return "Sin vencimiento"
+    if tipo_referencia == "lote":
+        if isinstance(valor, str):
+            valor = date.fromisoformat(valor)
+        return valor.strftime("%m/%Y")
     return _fmt_fecha(valor)
 
 
@@ -150,7 +159,7 @@ def _dibujar_copia(
     campo("Material", f"{datos.erp_CODART} - {datos.erp_DESART}")
     campo(etiqueta_referencia(datos.tipo_referencia), _texto(datos.nro_referencia))
     campo("Fecha de muestreo", _fmt_fecha(datos.fecha_muestreo))
-    campo("Vencimiento del lote", _fmt_vencimiento_lote(vencimiento_lote))
+    campo("Vencimiento del lote", _fmt_vencimiento_lote(vencimiento_lote, datos.tipo_referencia))
     campo("Muestreador", _texto(datos.usuario_muestreo_nombre))
     if datos.cantidad_enviada is not None:
         campo("Cantidad de muestra enviada", f"{float(datos.cantidad_enviada)} {datos.unidad_enviada or ''}".strip())
@@ -182,9 +191,21 @@ def _dibujar_copia(
             tipo_legible = "Numérico" if e.tipo_dato == "numerico" else "Cualitativo"
             if e.tipo_dato == "numerico":
                 unidad = f" {e.unidad_medida}" if e.unidad_medida else ""
-                especificacion = f"{_texto(e.limite_inferior)} a {_texto(e.limite_superior)}{unidad}"
+                especificacion = (
+                    f"{formatear_decimal_significativo(e.limite_inferior)} a "
+                    f"{formatear_decimal_significativo(e.limite_superior)}{unidad}"
+                )
             else:
                 especificacion = e.valor_requerido or e.especificacion_texto or "—"
+
+            # Analito (lims_especificacion_ensayos.analito) -- opcional, para
+            # diferenciar visualmente ensayos repetidos del mismo catálogo en
+            # una misma especificación (ej. "Valoración" para Trimetoprima y
+            # para Sulfametoxazol). Sin analito cargado, el nombre del ensayo
+            # queda igual que siempre, sin espacio ni separador de más.
+            nombre_ensayo = e.nombre_ensayo
+            if getattr(e, "analito", None):
+                nombre_ensayo = f"{nombre_ensayo} — Analito: {e.analito}"
 
             # Ensayo/Metodología/Especificación pueden ser texto largo -- las
             # tres usan Paragraph para hacer salto de línea dentro del ancho
@@ -193,7 +214,7 @@ def _dibujar_copia(
             # se superpone al texto de al lado). "Tipo" siempre es corto
             # ("Numérico"/"Cualitativo") y no lo necesita. La altura de la
             # fila la marca la columna que más líneas ocupe.
-            parrafo_ensayo = Paragraph(_escapar_html(e.nombre_ensayo), _ESTILO_CELDA)
+            parrafo_ensayo = Paragraph(_escapar_html(nombre_ensayo), _ESTILO_CELDA)
             parrafo_metodo = Paragraph(_escapar_html(_texto(e.metodologia)), _ESTILO_CELDA)
             parrafo_espec = Paragraph(_escapar_html(str(especificacion)), _ESTILO_CELDA)
             _, alto_ensayo = parrafo_ensayo.wrap(col_ensayo[1] - 0.2 * cm, 1000)
@@ -259,9 +280,15 @@ def _dibujar_copia(
         c.setFont("Helvetica", 8)
         for t in testigos:
             salto_pagina_si_hace_falta(0.45 * cm)
+            # "Fecha envío al lab." -- fecha_envio_lab ya viene resuelta por
+            # testigo desde _obtener_testigos_remito (prioriza fecha_envio_real
+            # de lims_testigo_laboratorios, cae a la fecha de despacho de
+            # este envío solo si no está cargada). Es una columna DATE (sin
+            # hora), a diferencia de "Fecha de despacho" más abajo -- por
+            # eso usa _fmt_fecha, no _fmt_fecha_hora.
             valores = [
                 _texto(t.nro_ir), t.nombre, _texto(t.nro_lote), _fmt_fecha(t.fecha_vencimiento),
-                _texto(t.cantidad), _texto(t.unidad_medida), _fmt_fecha_hora(datos.fecha_despacho),
+                _texto(t.cantidad), _texto(t.unidad_medida), _fmt_fecha(t.fecha_envio_lab),
             ]
             for (_, cx, ancho), valor in zip(columnas_t, valores):
                 c.drawString(cx, y, str(valor)[: int(ancho / 0.17)])

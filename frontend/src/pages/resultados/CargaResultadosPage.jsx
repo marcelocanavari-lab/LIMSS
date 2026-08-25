@@ -11,6 +11,144 @@ function tieneResultado(en) {
   return !!(en.valor_cualitativo && en.valor_cualitativo.trim());
 }
 
+// Color de rollo físico que el operador debe tener cargado en la SATO --
+// el sistema no imprime en color, lo determina el papel (amarillo/verde/
+// rojo para Cuarentena/Aprobado/Rechazado). Mismo mapeo que usa el modal de
+// Cuarentena en SolicitudesMuestreoPage.jsx.
+const COLOR_PAPEL_POR_ESTADO = { aprobado: 'VERDES', rechazado: 'ROJAS' };
+
+// Estados de lims_muestras.estado que habilitan cada etiqueta -- mismo
+// criterio que el backend (_imprimir_etiqueta_estado_muestra en
+// muestras.py). APROBADO ya no exige dictamen formal emitido: alcanza con
+// que todos los resultados hayan dado dentro de especificación
+// ('aprobado_sin_dictamen', ver guardar_resultados en resultados.py) -- el
+// material tiene que poder salir de cuarentena apenas los resultados dan
+// bien, sin esperar el papeleo formal. RECHAZADO sigue exigiendo el
+// dictamen formal (no hay estado "sin dictamen" equivalente para el caso
+// de rechazo -- eso sí necesita la revisión y justificación de QA).
+const ESTADOS_PERMITIDOS_POR_ETIQUETA = {
+  aprobado: ['aprobado', 'aprobado_sin_dictamen'],
+  rechazado: ['rechazado'],
+};
+
+// Tarjeta de impresión de etiqueta APROBADO/RECHAZADO -- misma UI para las
+// dos (solo cambia el estado esperado, el título y qué endpoint llama), con
+// cantidad de copias + aviso de color de papel + confirmación explícita
+// antes de imprimir.
+function TarjetaImprimirEstado({ estado, titulo, estadoMuestra, idMuestra, imprimirFn }) {
+  const [impresoras, setImpresoras] = useState([]);
+  const [idImpresora, setIdImpresora] = useState('');
+  const [cantidad, setCantidad] = useState(1);
+  const [imprimiendo, setImprimiendo] = useState(false);
+  const [mensaje, setMensaje] = useState(null);
+
+  function abrir() {
+    setMensaje(null);
+    if (impresoras.length === 0) {
+      muestrasApi
+        .listarImpresoras(true)
+        .then((data) => {
+          setImpresoras(data);
+          if (data.length === 1) setIdImpresora(String(data[0].id_impresora));
+        })
+        .catch(() => setMensaje({ tipo: 'error', texto: 'No se pudo cargar el listado de impresoras' }));
+    }
+  }
+
+  async function confirmar() {
+    if (!idImpresora || !idMuestra) return;
+    setImprimiendo(true);
+    setMensaje(null);
+    try {
+      const resp = await imprimirFn(idMuestra, Number(idImpresora), cantidad);
+      setMensaje({ tipo: 'ok', texto: resp.mensaje });
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: err instanceof ApiError ? err.message : 'No se pudo imprimir la etiqueta' });
+    } finally {
+      setImprimiendo(false);
+    }
+  }
+
+  const permitido = ESTADOS_PERMITIDOS_POR_ETIQUETA[estado].includes(estadoMuestra);
+
+  return (
+    <div className="card" style={{ marginTop: 'var(--sp-5)' }}>
+      <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-2)' }}>Etiqueta {titulo}</h2>
+      <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', marginBottom: 'var(--sp-3)' }}>
+        {titulo === 'APROBADO'
+          ? 'Se puede imprimir apenas todos los resultados dan dentro de especificación, sin esperar el dictamen formal.'
+          : 'Solo se puede imprimir cuando el dictamen de esta muestra está Rechazado.'}
+      </p>
+
+      {!permitido && (
+        <div className="alert alert-warn" style={{ marginBottom: 'var(--sp-3)' }}>
+          {estadoMuestra === 'en_análisis'
+            ? 'Esta muestra todavía está en análisis -- faltan resultados por cargar.'
+            : `El estado actual de la muestra ('${estadoMuestra}') no corresponde a esta etiqueta.`}
+        </div>
+      )}
+
+      {impresoras.length > 0 && (
+        <>
+          <div className="alert alert-warn" style={{ marginBottom: 'var(--sp-3)' }}>
+            Verificá que la impresora tenga cargado el rollo de etiquetas {COLOR_PAPEL_POR_ESTADO[estado]} antes de continuar.
+          </div>
+          <div className="field">
+            <label className="field-label" htmlFor={`impresora-${estado}`}>Impresora</label>
+            <select
+              id={`impresora-${estado}`}
+              className="field-input"
+              value={idImpresora}
+              onChange={(e) => setIdImpresora(e.target.value)}
+              disabled={imprimiendo}
+            >
+              <option value="">Seleccioná una impresora...</option>
+              {impresoras.map((imp) => (
+                <option key={imp.id_impresora} value={imp.id_impresora}>{imp.nombre} ({imp.modelo})</option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label className="field-label" htmlFor={`cantidad-${estado}`}>Cantidad de copias</label>
+            <input
+              id={`cantidad-${estado}`}
+              className="field-input"
+              type="number"
+              min="1"
+              max="99"
+              style={{ maxWidth: 120 }}
+              value={cantidad}
+              onChange={(e) => setCantidad(Math.min(99, Math.max(1, Number(e.target.value) || 1)))}
+              disabled={imprimiendo}
+            />
+          </div>
+        </>
+      )}
+
+      {mensaje && (
+        <div className={`alert ${mensaje.tipo === 'ok' ? 'alert-ok' : 'alert-danger'}`} style={{ marginBottom: 'var(--sp-3)' }}>
+          {mensaje.texto}
+        </div>
+      )}
+
+      {impresoras.length === 0 ? (
+        <button type="button" className="btn btn-secondary btn-block" onClick={abrir}>
+          Imprimir etiqueta {titulo} →
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="btn btn-primary btn-block"
+          onClick={confirmar}
+          disabled={imprimiendo || !idImpresora}
+        >
+          {imprimiendo ? <span className="spinner" /> : `Confirmar e imprimir ${cantidad} copia${cantidad === 1 ? '' : 's'}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function CargaResultadosPage() {
   const { idEnvio } = useParams();
   const navigate = useNavigate();
@@ -39,17 +177,6 @@ export default function CargaResultadosPage() {
   const [guardandoProtocolo, setGuardandoProtocolo] = useState(false);
   const [errorProtocolo, setErrorProtocolo] = useState('');
   const [mensajeOk, setMensajeOk] = useState('');
-
-  // Etiqueta APROBADO -- solo imprimible si el dictamen de la muestra (no
-  // del envío, la muestra puede tener varios envíos) está Aprobado. El
-  // backend es quien realmente lo bloquea (ver imprimir_etiqueta_aprobado
-  // en muestras.py); acá solo se refleja el estado para no ofrecer la
-  // acción como si nada cuando claramente no corresponde todavía.
-  const [dictamen, setDictamen] = useState(null);
-  const [impresorasAprobado, setImpresorasAprobado] = useState([]);
-  const [idImpresoraAprobado, setIdImpresoraAprobado] = useState('');
-  const [imprimiendoAprobado, setImprimiendoAprobado] = useState(false);
-  const [mensajeAprobado, setMensajeAprobado] = useState(null);
 
   function cargar() {
     return resultadosApi
@@ -82,41 +209,6 @@ export default function CargaResultadosPage() {
   useEffect(() => {
     cargar().finally(() => setLoading(false));
   }, [idEnvio]);
-
-  useEffect(() => {
-    if (!envio?.id_muestra) return;
-    muestrasApi
-      .obtenerRecorrido(envio.id_muestra)
-      .then((data) => setDictamen(data.dictamen || null))
-      .catch(() => {});
-  }, [envio?.id_muestra]);
-
-  function abrirImprimirAprobado() {
-    setMensajeAprobado(null);
-    if (impresorasAprobado.length === 0) {
-      muestrasApi
-        .listarImpresoras(true)
-        .then((data) => {
-          setImpresorasAprobado(data);
-          if (data.length === 1) setIdImpresoraAprobado(String(data[0].id_impresora));
-        })
-        .catch(() => setMensajeAprobado({ tipo: 'error', texto: 'No se pudo cargar el listado de impresoras' }));
-    }
-  }
-
-  async function confirmarImprimirAprobado() {
-    if (!idImpresoraAprobado || !envio?.id_muestra) return;
-    setImprimiendoAprobado(true);
-    setMensajeAprobado(null);
-    try {
-      const resp = await muestrasApi.imprimirAprobado(envio.id_muestra, Number(idImpresoraAprobado));
-      setMensajeAprobado({ tipo: 'ok', texto: resp.mensaje });
-    } catch (err) {
-      setMensajeAprobado({ tipo: 'error', texto: err instanceof ApiError ? err.message : 'No se pudo imprimir la etiqueta' });
-    } finally {
-      setImprimiendoAprobado(false);
-    }
-  }
 
   function actualizarValor(idEnsayo, campo, valor) {
     setValores((prev) => ({ ...prev, [idEnsayo]: { ...prev[idEnsayo], [campo]: valor } }));
@@ -182,7 +274,11 @@ export default function CargaResultadosPage() {
       return;
     }
     if (!archivo) {
-      setErrorProtocolo('El protocolo en PDF es obligatorio');
+      setErrorProtocolo(
+        envio.protocolo
+          ? 'Para reemplazar el protocolo ya cargado, adjuntá el PDF nuevo -- no alcanza con cambiar el número/fecha.'
+          : 'Adjuntá el protocolo en PDF',
+      );
       return;
     }
     if (archivo.type !== 'application/pdf') {
@@ -387,8 +483,9 @@ export default function CargaResultadosPage() {
           </p>
           {envio.protocolo && (
             <div className="alert alert-info" style={{ marginBottom: 'var(--sp-3)' }}>
-              Ya hay un protocolo cargado ({envio.protocolo.pdf_nombre_original}, {envio.protocolo.fecha_emision}). Subir
-              uno nuevo lo reemplaza.
+              Ya hay un protocolo cargado ({envio.protocolo.pdf_nombre_original}, {envio.protocolo.fecha_emision}). Para
+              reemplazarlo, completá el formulario de abajo adjuntando el PDF nuevo -- es obligatorio volver a
+              seleccionar un archivo cada vez, aunque solo quieras corregir el número o la fecha.
             </div>
           )}
           <form onSubmit={handleGuardarProtocolo}>
@@ -414,7 +511,7 @@ export default function CargaResultadosPage() {
               />
             </div>
             <div className="field">
-              <label className="field-label" htmlFor="pdf">Protocolo (PDF)</label>
+              <label className="field-label" htmlFor="pdf">Protocolo (PDF){envio.protocolo ? ' -- nuevo, para reemplazar el actual' : ''}</label>
               <input
                 id="pdf"
                 className="field-input"
@@ -423,6 +520,11 @@ export default function CargaResultadosPage() {
                 onChange={(e) => setArchivo(e.target.files?.[0] || null)}
                 disabled={guardandoProtocolo}
               />
+              {archivo && (
+                <p style={{ fontSize: 'var(--fs-xs)', color: 'var(--ink-2)', marginTop: 'var(--sp-1)' }}>
+                  Seleccionado: {archivo.name}
+                </p>
+              )}
             </div>
 
             {errorProtocolo && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-4)' }}>{errorProtocolo}</div>}
@@ -433,59 +535,14 @@ export default function CargaResultadosPage() {
           </form>
         </div>
 
-        <div className="card" style={{ marginTop: 'var(--sp-5)' }}>
-          <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-2)' }}>Etiqueta APROBADO</h2>
-          <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', marginBottom: 'var(--sp-3)' }}>
-            Solo se puede imprimir cuando el dictamen de esta muestra está Aprobado.
-          </p>
-
-          {dictamen?.estado_dictamen !== 'aprobado' && (
-            <div className="alert alert-warn" style={{ marginBottom: 'var(--sp-3)' }}>
-              {dictamen
-                ? `El dictamen de esta muestra está '${dictamen.estado_dictamen}', no Aprobado -- no se puede imprimir esta etiqueta.`
-                : 'Esta muestra todavía no tiene un dictamen emitido.'}
-            </div>
-          )}
-
-          {impresorasAprobado.length > 0 && (
-            <div className="field">
-              <label className="field-label" htmlFor="impresoraAprobado">Impresora</label>
-              <select
-                id="impresoraAprobado"
-                className="field-input"
-                value={idImpresoraAprobado}
-                onChange={(e) => setIdImpresoraAprobado(e.target.value)}
-                disabled={imprimiendoAprobado}
-              >
-                <option value="">Seleccioná una impresora...</option>
-                {impresorasAprobado.map((imp) => (
-                  <option key={imp.id_impresora} value={imp.id_impresora}>{imp.nombre} ({imp.modelo})</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {mensajeAprobado && (
-            <div className={`alert ${mensajeAprobado.tipo === 'ok' ? 'alert-ok' : 'alert-danger'}`} style={{ marginBottom: 'var(--sp-3)' }}>
-              {mensajeAprobado.texto}
-            </div>
-          )}
-
-          {impresorasAprobado.length === 0 ? (
-            <button type="button" className="btn btn-secondary btn-block" onClick={abrirImprimirAprobado}>
-              Imprimir etiqueta APROBADO →
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="btn btn-primary btn-block"
-              onClick={confirmarImprimirAprobado}
-              disabled={imprimiendoAprobado || !idImpresoraAprobado}
-            >
-              {imprimiendoAprobado ? <span className="spinner" /> : 'Imprimir'}
-            </button>
-          )}
-        </div>
+        <TarjetaImprimirEstado
+          estado="aprobado" titulo="APROBADO" estadoMuestra={envio.estado_muestra} idMuestra={envio.id_muestra}
+          imprimirFn={muestrasApi.imprimirAprobado}
+        />
+        <TarjetaImprimirEstado
+          estado="rechazado" titulo="RECHAZADO" estadoMuestra={envio.estado_muestra} idMuestra={envio.id_muestra}
+          imprimirFn={muestrasApi.imprimirRechazado}
+        />
       </div>
     </div>
   );

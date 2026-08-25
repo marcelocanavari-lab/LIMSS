@@ -193,8 +193,7 @@ export default function FacturaDetallePage() {
                     <tr>
                       <th>N° Remito</th>
                       <th>Muestra</th>
-                      <th>IR</th>
-                      <th>Lote</th>
+                      <th>{en.tipo_referencia === 'ir' ? 'IR' : 'Lote'}</th>
                       <th>Material</th>
                       <th>Fecha</th>
                       <th>Ensayos</th>
@@ -204,8 +203,7 @@ export default function FacturaDetallePage() {
                     <tr>
                       <td style={{ fontFamily: 'var(--font-mono)' }}>{en.nro_remito || '—'}</td>
                       <td>{en.codigo_muestra || '—'}</td>
-                      <td>{en.erp_nro_ir || '—'}</td>
-                      <td>{en.lote_proveedor || '—'}</td>
+                      <td>{en.nro_referencia || '—'}</td>
                       <td>{en.erp_DESART ? `${en.erp_DESART}${en.erp_CODART ? ` (${en.erp_CODART})` : ''}` : '—'}</td>
                       <td>{new Date(en.fecha_despacho).toLocaleDateString()}</td>
                       <td className="num">{en.cantidad_ensayos}</td>
@@ -218,6 +216,7 @@ export default function FacturaDetallePage() {
                     <thead>
                       <tr>
                         <th>Ensayo</th>
+                        <th>{en.tipo_referencia === 'ir' ? 'IR' : 'Lote'}</th>
                         <th style={{ width: 160 }} className="num">Importe</th>
                       </tr>
                     </thead>
@@ -225,6 +224,7 @@ export default function FacturaDetallePage() {
                       {en.ensayos.map((ens) => (
                         <tr key={ens.id_envio_ensayo}>
                           <td>{ens.analito ? `${ens.nombre_ensayo} — ${ens.analito}` : ens.nombre_ensayo}</td>
+                          <td>{en.nro_referencia || '—'}</td>
                           <td className="num">{ens.importe != null ? `${factura.moneda} ${Number(ens.importe).toFixed(2)}` : '—'}</td>
                         </tr>
                       ))}

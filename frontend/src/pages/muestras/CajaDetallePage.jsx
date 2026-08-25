@@ -138,7 +138,7 @@ export default function CajaDetallePage() {
   if (loading && !caja) {
     return (
       <div className="screen">
-        <TopBar titulo="Archivo de Contramuestras" subtitulo="Caja" onBack={() => navigate('/cajas')} />
+        <TopBar titulo="Archivo de Contramuestras" subtitulo="Caja" onBack={() => navigate(-1)} />
         <div className="screen-content"><div className="state-block"><span className="spinner" /></div></div>
       </div>
     );
@@ -147,7 +147,7 @@ export default function CajaDetallePage() {
   if (error && !caja) {
     return (
       <div className="screen">
-        <TopBar titulo="Archivo de Contramuestras" subtitulo="Caja" onBack={() => navigate('/cajas')} />
+        <TopBar titulo="Archivo de Contramuestras" subtitulo="Caja" onBack={() => navigate(-1)} />
         <div className="screen-content"><div className="alert alert-danger">{error}</div></div>
       </div>
     );
@@ -155,7 +155,7 @@ export default function CajaDetallePage() {
 
   return (
     <div className="screen">
-      <TopBar titulo={`Caja ${caja.codigo}`} subtitulo="Archivo de Contramuestras" onBack={() => navigate('/cajas')} />
+      <TopBar titulo={`Caja ${caja.codigo}`} subtitulo="Archivo de Contramuestras" onBack={() => navigate(-1)} />
       <div className="screen-content">
         <div className="card no-print" style={{ marginBottom: 'var(--sp-4)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--sp-3)' }}>

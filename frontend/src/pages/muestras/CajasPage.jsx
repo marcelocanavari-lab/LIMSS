@@ -141,6 +141,7 @@ export default function CajasPage() {
           <button className="btn btn-secondary" disabled={seleccionadas.size === 0} onClick={imprimirEtiquetasSeleccionadas}>
             Imprimir etiquetas seleccionadas ({seleccionadas.size})
           </button>
+          <button className="btn btn-secondary" onClick={() => window.print()}>Imprimir / Exportar PDF</button>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}>
             <label className="field-label" style={{ margin: 0 }}>Estado:</label>
             <select className="field-input" style={{ width: 'auto', height: 36 }} value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
@@ -177,11 +178,68 @@ export default function CajasPage() {
 
         {error && <div className="alert alert-danger no-print" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}
 
-        <div className="printable">
-          <div className="no-print" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 'var(--sp-3)' }}>
-            <button className="btn btn-secondary" onClick={() => window.print()}>Imprimir / Exportar PDF</button>
+        {/* Vista interactiva (pantalla) -- mismo look & feel que Consulta de
+            Muestras: tabla con buen espaciado, sin el estilo denso de
+            reporte. Se oculta al imprimir (no-print); para imprimir se usa
+            el bloque .printable de más abajo, que sí mantiene el formato
+            denso tipo PDF. */}
+        {loading ? (
+          <div className="state-block"><span className="spinner" /></div>
+        ) : cajas.length === 0 ? (
+          <div className="state-block"><span className="state-block-title">Sin cajas para este filtro</span></div>
+        ) : (
+          <div className="no-print table-scroll">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Código</th>
+                  <th>Ubicación</th>
+                  <th>Estado</th>
+                  <th>Apertura</th>
+                  <th>Cierre</th>
+                  <th>Muestras</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {cajas.map((c) => (
+                  <tr key={c.id_caja}>
+                    <td>
+                      <input type="checkbox" checked={seleccionadas.has(c.id_caja)} onChange={() => toggleSeleccion(c.id_caja)} />
+                    </td>
+                    <td style={{ fontFamily: 'var(--font-mono)', cursor: 'pointer' }} onClick={() => navigate(`/cajas/${c.id_caja}`)}>
+                      {c.codigo}
+                    </td>
+                    <td>{c.ubicacion || '—'}</td>
+                    <td><span className={c.estado === 'activa' ? 'badge badge-ok' : 'badge badge-neutral'}>{c.estado === 'activa' ? 'Activa' : 'Cerrada'}</span></td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{formatFechaHora(c.fecha_apertura)}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{formatFechaHora(c.fecha_cierre)}</td>
+                    <td className="num">{c.cantidad_muestras}</td>
+                    <td style={{ display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap' }}>
+                      <button className="btn btn-ghost" onClick={() => navigate(`/cajas/${c.id_caja}`)}>Ver contenido</button>
+                      {puedeGestionar && (
+                        c.estado === 'activa' ? (
+                          <>
+                            <button className="btn btn-ghost" onClick={() => navigate(`/cajas/${c.id_caja}?asignar=1`)}>Asignar Contramuestras</button>
+                            <button className="btn btn-ghost" onClick={() => cerrarCaja(c)}>Cerrar</button>
+                          </>
+                        ) : (
+                          <button className="btn btn-ghost" onClick={() => reabrirCaja(c)}>Reabrir</button>
+                        )
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
+        )}
 
+        {/* Vista de impresión -- oculta en pantalla (print-only), formato
+            denso tipo PDF preservado tal cual estaba, solo para cuando se
+            usa el botón "Imprimir / Exportar PDF". */}
+        <div className="printable print-only">
           <h1 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-2)' }}>Reporte de Cajas</h1>
           <p style={{ color: 'var(--ink-2)', marginBottom: 'var(--sp-4)' }}>
             Generado el {fechaGeneracion?.toLocaleString()} por {user?.nombre} {user?.apellido} ({user?.codigo}) —{' '}
@@ -189,52 +247,28 @@ export default function CajasPage() {
             {cajas.length} caja{cajas.length === 1 ? '' : 's'}
           </p>
 
-          {loading ? (
-            <div className="state-block"><span className="spinner" /></div>
-          ) : cajas.length === 0 ? (
-            <div className="state-block"><span className="state-block-title">Sin cajas para este filtro</span></div>
-          ) : (
+          {cajas.length > 0 && (
             <div className="reporte-tabla-scroll">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th className="no-print"></th>
                     <th>Código</th>
                     <th>Ubicación</th>
                     <th>Estado</th>
                     <th>Apertura</th>
                     <th>Cierre</th>
                     <th>Muestras</th>
-                    <th className="no-print"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {cajas.map((c) => (
                     <tr key={c.id_caja}>
-                      <td className="no-print">
-                        <input type="checkbox" checked={seleccionadas.has(c.id_caja)} onChange={() => toggleSeleccion(c.id_caja)} />
-                      </td>
-                      <td style={{ fontFamily: 'var(--font-mono)', cursor: 'pointer' }} onClick={() => navigate(`/cajas/${c.id_caja}`)}>
-                        {c.codigo}
-                      </td>
+                      <td style={{ fontFamily: 'var(--font-mono)' }}>{c.codigo}</td>
                       <td>{c.ubicacion || '—'}</td>
                       <td><span className={c.estado === 'activa' ? 'badge badge-ok' : 'badge badge-neutral'}>{c.estado === 'activa' ? 'Activa' : 'Cerrada'}</span></td>
                       <td style={{ whiteSpace: 'nowrap' }}>{formatFechaHora(c.fecha_apertura)}</td>
                       <td style={{ whiteSpace: 'nowrap' }}>{formatFechaHora(c.fecha_cierre)}</td>
                       <td className="num">{c.cantidad_muestras}</td>
-                      <td className="no-print" style={{ display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap' }}>
-                        <button className="btn btn-ghost" onClick={() => navigate(`/cajas/${c.id_caja}`)}>Ver contenido</button>
-                        {puedeGestionar && (
-                          c.estado === 'activa' ? (
-                            <>
-                              <button className="btn btn-ghost" onClick={() => navigate(`/cajas/${c.id_caja}?asignar=1`)}>Asignar Contramuestras</button>
-                              <button className="btn btn-ghost" onClick={() => cerrarCaja(c)}>Cerrar</button>
-                            </>
-                          ) : (
-                            <button className="btn btn-ghost" onClick={() => reabrirCaja(c)}>Reabrir</button>
-                          )
-                        )}
-                      </td>
                     </tr>
                   ))}
                 </tbody>

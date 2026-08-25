@@ -14,6 +14,7 @@ son las únicas dos rutas pedidas para este módulo.
 """
 import os
 from datetime import date
+from types import SimpleNamespace
 
 import pyodbc
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -28,6 +29,7 @@ from app.services.erp_ir import obtener_vencimiento_lote as obtener_vencimiento_
 from app.services.erp_ir import obtener_vencimiento_por_n01id
 from app.services.erp_lotes import obtener_vencimiento_lote_produccion
 from app.services.pdf_remito import generar_pdf_remito
+from app.api.routes.testigos_remitos import _fecha_envio_real_para_pdf
 
 router = APIRouter(prefix="/api/envios", tags=["Envíos"])
 
@@ -46,7 +48,7 @@ def _a_fecha(valor):
 
 
 _SELECT_DATOS_REMITO = """
-    SELECT e.id_envio, e.fecha_despacho, e.temperatura_transporte, e.nro_remito,
+    SELECT e.id_envio, e.id_laboratorio, e.fecha_despacho, e.temperatura_transporte, e.nro_remito,
            e.transportista, e.analisis_solicitados, e.protocolo_utilizar,
            m.codigo_muestra, m.tipo_referencia, m.nro_referencia, m.erp_n01id,
            m.erp_CODART, m.erp_DESART, m.fecha_muestreo,
@@ -63,10 +65,16 @@ _SELECT_DATOS_REMITO = """
 """
 
 
-def _obtener_testigos_remito(cursor, id_envio: int):
+def _obtener_testigos_remito(cursor, id_envio: int, id_laboratorio: int, fecha_envio_default: date):
+    """Fecha de envío al laboratorio por testigo: prioriza fecha_envio_real
+    (cargada a mano en la asignación testigo-laboratorio, ver
+    lims_testigo_laboratorios) y solo cae a fecha_envio_default (el
+    despacho de ESTE envío) si no está cargada -- reutiliza
+    _fecha_envio_real_para_pdf de testigos_remitos.py (mismo criterio ya
+    aplicado ahí) en vez de reimplementar la lógica acá."""
     cursor.execute(
         """
-        SELECT t.codigo, t.nombre, t.nro_ir, t.nro_lote, t.fecha_vencimiento, t.unidad_medida, et.cantidad
+        SELECT t.id_testigo, t.codigo, t.nombre, t.nro_ir, t.nro_lote, t.fecha_vencimiento, t.unidad_medida, et.cantidad
         FROM lims_envio_testigos et
         INNER JOIN lims_testigos t ON t.id_testigo = et.id_testigo
         WHERE et.id_envio = ?
@@ -74,14 +82,22 @@ def _obtener_testigos_remito(cursor, id_envio: int):
         """,
         id_envio,
     )
-    return cursor.fetchall()
+    filas = cursor.fetchall()
+    return [
+        SimpleNamespace(
+            codigo=t.codigo, nombre=t.nombre, nro_ir=t.nro_ir, nro_lote=t.nro_lote,
+            fecha_vencimiento=t.fecha_vencimiento, unidad_medida=t.unidad_medida, cantidad=t.cantidad,
+            fecha_envio_lab=_fecha_envio_real_para_pdf(cursor, id_laboratorio, [t.id_testigo], fecha_envio_default),
+        )
+        for t in filas
+    ]
 
 
 def _obtener_ensayos_remito(cursor, id_envio: int):
     cursor.execute(
         """
         SELECT m.nombre_ensayo, se.metodologia, se.tipo_dato, se.limite_inferior, se.limite_superior,
-               se.unidad_medida, se.valor_requerido, se.especificacion_texto
+               se.unidad_medida, se.valor_requerido, se.especificacion_texto, se.analito
         FROM lims_envio_ensayos ee
         INNER JOIN lims_especificacion_ensayos se ON se.id_espec_ensayo = ee.id_espec_ensayo
         INNER JOIN lims_ensayos_maestro m ON m.id_ensayo_maestro = se.id_ensayo_maestro
@@ -121,7 +137,7 @@ def generar_remito(
         raise HTTPException(status_code=404, detail="Envío no encontrado")
 
     ensayos = _obtener_ensayos_remito(cursor, id_envio)
-    testigos = _obtener_testigos_remito(cursor, id_envio)
+    testigos = _obtener_testigos_remito(cursor, id_envio, datos.id_laboratorio, datos.fecha_despacho)
 
     try:
         principios_activos = obtener_principios_activos(erp, datos.erp_CODART)

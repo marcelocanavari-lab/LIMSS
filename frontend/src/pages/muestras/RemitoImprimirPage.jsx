@@ -188,7 +188,7 @@ export default function RemitoImprimirPage() {
         )}
 
         {remito && remitoPdf && (
-          <div className="card no-print" style={{ marginBottom: 'var(--sp-4)' }}>
+          <div id="constancia-recepcion" className="card no-print" style={{ marginBottom: 'var(--sp-4)' }}>
             <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Constancia de recepción</h2>
 
             {remito.tiene_copia_firmada && !mostrarFormRecepcion ? (

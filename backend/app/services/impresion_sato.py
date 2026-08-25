@@ -32,6 +32,14 @@ byte en la sintaxis de estos comandos:
                                c=modo de datos (0=manual), d=modo de
                                concatenación (0=normal)
     <DS>k,datos               datos del QR en modo manual (k=2 alfanumérico)
+    <BG>aabbbdatos            código de barras CODE128: a=ancho de barra
+                               angosta (01-12 pts), bbb=alto (001-600 pts),
+                               datos=el dato a codificar (el dígito
+                               verificador se genera solo) -- sección
+                               "ESC+BG CODE128 Barcode Specification" del
+                               mismo manual "SATO Barcode Programming
+                               Language for Enhanced Printer Models" citado
+                               arriba, página 51 (verificado, no inventado).
     <Q>1                      cantidad de copias
     <Z>                       fin del trabajo
 
@@ -68,7 +76,7 @@ import socket
 import struct
 from pathlib import Path
 
-from app.services.formato import etiqueta_referencia
+from app.services.formato import etiqueta_referencia, formatear_cantidad
 
 logger = logging.getLogger("impresion_sato")
 
@@ -138,12 +146,36 @@ def _texto(valor) -> str:
     return str(valor) if valor not in (None, "") else "-"
 
 
+# Acentos/ñ en la SATO (punto 6 del pedido de ajustes de etiquetas): se
+# investigó primero si el manual documenta un comando de code page/juego de
+# caracteres distinto para <XM> (u otra fuente usada acá) que sí imprima
+# á/é/í/ó/ú/ñ correctamente -- no se encontró ninguno. La especificación de
+# <XM> (sección "ESC+XM XM Font Specification" del manual) solo permite
+# elegir paso proporcional o fijo, sin ningún parámetro de charset/code
+# page; tampoco aparece un comando de selección de tabla de caracteres en
+# el resto del manual (se buscó explícitamente "code page", "character
+# set", ISO-8859, Windows-1252, CP437, etc.). Probar a ciegas un comando no
+# documentado para esto es justamente el escenario "demasiado riesgoso" que
+# el pedido contempla como razón válida para no intentarlo (un comando mal
+# formado puede hacer que la impresora ignore el resto del trabajo). Se usa
+# entonces el respaldo explícitamente autorizado: sacar los acentos SOLO en
+# el texto que se manda a la SATO (el PDF de la misma etiqueta sigue
+# mostrando los acentos normalmente, no pasa por acá).
+_MAPA_SIN_ACENTOS = str.maketrans("áéíóúÁÉÍÓÚñÑüÜ", "aeiouAEIOUnNuU")
+
+
+def _quitar_acentos(texto: str) -> str:
+    return texto.translate(_MAPA_SIN_ACENTOS)
+
+
 def _cmd(codigo: str, datos: str = "") -> bytes:
     """Un comando SBPL individual: byte ESC real (0x1B) + código ASCII del
     comando + datos (si tiene). `codigo` en ASCII puro (siempre lo es en
-    SBPL); `datos` en latin-1 para no romper el comando si el texto trae
-    acentos/ñ (ver encoding en generar_sbpl_etiqueta)."""
-    return ESC + codigo.encode("ascii") + datos.encode("latin-1", errors="replace")
+    SBPL); `datos` pasa primero por _quitar_acentos (ver más arriba) y
+    después se codifica en latin-1 como respaldo final para cualquier otro
+    carácter no contemplado (para no romper el comando entero por un
+    carácter suelto que igual no se vaya a ver bien)."""
+    return ESC + codigo.encode("ascii") + _quitar_acentos(datos).encode("latin-1", errors="replace")
 
 
 # <L> solo admite múltiplos ENTEROS 1-12 (no hay especificación de
@@ -186,6 +218,46 @@ TAMANO_CELDA_QR_MM = 0.7
 # centrado) -- mismo criterio que el margen general del resto del layout.
 MARGEN_DERECHO_QR_PT_MM = 3
 
+# QR y código de barras de la etiqueta CUARENTENA/APROBADO/RECHAZADO (ver
+# generar_sbpl_etiqueta_estado) -- celda de QR más chica que
+# TAMANO_CELDA_QR_MM porque esta etiqueta tiene mucho menos lugar libre que
+# la de muestra (ya lleva título 2x, nombre de producto a 2 líneas, IR/LOTE
+# 2x y 5 campos más antes de llegar acá).
+TAMANO_CELDA_QR_ESTADO_MM = 0.5
+# Código de barras CODE128 (<BG>, ver más abajo): altura fija (no depende
+# del dato, a diferencia del QR que crece con el largo del texto) y ancho
+# de barra angosta chico para que el símbolo completo (código de artículo +
+# IR/LOTE) no se pase del ancho disponible.
+ALTO_BARCODE_MM = 10
+ALTO_BARCODE_MINIMO_PT = 40  # piso: por debajo de esto un CODE128 deja de ser confiable para escanear
+ANCHO_BARRA_CODE128_PT = 2
+# Estructura de módulos de un símbolo CODE128 (estándar ISO/IEC 15417, no
+# específico de SATO): cada carácter de datos ocupa 11 módulos; el símbolo
+# completo agrega además el carácter de inicio (11), el dígito verificador
+# (11, el mismo que <BG> genera solo, ver nota del módulo) y el carácter de
+# parada (13) -- de ahí la fórmula ya publicada L = (11*C + 35) * X, con C =
+# cantidad de caracteres de DATOS (sin contar inicio/verificador/parada) y
+# X = ancho de módulo (acá, ANCHO_BARRA_CODE128_PT). Asume Code Set B (un
+# carácter de entrada = un carácter de símbolo) -- válido para datos
+# alfanuméricos mixtos como los de esta etiqueta (código de artículo +
+# IR/LOTE): el ahorro de Code Set C (2 dígitos por carácter de símbolo) solo
+# aplica a corridas de 4+ dígitos seguidos, que estos datos no tienen.
+MODULOS_OVERHEAD_CODE128 = 35
+MODULOS_POR_CARACTER_CODE128 = 11
+# Margen deseado contra el borde derecho al alinear el código de barras ahí
+# (mismo criterio que MARGEN_DERECHO_QR_PT_MM para el QR de la etiqueta de
+# muestra).
+MARGEN_DERECHO_BARCODE_MM = 3
+# Margen inferior reservado antes del logo del pie, y aire entre la grilla y
+# la fila de QR/código de barras -- más chicos que el margen general
+# (margen de texto, 3mm) porque acá ya no queda aire de sobra: hace falta
+# ese lugar para la grilla y el QR/código de barras nuevos (ver el pedido de
+# agregarlos a esta etiqueta). Son elementos gráficos, no texto -- no
+# necesitan el mismo "aire" que un renglón de letra para no verse pegados.
+MARGEN_INFERIOR_FOOTER_MM = 1
+GAP_ANTES_CODIGOS_MM = 1.5
+GAP_CODIGOS_A_FOOTER_MM = 1
+
 # Ancho de cada carácter en la fuente <XM>, en puntos, a multiplicador 1x --
 # confirmado en el manual oficial ("Font with the basic size of: width 24
 # dots, height 24 dots"), paso FIJO (no proporcional, acá nunca se manda
@@ -215,23 +287,26 @@ def _modulos_qr(cantidad_caracteres: int) -> int:
     return 4 * max(_CAPACIDAD_ALFANUMERICA_QR_M) + 17
 
 
-def generar_sbpl_etiqueta(datos: dict, ancho_mm: int, alto_mm: int, dpi: int) -> bytes:
-    """Arma el comando SBPL completo para una etiqueta de muestra, con el
-    mismo contenido que ya muestra la etiqueta en PDF (ver
-    generar_pdf_etiqueta_muestra / _dibujar_etiqueta en
-    app/services/pdf_solicitud_muestreo.py) -- layout propio en puntos SBPL,
-    no hace falta que sea idéntico al PDF.
+def generar_sbpl_etiqueta(datos: dict, ancho_mm: int, alto_mm: int, dpi: int, cantidad_copias: int = 1) -> bytes:
+    """Arma el comando SBPL completo para una etiqueta de muestra, con los
+    MISMOS campos, mismo orden y mismo criterio de énfasis por tamaño que
+    la etiqueta en PDF (ver generar_pdf_etiqueta_muestra / _dibujar_etiqueta
+    en app/services/pdf_solicitud_muestreo.py) -- no técnicamente idéntico
+    pixel a pixel (dos tecnologías de impresión distintas), pero deben verse
+    como la misma etiqueta al ojo del operador.
 
     `datos` (ver _datos_etiqueta_para_impresion en app/api/routes/muestras.py):
-        titulo (ya no se imprime -- ver más abajo), identificador,
+        titulo ("MUESTRA PARA ANÁLISIS"/"TESTIGO"/"CONTRAMUESTRA"/"MUESTRA",
+        mismo texto que el título del PDF -- ver
+        app.services.formato.titulo_etiqueta_por_tipo), identificador,
         erp_codart, erp_desart, nro_ir, cantidad_texto, laboratorio_nombre,
-        fecha (date/datetime u None), iniciales_muestreador, tipo_muestra
-        (opcional -- "Análisis"/"Contramuestra"/"Testigo", una etiqueta por
-        tipo cuando la especificación tiene varios, ver
-        imprimir_etiqueta_directo en muestras.py), cantidad_muestra_texto
-        (opcional -- cantidad definida en lims_especificacion_muestras para
-        ESE tipo puntual, distinta de cantidad_texto que es lo ingresado
-        del IR/lote).
+        fecha (date/datetime u None), iniciales_muestreador,
+        cantidad_muestra_texto (opcional -- cantidad definida en
+        lims_especificacion_muestras para el tipo de muestra puntual de
+        esta etiqueta, ver imprimir_etiqueta_directo en muestras.py; cuando
+        está presente reemplaza a cantidad_texto en el campo "Cantidad",
+        mismo criterio que sigue el PDF entre generar_pdf_etiquetas_v2 y
+        generar_pdf_etiqueta_muestra).
 
     El texto de cada comando se codifica en latin-1 (SBPL trabaja
     primariamente en ASCII; latin-1 cubre los acentos/ñ del español sin
@@ -271,7 +346,18 @@ def generar_sbpl_etiqueta(datos: dict, ancho_mm: int, alto_mm: int, dpi: int) ->
     comandos.append(_cmd("A1", f"{alto_pt:04d}{ancho_pt:04d}"))
 
     def campo(texto: str, multiplicador: int = MULTIPLICADOR_BASE, avance: int = None, nombre_diag: str = None):
+        """Si el multiplicador pedido no entra en el ancho disponible (a
+        diferencia de IR/LOTE y Cantidad en CUARENTENA/APROBADO, acá el
+        contenido es variable -- cantidad_texto/nro_referencia los carga el
+        usuario, no hay garantía de que el valor real sea corto como en las
+        pruebas), se cae a 1x en vez de desbordar -- mismo criterio adaptativo
+        que ya usa el PDF de esta etiqueta (baja de fuente cuando el nombre
+        del producto es largo, ver _ESTILO_NOMBRE_ETIQUETA_CHICO en
+        pdf_solicitud_muestreo.py)."""
         nonlocal v
+        ancho_disponible = ancho_pt - h - margen
+        if len(texto) * ANCHO_CARACTER_XM_PT * multiplicador > ancho_disponible:
+            multiplicador = MULTIPLICADOR_BASE
         comandos.append(_cmd("V", f"{v:04d}"))
         comandos.append(_cmd("H", f"{h:04d}"))
         comandos.append(_cmd("L", f"{multiplicador:02d}{multiplicador:02d}"))
@@ -279,21 +365,51 @@ def generar_sbpl_etiqueta(datos: dict, ancho_mm: int, alto_mm: int, dpi: int) ->
         diagnostico.append((nombre_diag or texto[:24], h, len(texto) * ANCHO_CARACTER_XM_PT * multiplicador))
         v += avance if avance is not None else salto
 
-    # Punto 1 (pedido anterior): sin renglón de título ("MUESTRA") -- se
-    # sacó el campo() que lo imprimía; como v se incrementa una vez menos,
-    # todos los campos de abajo suben solos exactamente el espacio que
-    # ocupaba esa línea (no hace falta restar nada a mano).
+    # Avance vertical para un campo a 2x -- mismo criterio ya usado en
+    # generar_sbpl_etiqueta_estado (CUARENTENA/APROBADO): a 2x el glifo mide
+    # 48pt, el avance análogo es 48 + 16 (mismo "aire" proporcional que usan
+    # los campos a 1x) = salto + ANCHO_CARACTER_XM_PT.
+    AVANCE_2X = salto + ANCHO_CARACTER_XM_PT
+    MULT_DESTACADO = 2
+
+    # Título -- mismo texto que ya usa el PDF de esta etiqueta
+    # (generar_pdf_etiqueta_muestra/generar_pdf_etiquetas_v2 en
+    # pdf_solicitud_muestreo.py: "MUESTRA PARA ANÁLISIS"/"TESTIGO"/
+    # "CONTRAMUESTRA"/"MUESTRA") como primer renglón, para que ambas
+    # versiones de la etiqueta se vean iguales (mismos campos, mismo orden).
+    # Reemplaza al campo "Tipo: X" que antes iba al final (misma
+    # información, ahora en la misma posición que el PDF).
+    campo(_texto(datos.get("titulo")), nombre_diag="Título")
+
     campo(_texto(datos.get("identificador")), nombre_diag="Identificador")
+    # Nombre del producto: se mantiene al tamaño base -- un intento anterior
+    # de agrandarlo en esta etiqueta puntual desbordó el margen en la
+    # impresora real y se revirtió (ver MULTIPLICADOR_BASE más arriba). El
+    # PDF sí lo muestra más grande que el resto, pero acá no hay margen para
+    # replicarlo sin repetir ese problema -- misma etiqueta física
+    # (100x85mm) donde ya se confirmó el desborde.
     campo(_texto(datos.get("erp_desart"))[:40], nombre_diag="Nombre del producto")
+
+    # Código e IR/LOTE: en el PDF son dos renglones separados (antes acá iban
+    # en una sola línea combinada) -- IR/LOTE además se imprime notablemente
+    # más grande que el resto (14pt contra 9-12pt), mismo criterio de énfasis
+    # que ya usan las etiquetas CUARENTENA/APROBADO para este mismo campo
+    # (generar_sbpl_etiqueta_estado, misma etiqueta física de 100x85mm, sin
+    # riesgo de desborde nuevo).
+    campo(_texto(datos.get("erp_codart")), nombre_diag="Código")
     etiqueta_ref = datos.get("etiqueta_referencia") or "IR"
-    campo(f"{_texto(datos.get('erp_codart'))}  {etiqueta_ref}: {_texto(datos.get('nro_ir'))}", nombre_diag=f"Código + {etiqueta_ref}")
-    # Renombrado de "Cantidad: " a "Ingreso: " -- mismo campo, mismo dato
-    # (lo ingresado del IR/lote), para no confundirlo con "Cantidad
-    # muestra" de abajo (la cantidad definida para ESTE tipo de muestra
-    # puntual, un dato distinto).
-    campo(f"Ingreso: {_texto(datos.get('cantidad_texto'))}", nombre_diag="Ingreso")
-    if datos.get("cantidad_muestra_texto"):
-        campo(f"Cantidad muestra: {datos['cantidad_muestra_texto']}", nombre_diag="Cantidad muestra")
+    campo(f"{etiqueta_ref}: {_texto(datos.get('nro_ir'))}", multiplicador=MULT_DESTACADO, avance=AVANCE_2X, nombre_diag=etiqueta_ref)
+
+    # Cantidad: un solo campo (antes eran dos -- "Ingreso" y "Cantidad
+    # muestra" -- el PDF solo tiene uno). Cuando esta etiqueta puntual tiene
+    # un tipo de muestra confirmado (ver imprimir_etiqueta_directo en
+    # muestras.py), usa la cantidad de ESE tipo; si no, la cantidad general
+    # de la muestra -- mismo criterio que ya sigue el PDF entre
+    # generar_pdf_etiquetas_v2 y generar_pdf_etiqueta_muestra. También más
+    # grande, mismo criterio que IR/LOTE de arriba (13pt en el PDF).
+    cantidad_final = datos.get("cantidad_muestra_texto") or datos.get("cantidad_texto")
+    campo(f"Cantidad: {_texto(cantidad_final)}", multiplicador=MULT_DESTACADO, avance=AVANCE_2X, nombre_diag="Cantidad")
+
     if datos.get("laboratorio_nombre"):
         campo(f"Lab: {datos['laboratorio_nombre']}", nombre_diag="Laboratorio")
 
@@ -303,13 +419,6 @@ def generar_sbpl_etiqueta(datos: dict, ancho_mm: int, alto_mm: int, dpi: int) ->
     if datos.get("iniciales_muestreador"):
         linea_fecha += f"  Muestreador: {datos['iniciales_muestreador']}"
     campo(linea_fecha, nombre_diag="Fecha + muestreador")
-
-    # Punto 3 de ESTE pedido: tipo de muestra (Análisis/Contramuestra/
-    # Testigo), en un renglón propio inmediatamente después de la fecha --
-    # solo si esta etiqueta puntual tiene un tipo asociado (ver el loop en
-    # imprimir_etiqueta_directo, una invocación de esta función por tipo).
-    if datos.get("tipo_muestra"):
-        campo(f"Tipo: {datos['tipo_muestra']}", nombre_diag="Tipo de muestra")
 
     # Punto 3 de ESTE pedido: el QR se corrió 5 renglones más arriba de la
     # posición que tenía en el pedido anterior (v + 2*salto) -- misma
@@ -372,7 +481,7 @@ def generar_sbpl_etiqueta(datos: dict, ancho_mm: int, alto_mm: int, dpi: int) ->
 
     diagnostico.append(("Recuadro", h_recuadro, ancho_recuadro_pt))
 
-    comandos.append(_cmd("Q", "1"))
+    comandos.append(_cmd("Q", str(cantidad_copias)))
     comandos.append(_cmd("Z"))
 
     logger.info("=== Diagnóstico de posiciones SBPL -- ancho etiqueta configurado: %dmm = %dpt (dpi=%d) ===", ancho_mm, ancho_pt, dpi)
@@ -417,19 +526,22 @@ def _envolver_texto(texto: str, max_chars: int, max_lineas: int) -> list[str]:
     return lineas or [""]
 
 
-def generar_sbpl_etiqueta_estado(datos: dict, titulo: str, ancho_mm: int, alto_mm: int, dpi: int) -> bytes:
-    """Etiqueta CUARENTENA/APROBADO -- mismo mecanismo SBPL que
+def generar_sbpl_etiqueta_estado(datos: dict, titulo: str, ancho_mm: int, alto_mm: int, dpi: int, cantidad_copias: int = 1) -> bytes:
+    """Etiqueta CUARENTENA/APROBADO/RECHAZADO -- mismo mecanismo SBPL que
     generar_sbpl_etiqueta (etiqueta de muestra), layout propio: título
-    grande, nombre del producto (hasta 2 líneas), IR/lote, código, fecha de
-    ingreso, fecha de vencimiento, bulto/s y cantidad, más el logo al pie.
-    NO lleva lote de proveedor ni proveedor (a diferencia de la etiqueta de
-    muestra) -- confirmado que no corresponde acá.
+    grande, nombre del producto (hasta 2 líneas), IR/lote, código + bulto/s
+    (combinados en un renglón), fechas de ingreso y vencimiento (combinadas
+    en otro), cantidad, grilla de 6 casilleros vacíos, QR y código de
+    barras CODE128, más el logo al pie. NO lleva lote de proveedor ni
+    proveedor (a diferencia de la etiqueta de muestra) -- confirmado que no
+    corresponde acá.
 
     `datos`:
         erp_desart, erp_codart, nro_ir, etiqueta_referencia ("IR"/"LOTE"/
         "Ref", ver app/services/formato.py), fecha_ingreso, fecha_vencimiento
         (date u None), bulto_actual, bulto_total (int), cantidad_texto (ya
-        formateada, ver formatear_cantidad)."""
+        formateada, ver formatear_cantidad), cantidad_valor (el mismo dato
+        SIN formatear ni unidad -- Optional[float], lo que va en el QR)."""
     ancho_pt = mm_a_puntos(ancho_mm, dpi)
     alto_pt = mm_a_puntos(alto_mm, dpi)
 
@@ -498,15 +610,141 @@ def generar_sbpl_etiqueta_estado(datos: dict, titulo: str, ancho_mm: int, alto_m
     etiqueta_ref = datos.get("etiqueta_referencia") or "IR"
     campo(f"{etiqueta_ref} N°: {_texto(datos.get('nro_ir'))}", multiplicador=MULT_REFERENCIA, avance=AVANCE_2X)
 
-    campo(f"Código: {_texto(datos.get('erp_codart'))}")
-
     def fecha_texto(valor):
         return valor.strftime("%d/%m/%y") if valor else "-"
 
-    campo(f"Fecha de Ingreso: {fecha_texto(datos.get('fecha_ingreso'))}")
-    campo(f"Fecha de vencimiento: {fecha_texto(datos.get('fecha_vencimiento'))}")
-    campo(f"Bulto/s: {_texto(datos.get('bulto_actual'))}/{_texto(datos.get('bulto_total'))}")
-    campo(f"Cantidad: {_texto(datos.get('cantidad_texto'))}")
+    # Grilla, QR y código de barras (agregados a esta etiqueta): para
+    # hacerles lugar sin sacar ningún dato de los que ya había, "Código" se
+    # combina con "Bulto/s" en un renglón y las dos fechas en otro (antes 4
+    # renglones sueltos) -- mismos datos, con etiquetas más cortas para que
+    # la línea combinada entre en el ancho de la etiqueta (799pt a 203dpi,
+    # 24pt/carácter a 1x: "Código:"+"Fecha de Ingreso:"/"Fecha de
+    # vencimiento:" completos no entraban combinados en una sola línea,
+    # "Cód:"/"Ing:"/"Venc:" sí). El salto entre estos renglones y "Cantidad"
+    # también se achica (SALTO_COMPACTO en vez de salto) -- ninguno de los
+    # dos cambios toca el tamaño de letra de ningún campo, solo el espacio
+    # entre renglones y el texto de la etiqueta de cada uno.
+    SALTO_COMPACTO = mm_a_puntos(4, dpi)
+    campo(
+        f"Cód: {_texto(datos.get('erp_codart'))}   Bultos: {_texto(datos.get('bulto_actual'))}/{_texto(datos.get('bulto_total'))}",
+        avance=SALTO_COMPACTO,
+    )
+    campo(
+        f"Ing: {fecha_texto(datos.get('fecha_ingreso'))}   Venc: {fecha_texto(datos.get('fecha_vencimiento'))}",
+        avance=SALTO_COMPACTO,
+    )
+    campo(f"Cantidad: {_texto(datos.get('cantidad_texto'))}", avance=SALTO_COMPACTO)
+
+    diagnostico = []  # (nombre, v, h, alto, ancho) -- mismo criterio de diagnóstico que ya usa generar_sbpl_etiqueta
+
+    # Grilla de 6 casilleros vacíos, para anotar a mano cantidades restantes
+    # durante la vida del bulto -- ancho completo de la etiqueta (mismo
+    # margen que el resto de los campos de esta función: acá no hay
+    # recuadro exterior al que pegarse, a diferencia de la etiqueta de
+    # muestra) y alto igual al que ya ocupa UN renglón del nombre del
+    # producto (AVANCE_2X -- la misma medida que usan las 2 líneas
+    # reservadas para erp_desart más arriba, no un valor nuevo). El
+    # contorno y las 5 divisiones internas se arman con 7 líneas verticales
+    # (<FW> modo "Rule", ver nota del módulo) más 2 horizontales -- mismo
+    # mecanismo que el recuadro de generar_sbpl_etiqueta.
+    CANTIDAD_CASILLEROS = 6
+    alto_grilla_pt = AVANCE_2X
+    ancho_grilla_pt = ancho_pt - 2 * margen
+    h_grilla = margen
+    v_grilla = v
+
+    comandos.append(_cmd("V", f"{v_grilla:04d}"))
+    comandos.append(_cmd("H", f"{h_grilla:04d}"))
+    comandos.append(_cmd("FW", f"{GROSOR_RECUADRO_PT:02d}H{ancho_grilla_pt:04d}"))
+    comandos.append(_cmd("V", f"{v_grilla + alto_grilla_pt:04d}"))
+    comandos.append(_cmd("H", f"{h_grilla:04d}"))
+    comandos.append(_cmd("FW", f"{GROSOR_RECUADRO_PT:02d}H{ancho_grilla_pt:04d}"))
+    for i in range(CANTIDAD_CASILLEROS + 1):
+        h_linea = h_grilla + round(i * ancho_grilla_pt / CANTIDAD_CASILLEROS)
+        comandos.append(_cmd("V", f"{v_grilla:04d}"))
+        comandos.append(_cmd("H", f"{h_linea:04d}"))
+        comandos.append(_cmd("FW", f"{GROSOR_RECUADRO_PT:02d}V{alto_grilla_pt:04d}"))
+    diagnostico.append(("Grilla 6 casilleros", v_grilla, h_grilla, alto_grilla_pt, ancho_grilla_pt))
+
+    v = v_grilla + alto_grilla_pt + mm_a_puntos(GAP_ANTES_CODIGOS_MM, dpi)
+
+    # QR (inventario rápido) y código de barras CODE128, mismo dato
+    # combinado (código de artículo + IR/LOTE), el QR además con la
+    # cantidad (solo el número, sin unidad -- ver cantidad_valor). Separador
+    # "*" en vez del "|" original: el modo Alfanumérico del QR (<DS>2,...>,
+    # el mismo que ya usa generar_sbpl_etiqueta) solo admite el set de 45
+    # caracteres del estándar ISO/IEC 18004 (0-9, A-Z, espacio y $%*+-./:) --
+    # "|" no forma parte de ese set y el símbolo quedaría mal formado; "*"
+    # sí, y no aparece en ningún código de artículo/IR/lote real de esta
+    # base (verificado contra los datos reales de lims_muestras). Mismo
+    # separador en el código de barras -- CODE128 no tiene esa restricción,
+    # pero usar el mismo separador en los dos códigos evita mantener dos
+    # formatos distintos para el mismo dato.
+    codigo_articulo = _texto(datos.get("erp_codart"))
+    ir_o_lote = _texto(datos.get("nro_ir"))
+    cantidad_valor_texto = formatear_cantidad(datos.get("cantidad_valor")) or "-"
+    dato_codigo_barras = f"{codigo_articulo}*{ir_o_lote}"
+    dato_qr = f"{dato_codigo_barras}*{cantidad_valor_texto}"
+
+    v_codigos = v
+    alto_disponible_codigos_pt = (
+        alto_pt - mm_a_puntos(MARGEN_INFERIOR_FOOTER_MM, dpi) - _LOGO_ALTO_PX
+        - mm_a_puntos(GAP_CODIGOS_A_FOOTER_MM, dpi) - v_codigos
+    )
+
+    # QR a la izquierda -- celda de tamaño fijo (TAMANO_CELDA_QR_ESTADO_MM),
+    # achicada solo si con el dato real (más largo de lo esperado) no
+    # entraría en el alto disponible -- mismo criterio "cae a un tamaño que
+    # entre en vez de desbordar" que ya usa campo() más arriba en este
+    # archivo.
+    modulos_qr = _modulos_qr(len(dato_qr))
+    tamano_celda_qr = max(1, min(32, mm_a_puntos(TAMANO_CELDA_QR_ESTADO_MM, dpi)))
+    while modulos_qr * tamano_celda_qr > alto_disponible_codigos_pt and tamano_celda_qr > 1:
+        tamano_celda_qr -= 1
+    ancho_qr_pt = modulos_qr * tamano_celda_qr
+
+    comandos.append(_cmd("V", f"{v_codigos:04d}"))
+    comandos.append(_cmd("H", f"{h_grilla:04d}"))
+    comandos.append(_cmd("2D30", f",{NIVEL_CORRECCION_QR},{tamano_celda_qr:02d},0,0"))
+    comandos.append(_cmd("DS", f"2,{dato_qr}"))
+    diagnostico.append(("QR", v_codigos, h_grilla, ancho_qr_pt, ancho_qr_pt))
+
+    # Código de barras CODE128, alineado contra el margen derecho de la
+    # etiqueta (el QR queda donde está, a la izquierda, sin moverse) --
+    # <BG>aabbbn-n (a=ancho de barra angosta en dots, b=alto en dots,
+    # n=dato; el dígito verificador se genera solo, ver nota del módulo).
+    # El alto objetivo es fijo (ALTO_BARCODE_MM) -- a diferencia del QR, no
+    # depende del largo del dato -- pero igual se achica si no entra en el
+    # alto disponible (mismo criterio que el QR de arriba), con un piso
+    # (ALTO_BARCODE_MINIMO_PT) para no terminar con un código tan bajo que
+    # ya no sea confiable de escanear.
+    alto_barcode_pt = max(ALTO_BARCODE_MINIMO_PT, min(mm_a_puntos(ALTO_BARCODE_MM, dpi), alto_disponible_codigos_pt))
+
+    # Ancho real del símbolo (MODULOS_OVERHEAD_CODE128/MODULOS_POR_CARACTER_CODE128,
+    # ver esas constantes) -- con esto ya se puede calcular <H> igual que el
+    # QR de la etiqueta de muestra (ancho total - ancho del elemento -
+    # margen derecho deseado, con la misma corrección de un ancho de
+    # carácter hacia la izquierda que ya usa esa etiqueta -- "mismo
+    # criterio" pedido, no una fórmula distinta).
+    ancho_barcode_pt = (MODULOS_POR_CARACTER_CODE128 * len(dato_codigo_barras) + MODULOS_OVERHEAD_CODE128) * ANCHO_BARRA_CODE128_PT
+    margen_derecho_barcode_pt = mm_a_puntos(MARGEN_DERECHO_BARCODE_MM, dpi)
+    h_barcode = ancho_pt - ancho_barcode_pt - margen_derecho_barcode_pt - ANCHO_CARACTER_XM_PT
+
+    # Si el dato fuera tan largo que el código de barras, ya alineado a la
+    # derecha, invadiera el lugar del QR (que no se mueve de la izquierda),
+    # se lo corre lo mínimo indispensable para que no se pisen -- con datos
+    # reales (código de artículo + IR/LOTE, siempre cortos) esto no debería
+    # activarse nunca, pero es más seguro que dejar que se superpongan en
+    # silencio.
+    h_barcode_minimo = h_grilla + ancho_qr_pt + mm_a_puntos(GAP_ANTES_CODIGOS_MM, dpi)
+    h_barcode = max(h_barcode, h_barcode_minimo)
+
+    comandos.append(_cmd("V", f"{v_codigos:04d}"))
+    comandos.append(_cmd("H", f"{h_barcode:04d}"))
+    comandos.append(_cmd("BG", f"{ANCHO_BARRA_CODE128_PT:02d}{alto_barcode_pt:03d}{dato_codigo_barras}"))
+    diagnostico.append(("Código de barras", v_codigos, h_barcode, alto_barcode_pt, ancho_barcode_pt))
+
+    v = v_codigos + max(ancho_qr_pt, alto_barcode_pt)
 
     # Logo + razón social, al pie -- centrados como UN solo bloque (logo +
     # espacio + texto), no cada uno por separado, para que el conjunto quede
@@ -520,7 +758,11 @@ def generar_sbpl_etiqueta_estado(datos: dict, titulo: str, ancho_mm: int, alto_m
     ancho_bloque_footer = _LOGO_ANCHO_PX + gap_footer_pt + ancho_texto_footer_pt
     h_footer = max(margen, (ancho_pt - ancho_bloque_footer) // 2)
 
-    v_footer = alto_pt - margen - _LOGO_ALTO_PX
+    # Margen inferior reducido (MARGEN_INFERIOR_FOOTER_MM en vez de margen)
+    # -- ver el comentario de esa constante: es el lugar que hacía falta
+    # liberar para la grilla y el QR/código de barras de más arriba.
+    v_footer = alto_pt - mm_a_puntos(MARGEN_INFERIOR_FOOTER_MM, dpi) - _LOGO_ALTO_PX
+    diagnostico.append(("Logo + razón social (pie)", v_footer, h_footer, _LOGO_ALTO_PX, ancho_bloque_footer))
     comandos.append(_cmd("V", f"{v_footer:04d}"))
     comandos.append(_cmd("H", f"{h_footer:04d}"))
     comandos.append(_cmd("L", "0101"))
@@ -537,8 +779,43 @@ def generar_sbpl_etiqueta_estado(datos: dict, titulo: str, ancho_mm: int, alto_m
     comandos.append(_cmd("L", "0101"))
     comandos.append(_cmd("XM", texto_footer))
 
-    comandos.append(_cmd("Q", "1"))
+    comandos.append(_cmd("Q", str(cantidad_copias)))
     comandos.append(_cmd("Z"))
+
+    # Diagnóstico de posiciones -- mismo criterio que ya usa
+    # generar_sbpl_etiqueta: loguea cada elemento agregado por este pedido
+    # (grilla, QR, código de barras, pie) con su caja (V/H + alto/ancho), y
+    # avisa si alguno se pasa del alto total de la etiqueta o si su caja se
+    # superpone de verdad (en V Y en H) con la de otro elemento -- comparado
+    # contra TODOS los demás, no solo "el siguiente de la lista", para no
+    # marcar como choque el QR y el código de barras (comparten el mismo V
+    # a propósito, van uno al lado del otro, no se pisan porque su H no se
+    # superpone). Para poder confirmar por log, sin depender solo de mirar
+    # la impresión física, que las cuentas de este layout tan ajustado
+    # cierran bien.
+    def _se_superponen(a, b):
+        _, av, ah, aalto, aancho = a
+        _, bv, bh, balto, bancho = b
+        return av < bv + balto and bv < av + aalto and ah < bh + bancho and bh < ah + aancho
+
+    logger.info("=== Diagnóstico de posiciones SBPL '%s' -- %dmm x %dmm = %dpt alto x %dpt ancho (dpi=%d) ===", titulo, ancho_mm, alto_mm, alto_pt, ancho_pt, dpi)
+    for idx, item in enumerate(diagnostico):
+        nombre, v_elem, h_elem, alto_elem, ancho_elem = item
+        borde_inferior = v_elem + alto_elem
+        borde_derecho = h_elem + ancho_elem
+        avisos = []
+        if borde_inferior > alto_pt:
+            avisos.append("SE PASA DEL ALTO TOTAL")
+        if borde_derecho > ancho_pt:
+            avisos.append("SE PASA DEL ANCHO TOTAL")
+        choques = [otro[0] for j, otro in enumerate(diagnostico) if j != idx and _se_superponen(item, otro)]
+        if choques:
+            avisos.append(f"CHOCA CON {choques}")
+        logger.info(
+            "  %-24s V=%4d H=%4d alto=%4d ancho=%4d V+alto=%4d H+ancho=%4d%s",
+            nombre, v_elem, h_elem, alto_elem, ancho_elem, borde_inferior, borde_derecho,
+            f"  <-- {', '.join(avisos)}" if avisos else "",
+        )
 
     logger.info(
         "=== SBPL etiqueta '%s' -- %dmm x %dmm (dpi=%d), logo %dx%dpx ===",

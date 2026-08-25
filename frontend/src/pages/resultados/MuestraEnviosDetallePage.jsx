@@ -98,9 +98,14 @@ export default function MuestraEnviosDetallePage() {
                     {en.nro_remito && ` — remito ${en.nro_remito}`}
                   </span>
                 </div>
-                <span className={`badge ${en.completo ? 'badge-ok' : 'badge-warn'}`}>
-                  {en.completo ? 'Completo' : 'Faltan resultados'}
-                </span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <span className={`badge ${en.completo ? 'badge-ok' : 'badge-warn'}`}>
+                    {en.completo ? 'Completo' : 'Faltan resultados'}
+                  </span>
+                  <span className={`badge ${en.facturado ? 'badge-ok' : 'badge-neutral'}`}>
+                    {en.facturado ? 'Facturado' : 'Sin Facturar'}
+                  </span>
+                </div>
               </div>
 
               <ul style={{ margin: '0 0 var(--sp-3)', paddingLeft: '1.2em' }}>
@@ -141,6 +146,11 @@ export default function MuestraEnviosDetallePage() {
                 <button className="btn btn-secondary" onClick={() => navigate(`/muestras/${id}/envios/${en.id_envio}/remito`)}>
                   Ver remito
                 </button>
+                {en.tiene_remito && (
+                  <button className="btn btn-secondary" onClick={() => navigate(`/muestras/${id}/envios/${en.id_envio}/remito#constancia-recepcion`)}>
+                    Constancia de Recepción →
+                  </button>
+                )}
               </div>
             </div>
           ))
