@@ -14,7 +14,7 @@ Se corrió en producción una vez: de 88 especificaciones pendientes, solo 2
 quedaron resueltas, sin ninguna pista de qué pasó con las otras 86 (el
 script solo decía "[SIN RESOLVER]", sin loguear el motivo). Investigando en
 LIMSS_DEV con el diagnóstico agregado acá, las 28 especificaciones
-pendientes en este entorno (todas tipo_material='producto_terminado')
+pendientes en ese entorno (todas tipo_material='producto_terminado')
 fallaban TODAS por el mismo motivo real, verificado contra el ERP:
 lims_especificaciones.erp_CODART tiene el código "base" del producto (ej.
 'PT001'), pero el ERP le agrega a los producto_terminado un sufijo de
@@ -26,12 +26,12 @@ nunca iba a encontrar nada aunque el artículo SÍ exista en el ERP. No es el
 caso legítimo de "el artículo no tiene equivalente en el ERP" -- es un
 desajuste de formato entre el texto guardado y el texto real.
 
-Confirmado con una consulta directa: para las 28 especificaciones de
-DEV, GIM21ART.M21Id = lims_especificaciones.erp_IdM21 SIEMPRE encuentra la
-fila real del ERP (con su IdT59 ya cargado), aunque el CODART no matchee.
-Por eso este script prueba primero resolver_codsar_por_codart (el método
-ya usado y verificado -- no se toca su comportamiento para los casos que
-ya venían resolviendo bien) y, si falla, cae a resolver_codsar_por_idm21
+Confirmado con una consulta directa: para las especificaciones de DEV,
+GIM21ART.M21Id = lims_especificaciones.erp_IdM21 SIEMPRE encuentra la fila
+real del ERP (con su IdT59 ya cargado), aunque el CODART no matchee. Por
+eso este script prueba primero resolver_codsar_por_codart (el método ya
+usado y verificado -- no se toca su comportamiento para los casos que ya
+venían resolviendo bien) y, si falla, cae a resolver_codsar_por_idm21
 (mismo JOIN pero por la clave numérica M21Id, que no tiene el problema de
 formato de texto) antes de darlo por "sin resolver" de verdad.
 
