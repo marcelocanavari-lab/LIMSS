@@ -55,6 +55,15 @@ export default function CargaResultadosOrdenTrabajoPage() {
   const [muestrasConfirmadas, setMuestrasConfirmadas] = useState({});
   const [muestrasAdhoc, setMuestrasAdhoc] = useState([]);
 
+  // Recepción del proveedor (Libro de Ingresos) -- se carga en este mismo
+  // momento, junto con el resto de Ejecutar Muestreo (ver
+  // OrdenTrabajoDigitalBody en el backend).
+  const [recepcion, setRecepcion] = useState({
+    fecha_factura_proveedor: '', numero_factura_proveedor: '',
+    id_usuario_recibio: '', id_usuario_rotulo: '',
+  });
+  const [usuariosActivos, setUsuariosActivos] = useState([]);
+
   // Impresión directa (SATO/SBPL) de las etiquetas generadas -- alternativa
   // al PDF, mismo patrón que MuestraEtiquetaPage.jsx.
   const [impresoras, setImpresoras] = useState([]);
@@ -62,6 +71,10 @@ export default function CargaResultadosOrdenTrabajoPage() {
   const [mostrarImprimirDirecto, setMostrarImprimirDirecto] = useState(false);
   const [imprimiendo, setImprimiendo] = useState(false);
   const [mensajeDirecto, setMensajeDirecto] = useState(null); // { tipo: 'ok'|'error', texto }
+
+  useEffect(() => {
+    solicitudesMuestreoApi.listarUsuariosActivos().then(setUsuariosActivos).catch(() => {});
+  }, []);
 
   useEffect(() => {
     solicitudesMuestreoApi
@@ -117,6 +130,10 @@ export default function CargaResultadosOrdenTrabajoPage() {
 
   function actualizarCampoFisico(campo, valor) {
     setCamposFisicos((prev) => ({ ...prev, [campo]: valor }));
+  }
+
+  function actualizarRecepcion(campo, valor) {
+    setRecepcion((prev) => ({ ...prev, [campo]: valor }));
   }
 
   function actualizarChecklist(idEspecEnsayo, valor) {
@@ -201,6 +218,10 @@ export default function CargaResultadosOrdenTrabajoPage() {
           .filter((it) => it.valor_cualitativo)
           .map((it) => ({ id_espec_ensayo: it.id_espec_ensayo, valor_cualitativo: it.valor_cualitativo })),
         muestras: muestrasBody,
+        fecha_factura_proveedor: recepcion.fecha_factura_proveedor || null,
+        numero_factura_proveedor: recepcion.numero_factura_proveedor.trim() || null,
+        id_usuario_recibio: recepcion.id_usuario_recibio ? Number(recepcion.id_usuario_recibio) : null,
+        id_usuario_rotulo: recepcion.id_usuario_rotulo ? Number(recepcion.id_usuario_rotulo) : null,
       });
       setResultado(resp);
     } catch (err) {
@@ -554,6 +575,59 @@ export default function CargaResultadosOrdenTrabajoPage() {
                 + Agregar muestra ad-hoc
               </button>
             )}
+          </div>
+
+          <div className="card" style={{ marginBottom: 'var(--sp-4)' }}>
+            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Recepción del proveedor</h2>
+            <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
+              <div className="field" style={{ flex: '1 1 200px' }}>
+                <label className="field-label">Fecha de factura</label>
+                <input
+                  className="field-input"
+                  type="date"
+                  value={recepcion.fecha_factura_proveedor}
+                  onChange={(e) => actualizarRecepcion('fecha_factura_proveedor', e.target.value)}
+                  disabled={guardando || soloLectura}
+                />
+              </div>
+              <div className="field" style={{ flex: '1 1 200px' }}>
+                <label className="field-label">N° de factura</label>
+                <input
+                  className="field-input"
+                  value={recepcion.numero_factura_proveedor}
+                  onChange={(e) => actualizarRecepcion('numero_factura_proveedor', e.target.value)}
+                  disabled={guardando || soloLectura}
+                />
+              </div>
+              <div className="field" style={{ flex: '1 1 200px' }}>
+                <label className="field-label">Recibió</label>
+                <select
+                  className="field-input"
+                  value={recepcion.id_usuario_recibio}
+                  onChange={(e) => actualizarRecepcion('id_usuario_recibio', e.target.value)}
+                  disabled={guardando || soloLectura}
+                >
+                  <option value="">Seleccioná un usuario...</option>
+                  {usuariosActivos.map((u) => (
+                    <option key={u.id_usuario} value={u.id_usuario}>{u.nombre_completo}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field" style={{ flex: '1 1 200px' }}>
+                <label className="field-label">Rotuló</label>
+                <select
+                  className="field-input"
+                  value={recepcion.id_usuario_rotulo}
+                  onChange={(e) => actualizarRecepcion('id_usuario_rotulo', e.target.value)}
+                  disabled={guardando || soloLectura}
+                >
+                  <option value="">Seleccioná un usuario...</option>
+                  {usuariosActivos.map((u) => (
+                    <option key={u.id_usuario} value={u.id_usuario}>{u.nombre_completo}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
 
           {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}

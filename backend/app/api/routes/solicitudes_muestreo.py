@@ -54,6 +54,7 @@ from app.schemas.solicitudes_muestreo import (
     SolicitudMuestreoCreate,
     SolicitudMuestreoDetalle,
     SolicitudMuestreoResponse,
+    UsuarioDisponible,
 )
 from app.schemas.muestras import ImprimirDirectoBody, ImprimirDirectoResponse
 from app.services import audit, storage
@@ -66,6 +67,7 @@ from app.services.erp_ir import (
     normalizar_fecha_sentinel,
     solicitud_activa_existente,
 )
+from app.services.erp_materiales import asignar_numero_analisis_si_corresponde, tiene_numero_analisis
 from app.services.formato import formatear_cantidad
 from app.services.impresion_sato import generar_sbpl_etiqueta_estado, imprimir_sbpl
 from app.services.pdf_solicitud_muestreo import (
@@ -370,6 +372,24 @@ def listar_muestreadores(
     ]
 
 
+@router.get("/usuarios-activos", response_model=list[UsuarioDisponible])
+def listar_usuarios_activos(
+    user: dict = Depends(require_rol(*_ROLES_MUESTREADOR_O_SUPERIOR)),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Todos los usuarios activos (cualquier rol), para los selectores
+    "Recibió"/"Rotuló" de Ejecutar Muestreo (ver OrdenTrabajoDigitalBody) --
+    a diferencia de /muestreadores, acá no se filtra por rol porque quien
+    recibe o rotula un ingreso no tiene por qué ser un muestreador. Ruta
+    literal -- debe declararse antes de "/{id_solicitud}"."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT id_usuario, nombre, apellido FROM lims_usuarios WHERE activo = 1 ORDER BY apellido, nombre")
+    return [
+        UsuarioDisponible(id_usuario=r.id_usuario, nombre_completo=f"{r.nombre} {r.apellido}")
+        for r in cursor.fetchall()
+    ]
+
+
 @router.get("/mis-solicitudes", response_model=list[SolicitudMuestreoResponse])
 def listar_mis_solicitudes(
     user: dict = Depends(require_rol(*_ROLES_MUESTREADOR_O_SUPERIOR)),
@@ -424,7 +444,7 @@ def _tipo_material_de_especificacion(cursor, id_especificacion: Optional[int]) -
     return "materia_prima"
 
 
-def _crear_muestra_desde_solicitud(cursor, row, datos_muestreo_pendientes: bool) -> tuple[int, str]:
+def _crear_muestra_desde_solicitud(conn: pyodbc.Connection, cursor, row, datos_muestreo_pendientes: bool) -> tuple[int, str]:
     """Inserta lims_muestras a partir de los datos ya conocidos de la
     solicitud (y del ERP, ya resueltos al crearla) -- compartido por
     confirmar_orden_trabajo (flujo normal: el muestreador ejecuta el
@@ -444,19 +464,42 @@ def _crear_muestra_desde_solicitud(cursor, row, datos_muestreo_pendientes: bool)
     codigo_muestra = _generar_codigo_muestra(cursor)
     tipo_material = _tipo_material_de_especificacion(cursor, row.id_especificacion)
     estado_inicial = "en_análisis" if not tiene_ensayos_analisis(cursor, row.id_especificacion) else "pendiente_envio"
-    cursor.execute(
-        """
-        INSERT INTO lims_muestras
-            (codigo_muestra, tipo_referencia, tipo_material, nro_referencia, erp_n01id, erp_IdM21, erp_CODART, erp_DESART,
-             erp_cantidad_lote, erp_proveedor, cantidad_enviada, unidad_enviada, id_especificacion, estado,
-             id_usuario_muestreo, fecha_muestreo, datos_muestreo_pendientes)
-        VALUES (?, 'ir', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE(), ?)
-        """,
-        codigo_muestra, tipo_material, row.erp_nro_ir, getattr(row, "erp_n01id", None), row.erp_IdM21, row.erp_CODART, row.erp_DESART,
-        row.cantidad_ingresada, row.proveedor_nombre,
-        cantidades["cantidad_muestra"], cantidades["unidad_muestra"],
-        row.id_especificacion, estado_inicial, row.id_muestreador, 1 if datos_muestreo_pendientes else 0,
-    )
+
+    # numero_analisis (Libro de Ingresos): correlativo exclusivo de Materia
+    # Prima/Material de Empaque, determinado por erp_codsar (ver
+    # asignar_numero_analisis_si_corresponde) -- Solicitudes de Muestreo es
+    # siempre por IR (materia prima o material de empaque, nunca lote), así
+    # que acá puede tocar en cualquiera de los dos casos.
+    if tiene_numero_analisis(cursor):
+        numero_analisis = asignar_numero_analisis_si_corresponde(conn, row.id_especificacion)
+        cursor.execute(
+            """
+            INSERT INTO lims_muestras
+                (codigo_muestra, tipo_referencia, tipo_material, nro_referencia, erp_n01id, erp_IdM21, erp_CODART, erp_DESART,
+                 erp_cantidad_lote, erp_proveedor, cantidad_enviada, unidad_enviada, id_especificacion, estado,
+                 id_usuario_muestreo, fecha_muestreo, datos_muestreo_pendientes, numero_analisis)
+            VALUES (?, 'ir', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE(), ?, ?)
+            """,
+            codigo_muestra, tipo_material, row.erp_nro_ir, getattr(row, "erp_n01id", None), row.erp_IdM21, row.erp_CODART, row.erp_DESART,
+            row.cantidad_ingresada, row.proveedor_nombre,
+            cantidades["cantidad_muestra"], cantidades["unidad_muestra"],
+            row.id_especificacion, estado_inicial, row.id_muestreador, 1 if datos_muestreo_pendientes else 0,
+            numero_analisis,
+        )
+    else:
+        cursor.execute(
+            """
+            INSERT INTO lims_muestras
+                (codigo_muestra, tipo_referencia, tipo_material, nro_referencia, erp_n01id, erp_IdM21, erp_CODART, erp_DESART,
+                 erp_cantidad_lote, erp_proveedor, cantidad_enviada, unidad_enviada, id_especificacion, estado,
+                 id_usuario_muestreo, fecha_muestreo, datos_muestreo_pendientes)
+            VALUES (?, 'ir', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE(), ?)
+            """,
+            codigo_muestra, tipo_material, row.erp_nro_ir, getattr(row, "erp_n01id", None), row.erp_IdM21, row.erp_CODART, row.erp_DESART,
+            row.cantidad_ingresada, row.proveedor_nombre,
+            cantidades["cantidad_muestra"], cantidades["unidad_muestra"],
+            row.id_especificacion, estado_inicial, row.id_muestreador, 1 if datos_muestreo_pendientes else 0,
+        )
     cursor.execute("SELECT @@IDENTITY AS id")
     id_muestra = int(cursor.fetchone().id)
     return id_muestra, codigo_muestra
@@ -1169,7 +1212,7 @@ def generar_envio_anticipado(
         )
     _verificar_completa_para_ejecutar(row)
 
-    id_muestra, codigo_muestra = _crear_muestra_desde_solicitud(cursor, row, datos_muestreo_pendientes=True)
+    id_muestra, codigo_muestra = _crear_muestra_desde_solicitud(conn, cursor, row, datos_muestreo_pendientes=True)
     cursor.execute(
         "UPDATE lims_solicitudes_muestreo SET id_muestra = ? WHERE id_solicitud = ?",
         id_muestra, id_solicitud,
@@ -1213,6 +1256,17 @@ def confirmar_orden_trabajo(
         )
     _verificar_completa_para_ejecutar(row)
 
+    # Datos de recepción del proveedor (Libro de Ingresos) -- si vienen
+    # usuarios, tienen que existir y estar activos (mismo criterio que
+    # id_laboratorio/id_muestreador en completar_datos), para no guardar una
+    # referencia a un usuario borrado/desactivado que después el reporte no
+    # pueda resolver.
+    for id_usuario, campo in ((body.id_usuario_recibio, "id_usuario_recibio"), (body.id_usuario_rotulo, "id_usuario_rotulo")):
+        if id_usuario is not None:
+            cursor.execute("SELECT 1 FROM lims_usuarios WHERE id_usuario = ? AND activo = 1", id_usuario)
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail=f"El usuario indicado en {campo} no existe o está inactivo")
+
     df = body.datos_fisicos
     cursor.execute(
         """
@@ -1243,6 +1297,24 @@ def confirmar_orden_trabajo(
     except pyodbc.Error:
         pass
 
+    try:
+        # Columnas agregadas en la migración del Libro de Ingresos -- mismo
+        # criterio de tolerancia que el bloque de arriba: si el entorno
+        # todavía no la corrió, se omiten sin bloquear el resto de la
+        # confirmación.
+        cursor.execute(
+            """
+            UPDATE lims_solicitudes_muestreo
+            SET fecha_factura_proveedor = ?, numero_factura_proveedor = ?,
+                id_usuario_recibio = ?, id_usuario_rotulo = ?
+            WHERE id_solicitud = ?
+            """,
+            _a_datetime(body.fecha_factura_proveedor), body.numero_factura_proveedor,
+            body.id_usuario_recibio, body.id_usuario_rotulo, id_solicitud,
+        )
+    except pyodbc.Error:
+        pass
+
     if row.id_muestra is not None:
         cursor.execute(
             "UPDATE lims_muestras SET fecha_muestreo = GETDATE(), datos_muestreo_pendientes = 0 WHERE id_muestra = ?",
@@ -1253,7 +1325,7 @@ def confirmar_orden_trabajo(
         codigo_muestra = cursor.fetchone().codigo_muestra
         accion_auditoria = "completar_datos_muestreo"
     else:
-        id_muestra, codigo_muestra = _crear_muestra_desde_solicitud(cursor, row, datos_muestreo_pendientes=False)
+        id_muestra, codigo_muestra = _crear_muestra_desde_solicitud(conn, cursor, row, datos_muestreo_pendientes=False)
         cursor.execute(
             "UPDATE lims_solicitudes_muestreo SET id_muestra = ? WHERE id_solicitud = ?",
             id_muestra, id_solicitud,

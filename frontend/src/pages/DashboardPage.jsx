@@ -18,10 +18,12 @@ const QUICK_LINKS = [
   { label: 'Carga de Resultados', ruta: '/carga-resultados', roles: GESTION },
   { label: 'Dictámenes de QA', ruta: '/dictamenes', roles: QA_ADMIN },
   { label: 'Definiciones', ruta: '/menu-definiciones', roles: GESTION },
+  { label: 'Reportes', ruta: '/menu-reportes', roles: GESTION },
   { label: 'Facturación', ruta: '/facturas', roles: GESTION },
   { label: 'Novedades de Empaque', ruta: '/maestros/novedades-empaque', roles: GESTION },
   { label: 'Archivo de Contramuestras', ruta: '/cajas', roles: GESTION },
   { label: 'Administración', ruta: '/admin', roles: ['admin'] },
+  { label: 'Auditoría', ruta: '/auditoria', roles: ['admin'] },
 ];
 
 const ESTADOS_TESTIGO = [

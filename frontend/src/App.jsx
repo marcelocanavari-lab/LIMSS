@@ -7,6 +7,8 @@ import CambiarPinPage from './pages/CambiarPinPage';
 import DashboardPage from './pages/DashboardPage';
 import AdminMenuPage from './pages/AdminMenuPage';
 import DefinicionesMenuPage from './pages/DefinicionesMenuPage';
+import ReportesMenuPage from './pages/ReportesMenuPage';
+import LibroIngresosPage from './pages/reportes/LibroIngresosPage';
 import MuestrasMenuPage from './pages/MuestrasMenuPage';
 import ImpresionEtiquetasPage from './pages/ImpresionEtiquetasPage';
 import UsuariosPage from './pages/UsuariosPage';
@@ -83,6 +85,8 @@ export default function App() {
 
           {/* ── Definiciones (analista_qc, qa, admin) ───────────── */}
           <Route path="/menu-definiciones" element={<PrivateRoute roles={GESTION}><DefinicionesMenuPage /></PrivateRoute>} />
+          <Route path="/menu-reportes" element={<PrivateRoute roles={GESTION}><ReportesMenuPage /></PrivateRoute>} />
+          <Route path="/reportes/libro-ingresos" element={<PrivateRoute roles={GESTION}><LibroIngresosPage /></PrivateRoute>} />
           <Route path="/maestros/testigo-categorias" element={<PrivateRoute roles={GESTION}><TestigoCategoriasPage /></PrivateRoute>} />
           <Route path="/maestros/testigo-origenes" element={<PrivateRoute roles={GESTION}><TestigoOrigenesPage /></PrivateRoute>} />
 

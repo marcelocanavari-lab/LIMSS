@@ -53,7 +53,7 @@ from app.api.routes.solicitudes_muestreo import (
     obtener_muestras_confirmadas,
     obtener_solicitud_o_404,
 )
-from app.services.impresion_sato import generar_sbpl_etiqueta, generar_sbpl_etiqueta_estado, imprimir_sbpl
+from app.services.impresion_sato import generar_sbpl_etiqueta, generar_sbpl_etiqueta_estado, generar_sbpl_etiqueta_par, imprimir_sbpl
 from app.services.pdf_solicitud_muestreo import generar_pdf_etiqueta_muestra
 from app.schemas.facturas import EnvioSinFacturar
 from app.schemas.recorrido import RecorridoResponse
@@ -64,7 +64,7 @@ from app.services.formato import etiqueta_referencia, formatear_cantidad, titulo
 from app.services.especificaciones import guardar_checklist_muestreo, obtener_checklist_muestreo, tiene_ensayos_analisis
 from app.services.erp_ir import buscar_todos_candidatos_ir, formatear_nro_ir, normalizar_fecha_sentinel
 from app.services.erp_lotes import buscar_lote
-from app.services.erp_materiales import obtener_codsar_por_tipo
+from app.services.erp_materiales import asignar_numero_analisis_si_corresponde, obtener_codsar_por_tipo, tiene_numero_analisis
 from app.services.pdf_legajo import AdjuntoLegajo, generar_pdf_legajo
 from app.services.recorrido import construir_recorrido
 
@@ -792,18 +792,38 @@ def crear_muestra(
     # solicitudes_muestreo.py).
     estado_inicial = "en_análisis" if not tiene_ensayos_analisis(cursor, id_especificacion) else "pendiente_envio"
 
-    cursor.execute(
-        """
-        INSERT INTO lims_muestras
-            (codigo_muestra, tipo_referencia, tipo_material, nro_referencia, erp_n01id, erp_IdM21, erp_CODART, erp_DESART,
-             erp_cantidad_lote, erp_proveedor, cantidad_enviada, unidad_enviada, id_especificacion, estado,
-             id_usuario_muestreo, observaciones)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        codigo_muestra, body.tipo_referencia, body.tipo_material, body.nro_referencia, body.erp_n01id, body.erp_IdM21, body.erp_CODART, body.erp_DESART,
-        body.erp_cantidad_lote, body.erp_proveedor, cantidad_enviada, unidad_enviada, id_especificacion,
-        estado_inicial, user["id_usuario"], body.observaciones,
-    )
+    # numero_analisis (Libro de Ingresos): correlativo exclusivo de Materia
+    # Prima/Material de Empaque, ver asignar_numero_analisis_si_corresponde
+    # -- "Nueva Muestra" (esta pantalla) puede crear cualquier tipo de
+    # material (tipo_referencia 'ir' o 'lote'), a diferencia de Solicitudes
+    # de Muestreo que siempre es materia prima/empaque.
+    if tiene_numero_analisis(cursor):
+        numero_analisis = asignar_numero_analisis_si_corresponde(conn, id_especificacion)
+        cursor.execute(
+            """
+            INSERT INTO lims_muestras
+                (codigo_muestra, tipo_referencia, tipo_material, nro_referencia, erp_n01id, erp_IdM21, erp_CODART, erp_DESART,
+                 erp_cantidad_lote, erp_proveedor, cantidad_enviada, unidad_enviada, id_especificacion, estado,
+                 id_usuario_muestreo, observaciones, numero_analisis)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            codigo_muestra, body.tipo_referencia, body.tipo_material, body.nro_referencia, body.erp_n01id, body.erp_IdM21, body.erp_CODART, body.erp_DESART,
+            body.erp_cantidad_lote, body.erp_proveedor, cantidad_enviada, unidad_enviada, id_especificacion,
+            estado_inicial, user["id_usuario"], body.observaciones, numero_analisis,
+        )
+    else:
+        cursor.execute(
+            """
+            INSERT INTO lims_muestras
+                (codigo_muestra, tipo_referencia, tipo_material, nro_referencia, erp_n01id, erp_IdM21, erp_CODART, erp_DESART,
+                 erp_cantidad_lote, erp_proveedor, cantidad_enviada, unidad_enviada, id_especificacion, estado,
+                 id_usuario_muestreo, observaciones)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            codigo_muestra, body.tipo_referencia, body.tipo_material, body.nro_referencia, body.erp_n01id, body.erp_IdM21, body.erp_CODART, body.erp_DESART,
+            body.erp_cantidad_lote, body.erp_proveedor, cantidad_enviada, unidad_enviada, id_especificacion,
+            estado_inicial, user["id_usuario"], body.observaciones,
+        )
     cursor.execute("SELECT @@IDENTITY AS id")
     id_muestra = int(cursor.fetchone().id)
 
@@ -1797,6 +1817,20 @@ def _datos_etiqueta_para_impresion(cursor, id_muestra: int) -> dict:
     }
 
 
+def _armar_pares_etiquetas_muestra(etiquetas: list[dict]) -> list[tuple[dict, Optional[dict]]]:
+    """Agrupa la lista de etiquetas de a 2, en el orden en que vienen -- la
+    primera etiqueta física lleva las muestras 1 y 2, la segunda las 3 y 4,
+    así sucesivamente (ver generar_sbpl_etiqueta_par: rollo continuo, dos
+    muestras por etiqueta física en vez de una). Con cantidad impar, el
+    último par queda con la segunda mitad en None -- la última etiqueta
+    física lleva una sola muestra arriba, la mitad de abajo vacía, nunca se
+    repite la de arriba."""
+    return [
+        (etiquetas[i], etiquetas[i + 1] if i + 1 < len(etiquetas) else None)
+        for i in range(0, len(etiquetas), 2)
+    ]
+
+
 @router.post("/{id_muestra}/imprimir-directo", response_model=ImprimirDirectoResponse)
 def imprimir_etiqueta_directo(
     id_muestra: int,
@@ -1808,15 +1842,22 @@ def imprimir_etiqueta_directo(
     y lo manda directo, como trabajo RAW, a una impresora SATO configurada
     en lims_impresoras_etiquetas -- ver app/services/impresion_sato.py.
 
-    Una etiqueta por cada tipo de muestra confirmado en la especificación
-    (análisis, contramuestra, testigo, etc.) -- misma fuente de datos
-    (obtener_muestras_confirmadas) y mismo criterio que ya usa el PDF
-    (generar_pdf_etiquetas_v2 en solicitudes_muestreo.py), para no
-    mantener dos lógicas de iteración distintas. Si la muestra no tiene
-    Solicitud de Muestreo asociada, o la solicitud no tiene ningún tipo
-    confirmado (solicitudes viejas, o el modelo previo a
-    lims_solicitud_muestras), se manda una sola etiqueta genérica -- mismo
-    fallback que ya usa el PDF."""
+    Una etiqueta lógica por cada tipo de muestra confirmado en la
+    especificación (análisis, contramuestra, testigo, ad-hoc, etc.) --
+    misma fuente de datos (obtener_muestras_confirmadas, SIN filtrar por
+    tipo -- trae todas las filas confirmadas de lims_solicitud_muestras) y
+    mismo criterio que ya usa el PDF (generar_pdf_etiquetas_v2 en
+    solicitudes_muestreo.py), para no mantener dos lógicas de iteración
+    distintas. Si la muestra no tiene Solicitud de Muestreo asociada, o la
+    solicitud no tiene ningún tipo confirmado (solicitudes viejas, o el
+    modelo previo a lims_solicitud_muestras), se manda una sola etiqueta
+    genérica -- mismo fallback que ya usa el PDF.
+
+    Esas etiquetas lógicas se agrupan de a 2 por ETIQUETA FÍSICA
+    (_armar_pares_etiquetas_muestra + generar_sbpl_etiqueta_par): el rollo
+    es continuo, así que combinar dos muestras en una misma etiqueta física
+    (una arriba, una abajo) reduce a la mitad la cantidad de etiquetas
+    físicas usadas."""
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM lims_impresoras_etiquetas WHERE id_impresora = ? AND activa = 1", body.id_impresora)
     impresora = cursor.fetchone()
@@ -1847,17 +1888,25 @@ def imprimir_etiqueta_directo(
     else:
         etiquetas.append(datos_base)
 
+    # Dos muestras por etiqueta física (rollo continuo -- ver
+    # generar_sbpl_etiqueta_par y _armar_pares_etiquetas_muestra): agrupadas
+    # de a 2 en el mismo orden en que viene `etiquetas`, un solo trabajo de
+    # impresión por par en vez de uno por etiqueta.
+    pares = _armar_pares_etiquetas_muestra(etiquetas)
     enviadas = 0
-    for d in etiquetas:
-        sbpl_bytes = generar_sbpl_etiqueta(
-            d, impresora.ancho_mm, impresora.alto_mm, impresora.resolucion_dpi, cantidad_copias=body.cantidad,
+    for arriba, abajo in pares:
+        sbpl_bytes = generar_sbpl_etiqueta_par(
+            arriba, abajo, impresora.ancho_mm, impresora.alto_mm, impresora.resolucion_dpi, cantidad_copias=body.cantidad,
         )
+        nombre_trabajo = f"Etiqueta {arriba['identificador']}"
+        if abajo:
+            nombre_trabajo += f" + {abajo['identificador']}"
         try:
-            imprimir_sbpl(impresora, sbpl_bytes, nombre_trabajo=f"Etiqueta {d['identificador']}")
+            imprimir_sbpl(impresora, sbpl_bytes, nombre_trabajo=nombre_trabajo)
         except RuntimeError as e:
             detalle = str(e)
             if enviadas:
-                detalle += f" (se enviaron {enviadas} de {len(etiquetas)} etiquetas antes de este error)"
+                detalle += f" (se enviaron {enviadas} de {len(pares)} etiquetas antes de este error)"
             raise HTTPException(status_code=502, detail=detalle)
         enviadas += 1
 

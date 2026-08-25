@@ -212,4 +212,31 @@ export async function abrirPdfConAuth(path) {
   }
 }
 
+/* Descarga (Guardar como, no ver en pestaña -- a diferencia de
+   abrirPdfConAuth) un archivo autenticado, ej. la exportación CSV de un
+   reporte. Mismo mecanismo de fetch-con-token que abrirPdfConAuth, pero con
+   un <a download> temporal en vez de abrir una ventana -- ver descargarPdf
+   en RemitoImprimirPage.jsx, mismo patrón, acá centralizado porque no
+   depende de un blob ya cargado por otra pantalla. */
+export async function descargarArchivoConAuth(path, nombreArchivo) {
+  const headers = {};
+  const token = getToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE}${path}`, { headers });
+  if (!res.ok) {
+    throw new ApiError(`Error ${res.status}`, res.status);
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nombreArchivo;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
 export { ApiError };

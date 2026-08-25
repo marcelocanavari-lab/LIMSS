@@ -12,6 +12,8 @@ Mapeo CODSAR confirmado por el usuario (Lamar):
         ver CODSAR_MATERIAL_EMPAQUE más abajo: a diferencia del resto, es UN
         tipo_material que cubre DOS subartículos del ERP)
 """
+from typing import Optional
+
 import pyodbc
 
 # Fallback histórico -- se usa si lims_erp_config no existe todavía (no se
@@ -108,3 +110,64 @@ def buscar_materiales(erp: pyodbc.Connection, codsares: list[str], buscar: str =
         *codsares, like, like,
     )
     return cursor.fetchall()
+
+
+# ── numero_analisis (Libro de Ingresos) ─────────────────────────────────
+#
+# Correlativo exclusivo de Materia Prima y Material de Empaque (ver Libro de
+# Ingresos, app/api/routes/reportes.py). Se determina por el erp_codsar YA
+# RESUELTO contra el ERP de la especificación de la muestra
+# (lims_especificaciones.erp_codsar, congelado al crear/versionar la
+# especificación -- ver resolver_codsar_por_codart en maestros.py), NO por
+# lims_muestras.tipo_material: ese es texto libre, editable después de
+# creada la muestra sin volver a pasar por el ERP (ver editar_muestra en
+# muestras.py), y no una fuente confiable para decidir si corresponde
+# numerar.
+
+def tiene_numero_analisis(cursor) -> bool:
+    """lims_muestras.numero_analisis y lims_contador_numero_analisis pueden
+    no existir todavía en un entorno que no corrió la migración -- se
+    consultan las dos porque numero_analisis sin el contador (o viceversa)
+    dejaría la asignación a medio hacer."""
+    cursor.execute("SELECT COL_LENGTH('lims_muestras', 'numero_analisis') AS c")
+    if cursor.fetchone().c is None:
+        return False
+    cursor.execute("SELECT OBJECT_ID('lims_contador_numero_analisis') AS oid")
+    return cursor.fetchone().oid is not None
+
+
+def asignar_numero_analisis_si_corresponde(conn: pyodbc.Connection, id_especificacion: Optional[int]) -> Optional[int]:
+    """Si la muestra corresponde a Materia Prima o Material de Empaque
+    (según el erp_codsar de su especificación, ver nota del módulo más
+    arriba), asigna el siguiente numero_analisis de forma segura ante
+    concurrencia (ROWLOCK/XLOCK explícito sobre la única fila de
+    lims_contador_numero_analisis antes de leerla, para que dos creaciones
+    simultáneas nunca reciban el mismo número) y lo devuelve. Si no
+    corresponde -- otro tipo de material, sin especificación vinculada, con
+    erp_codsar sin resolver (especificaciones viejas, de antes de que
+    existiera esa columna, o creadas sin conexión al ERP), o si el entorno
+    todavía no corrió la migración -- devuelve None sin bloquear la
+    creación de la muestra: no se puede clasificar con certeza, la muestra
+    queda sin número en vez de adivinar."""
+    cursor = conn.cursor()
+    if not tiene_numero_analisis(cursor):
+        return None
+    if id_especificacion is None:
+        return None
+
+    cursor.execute("SELECT erp_codsar FROM lims_especificaciones WHERE id_especificacion = ?", id_especificacion)
+    espec = cursor.fetchone()
+    codsar = espec.erp_codsar.strip() if espec and espec.erp_codsar else None
+    if not codsar:
+        return None
+
+    codsar_materia_prima = obtener_codsar_por_tipo(conn).get("materia_prima")
+    codsars_empaque = obtener_codsars_material_empaque(conn)
+    if codsar != codsar_materia_prima and codsar not in codsars_empaque:
+        return None
+
+    cursor.execute(
+        "UPDATE lims_contador_numero_analisis WITH (ROWLOCK, XLOCK) SET ultimo_valor = ultimo_valor + 1 WHERE id = 1"
+    )
+    cursor.execute("SELECT ultimo_valor FROM lims_contador_numero_analisis WHERE id = 1")
+    return cursor.fetchone().ultimo_valor

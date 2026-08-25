@@ -8,6 +8,14 @@ class MuestreadorDisponible(BaseModel):
     nombre_completo: str
 
 
+class UsuarioDisponible(BaseModel):
+    """Igual forma que MuestreadorDisponible pero sin filtrar por rol --
+    "quién recibió"/"quién rotuló" (ver OrdenTrabajoDigitalBody) puede ser
+    cualquier usuario activo, no solo los de rol 'muestreador'."""
+    id_usuario: int
+    nombre_completo: str
+
+
 class BultoGrupoInput(BaseModel):
     """Un grupo de bultos (cantidad de bultos x cantidad de unidades cada
     uno -- ver lims_solicitud_bultos), cargado en el formulario de crear o
@@ -294,6 +302,15 @@ class OrdenTrabajoDigitalBody(BaseModel):
     # confirmar el muestreo, mismo momento para solicitudes manuales y del
     # agente (ver MuestraConfirmadaInput).
     muestras: list[MuestraConfirmadaInput] = []
+    # Datos de recepción del proveedor (Libro de Ingresos) -- se cargan en
+    # este mismo momento, junto con el resto de Ejecutar Muestreo, para
+    # solicitudes manuales y del agente por igual (mismo criterio que
+    # "Muestras a tomar" arriba). Los 4 son opcionales acá a nivel schema
+    # para no romper clientes viejos, pero la pantalla los pide juntos.
+    fecha_factura_proveedor: Optional[date] = None
+    numero_factura_proveedor: Optional[str] = Field(None, max_length=50)
+    id_usuario_recibio: Optional[int] = None
+    id_usuario_rotulo: Optional[int] = None
 
 
 class OrdenTrabajoDigitalResponse(BaseModel):

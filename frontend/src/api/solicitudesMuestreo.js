@@ -9,6 +9,7 @@ export const solicitudesMuestreoApi = {
   },
   misSolicitudes: () => api.get('/api/solicitudes-muestreo/mis-solicitudes'),
   listarMuestreadores: () => api.get('/api/solicitudes-muestreo/muestreadores'),
+  listarUsuariosActivos: () => api.get('/api/solicitudes-muestreo/usuarios-activos'),
   crear: (data, protocoloProveedor, documentacionProveedor) => {
     const formData = new FormData();
     formData.append('datos', JSON.stringify(data));

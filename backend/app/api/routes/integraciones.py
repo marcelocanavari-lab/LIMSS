@@ -32,6 +32,7 @@ from app.schemas.integraciones import (
     ProtocoloEstadoInfo,
 )
 from app.services import agente_muestreo, audit
+from app.services.erp_materiales import asignar_numero_analisis_si_corresponde, tiene_numero_analisis
 
 router = APIRouter(prefix="/api/integraciones", tags=["Integraciones eBR"])
 
@@ -67,18 +68,41 @@ def crear_muestra_desde_integracion(
         )
 
     codigo_muestra = generar_codigo_muestra(cursor)
-    cursor.execute(
-        """
-        INSERT INTO lims_muestras
-            (codigo_muestra, erp_nro_ir, erp_IdM21, erp_CODART, erp_DESART, id_especificacion,
-             estado, id_usuario_muestreo, fecha_muestreo, datos_muestreo_pendientes, tipo_referencia,
-             nro_referencia, observaciones, cantidad_enviada, unidad_enviada)
-        VALUES (?, NULL, ?, ?, ?, ?, 'pendiente_envio', ?, GETDATE(), 0, ?, ?, ?, ?, ?)
-        """,
-        codigo_muestra, body.erp_IdM21, codart, espec.erp_DESART, espec.id_especificacion,
-        body.id_usuario_limss, body.tipo_referencia, body.nro_referencia,
-        body.observaciones, body.cantidad_enviada, body.unidad_enviada,
-    )
+
+    # numero_analisis (Libro de Ingresos): correlativo exclusivo de Materia
+    # Prima/Material de Empaque -- este canal es para muestreo EN PROCESO de
+    # producción (ver docstring del módulo), así que en la práctica casi
+    # nunca va a corresponder, pero se evalúa igual por erp_codsar (mismo
+    # criterio que el resto de los flujos, ver
+    # asignar_numero_analisis_si_corresponde) en vez de asumir que nunca
+    # aplica acá.
+    if tiene_numero_analisis(cursor):
+        numero_analisis = asignar_numero_analisis_si_corresponde(conn, espec.id_especificacion)
+        cursor.execute(
+            """
+            INSERT INTO lims_muestras
+                (codigo_muestra, erp_nro_ir, erp_IdM21, erp_CODART, erp_DESART, id_especificacion,
+                 estado, id_usuario_muestreo, fecha_muestreo, datos_muestreo_pendientes, tipo_referencia,
+                 nro_referencia, observaciones, cantidad_enviada, unidad_enviada, numero_analisis)
+            VALUES (?, NULL, ?, ?, ?, ?, 'pendiente_envio', ?, GETDATE(), 0, ?, ?, ?, ?, ?, ?)
+            """,
+            codigo_muestra, body.erp_IdM21, codart, espec.erp_DESART, espec.id_especificacion,
+            body.id_usuario_limss, body.tipo_referencia, body.nro_referencia,
+            body.observaciones, body.cantidad_enviada, body.unidad_enviada, numero_analisis,
+        )
+    else:
+        cursor.execute(
+            """
+            INSERT INTO lims_muestras
+                (codigo_muestra, erp_nro_ir, erp_IdM21, erp_CODART, erp_DESART, id_especificacion,
+                 estado, id_usuario_muestreo, fecha_muestreo, datos_muestreo_pendientes, tipo_referencia,
+                 nro_referencia, observaciones, cantidad_enviada, unidad_enviada)
+            VALUES (?, NULL, ?, ?, ?, ?, 'pendiente_envio', ?, GETDATE(), 0, ?, ?, ?, ?, ?)
+            """,
+            codigo_muestra, body.erp_IdM21, codart, espec.erp_DESART, espec.id_especificacion,
+            body.id_usuario_limss, body.tipo_referencia, body.nro_referencia,
+            body.observaciones, body.cantidad_enviada, body.unidad_enviada,
+        )
     cursor.execute("SELECT @@IDENTITY AS id")
     id_muestra = int(cursor.fetchone().id)
 

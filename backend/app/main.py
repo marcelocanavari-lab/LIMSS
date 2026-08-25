@@ -6,7 +6,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
-from app.api.routes import auth, maestros, muestras, resultados, dictamenes, materiales, envios, testigos_remitos, erp_config, auditoria, solicitudes_muestreo, erp, dashboard, facturas, integraciones, cajas, novedades_empaque, empaque_ia
+from app.api.routes import auth, maestros, muestras, resultados, dictamenes, materiales, envios, testigos_remitos, erp_config, auditoria, solicitudes_muestreo, erp, dashboard, facturas, integraciones, cajas, novedades_empaque, empaque_ia, reportes
 from app.services import agente_muestreo
 
 settings = get_settings()
@@ -53,6 +53,7 @@ app.include_router(integraciones.router)
 app.include_router(cajas.router)
 app.include_router(novedades_empaque.router)
 app.include_router(empaque_ia.router)
+app.include_router(reportes.router)
 
 
 @app.get("/api/health")
