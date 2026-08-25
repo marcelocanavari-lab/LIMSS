@@ -310,6 +310,35 @@ def resolver_codsar_por_codart(erp: pyodbc.Connection, erp_codart: str) -> Optio
     return fila.CODSAR if fila and fila.CODSAR else None
 
 
+def resolver_codsar_por_idm21(erp: pyodbc.Connection, erp_idm21: int) -> Optional[str]:
+    """Igual que resolver_codsar_por_codart, pero por M21Id (clave numérica
+    del ERP, GIM21ART.M21Id -- la misma que ya se guarda en
+    lims_especificaciones.erp_IdM21 al crear la especificación) en vez de
+    por CODART.
+
+    Respaldo para cuando el CODART guardado en LIMSS no matchea EXACTO con
+    el del ERP -- confirmado en Scripts/backfill_erp_codsar.py: los
+    producto_terminado importados por Scripts/importar_especificaciones_pt.py
+    quedaron con el CODART "base" (ej. 'PT001'), pero el ERP le agrega un
+    sufijo de tamaño de envase por presentación ('PT001/10', 'PT001/20',
+    etc. -- variable por artículo, no un sufijo fijo), así que el match por
+    texto exacto de resolver_codsar_por_codart no encuentra nada aunque el
+    artículo sí exista. M21Id no tiene ese problema porque es la clave
+    numérica interna del ERP, no un texto formateado a mano."""
+    cursor = erp.cursor()
+    cursor.execute(
+        """
+        SELECT RTRIM(sar.CODSAR) AS CODSAR
+        FROM GIM21ART art
+        LEFT JOIN GIT59SAR sar ON sar.T59Id = art.IdT59
+        WHERE art.M21Id = ?
+        """,
+        erp_idm21,
+    )
+    fila = cursor.fetchone()
+    return fila.CODSAR if fila and fila.CODSAR else None
+
+
 def obtener_vencimiento_lote(erp: pyodbc.Connection, nro_ir: str):
     """VENCOM del comprobante IR. 1899-12-30 es el sentinel del ERP para
     "sin vencimiento" (igual que en el eBR) -- se normaliza a None."""
