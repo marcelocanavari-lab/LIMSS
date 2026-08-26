@@ -515,9 +515,19 @@ export default function EspecificacionDetallePage() {
   // incluye_bloque_analisis_laboratorio/incluye_bloque_muestreo_fisico) --
   // si la etapa activa quedó oculta (ej. cambió la config), se cae a la
   // primera visible en vez de mostrar una pestaña sin botón para volver.
+  //
+  // Resguardo: la config de categoría solo decide el default para etapas
+  // SIN ítems todavía (para no mostrar una pestaña vacía en categorías que
+  // nunca las usan) -- si esta especificación puntual ya tiene ítems
+  // cargados para una etapa, la pestaña se muestra igual sin importar la
+  // config, para que un checkbox destildado por error (a mano o por una
+  // categoría con una excepción real) nunca oculte datos ya cargados. Ver
+  // el mismo criterio en incluye_bloque_muestras/incluye_bloque_testigos
+  // más abajo.
   const etapasVisibles = especificacion
     ? ['analisis', 'muestreo'].filter((etapa) => (
-        etapa === 'analisis' ? especificacion.incluye_bloque_analisis_laboratorio : especificacion.incluye_bloque_muestreo_fisico
+        (etapa === 'analisis' ? especificacion.incluye_bloque_analisis_laboratorio : especificacion.incluye_bloque_muestreo_fisico)
+        || ensayosDeEtapa(etapa).length > 0
       ))
     : [];
   const etapaMostrada = etapasVisibles.includes(etapaActiva) ? etapaActiva : etapasVisibles[0];
@@ -619,7 +629,12 @@ export default function EspecificacionDetallePage() {
           </div>
         )}
 
-        {especificacion.incluye_bloque_muestras && (
+        {/* La config de categoría (incluye_bloque_muestras) solo decide el
+            default para especificaciones SIN muestras definidas todavía --
+            si ya hay muestras cargadas, el bloque se muestra igual aunque
+            la config diga que no, para que un checkbox destildado por
+            error nunca oculte datos ya cargados. */}
+        {(especificacion.incluye_bloque_muestras || muestrasDefinidas.length > 0) && (
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--sp-3)' }}>
               <h2 style={{ fontSize: 'var(--fs-lg)' }}>Muestras definidas ({muestrasDefinidas.length})</h2>
@@ -750,7 +765,14 @@ export default function EspecificacionDetallePage() {
           </>
         )}
 
-        {especificacion.incluye_bloque_testigos && (
+        {/* Mismo resguardo que Muestras arriba: incluye_bloque_testigos
+            solo decide el default para especificaciones SIN testigos
+            asignados todavía -- si ya hay testigos asociados, el bloque se
+            muestra igual sin importar la config (caso real: PT019 quedó
+            con testigos invisibles por un checkbox destildado a mano en la
+            config de categoría "Producto Terminado", con el dato intacto
+            en la base todo el tiempo). */}
+        {(especificacion.incluye_bloque_testigos || testigosAsociados.length > 0) && (
           <>
             <h2 style={{ fontSize: 'var(--fs-lg)', margin: 'var(--sp-5) 0 var(--sp-3)' }}>
               Testigos asociados ({testigosAsociados.length})

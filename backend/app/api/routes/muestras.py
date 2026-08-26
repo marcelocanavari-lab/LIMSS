@@ -9,6 +9,7 @@ declarara antes -- por eso los literales van primero.
 """
 import logging
 from datetime import date, datetime
+from types import SimpleNamespace
 from typing import Optional
 
 import pyodbc
@@ -52,9 +53,10 @@ from app.api.routes.solicitudes_muestreo import (
     iniciales_muestreador,
     obtener_muestras_confirmadas,
     obtener_solicitud_o_404,
+    obtener_tipos_de_especificacion,
 )
 from app.services.impresion_sato import generar_sbpl_etiqueta, generar_sbpl_etiqueta_estado, generar_sbpl_etiqueta_par, imprimir_sbpl
-from app.services.pdf_solicitud_muestreo import generar_pdf_etiqueta_muestra
+from app.services.pdf_solicitud_muestreo import generar_pdf_etiqueta_muestra, generar_pdf_etiquetas_v2
 from app.schemas.facturas import EnvioSinFacturar
 from app.schemas.recorrido import RecorridoResponse
 from app.schemas.solicitudes_muestreo import ChecklistMuestreoItem, ChecklistMuestreoRespuesta
@@ -1737,11 +1739,17 @@ def descargar_etiquetas_de_muestra(
     sin cambios.
 
     Una muestra creada por "Nueva Muestra" (en vez de por Solicitudes de
-    Muestreo) no tiene fila en lims_solicitudes_muestreo -- en ese caso se
-    arma una etiqueta simplificada con los datos propios de la muestra
-    (ver generar_pdf_etiqueta_muestra) en vez de devolver 404, porque el
-    botón "Imprimir etiqueta" se ofrece para cualquier muestra sin importar
-    cómo se haya creado."""
+    Muestreo) no tiene fila en lims_solicitudes_muestreo -- en ese caso, en
+    vez de devolver 404 (el botón "Imprimir etiqueta" se ofrece para
+    cualquier muestra sin importar cómo se haya creado), se busca si su
+    especificación define varios tipos de muestra (lims_especificacion_
+    muestras -- ver obtener_tipos_de_especificacion) y se genera una
+    etiqueta por tipo, igual que para una solicitud confirmada. Solo si la
+    especificación no define ningún tipo (o la muestra no tiene
+    especificación) se arma la etiqueta simplificada de siempre (ver
+    generar_pdf_etiqueta_muestra) -- bug real detectado con PT019 (4 tipos
+    definidos en su especificación, antes solo salía 1 etiqueta genérica
+    para una muestra sin solicitud)."""
     cursor = conn.cursor()
     cursor.execute("SELECT id_solicitud FROM lims_solicitudes_muestreo WHERE id_muestra = ?", id_muestra)
     fila = cursor.fetchone()
@@ -1757,11 +1765,23 @@ def descargar_etiquetas_de_muestra(
             raise HTTPException(status_code=404, detail="Muestra no encontrada")
         try:
             iniciales = iniciales_muestreador(cursor, muestra.id_usuario_muestreo)
-            pdf_bytes = generar_pdf_etiqueta_muestra(muestra, iniciales)
+            tipos = obtener_tipos_de_especificacion(cursor, muestra.id_especificacion) if muestra.id_especificacion else []
+            if tipos:
+                solicitud_shim = SimpleNamespace(
+                    nro_solicitud=muestra.codigo_muestra,
+                    erp_DESART=muestra.erp_DESART,
+                    erp_CODART=muestra.erp_CODART,
+                    erp_nro_ir=muestra.nro_referencia,
+                    tipo_referencia=muestra.tipo_referencia,
+                    fecha_solicitud=muestra.fecha_muestreo,
+                )
+                pdf_bytes = generar_pdf_etiquetas_v2(solicitud_shim, tipos, iniciales)
+            else:
+                pdf_bytes = generar_pdf_etiqueta_muestra(muestra, iniciales)
         except Exception:
             logger.error("Error generando la etiqueta simplificada (id_muestra=%s)", id_muestra, exc_info=True)
             raise HTTPException(status_code=500, detail="No se pudo generar el PDF de etiquetas -- ver el log del servidor")
-        nombre_archivo = f"{muestra.codigo_muestra}_etiqueta.pdf"
+        nombre_archivo = f"{muestra.codigo_muestra}_etiquetas.pdf"
 
     return Response(
         content=pdf_bytes, media_type="application/pdf",
@@ -1777,10 +1797,12 @@ def _datos_etiqueta_para_impresion(cursor, id_muestra: int) -> dict:
     cualquier muestra, tenga o no una Solicitud de Muestreo asociada) y
     enriquece con nro_solicitud/laboratorio cuando esa fila existe.
 
-    Incluye id_solicitud (no es un campo de la etiqueta en sí, lo saca
-    imprimir_etiqueta_directo antes de armar el SBPL) para que el llamador
-    pueda resolver los tipos de muestra confirmados -- ver
-    obtener_muestras_confirmadas más abajo."""
+    Incluye id_solicitud e id_especificacion (no son campos de la etiqueta
+    en sí, los saca imprimir_etiqueta_directo antes de armar el SBPL) para
+    que el llamador pueda resolver los tipos de muestra confirmados (ver
+    obtener_muestras_confirmadas) o, si no hay solicitud asociada, los tipos
+    definidos en la especificación misma (ver obtener_tipos_de_
+    especificacion) -- más abajo."""
     cursor.execute(_SELECT_MUESTRA + " WHERE m.id_muestra = ?", id_muestra)
     muestra = cursor.fetchone()
     if not muestra:
@@ -1814,6 +1836,7 @@ def _datos_etiqueta_para_impresion(cursor, id_muestra: int) -> dict:
         "fecha": muestra.fecha_muestreo,
         "iniciales_muestreador": iniciales_muestreador(cursor, muestra.id_usuario_muestreo),
         "id_solicitud": solicitud.id_solicitud if solicitud else None,
+        "id_especificacion": muestra.id_especificacion,
     }
 
 
@@ -1848,9 +1871,12 @@ def imprimir_etiqueta_directo(
     tipo -- trae todas las filas confirmadas de lims_solicitud_muestras) y
     mismo criterio que ya usa el PDF (generar_pdf_etiquetas_v2 en
     solicitudes_muestreo.py), para no mantener dos lógicas de iteración
-    distintas. Si la muestra no tiene Solicitud de Muestreo asociada, o la
-    solicitud no tiene ningún tipo confirmado (solicitudes viejas, o el
-    modelo previo a lims_solicitud_muestras), se manda una sola etiqueta
+    distintas. Si la muestra no tiene Solicitud de Muestreo asociada, se
+    busca en su lugar si la especificación misma define varios tipos (ver
+    obtener_tipos_de_especificacion) -- bug real detectado con PT019 (4
+    tipos definidos, antes salía 1 sola etiqueta genérica para una muestra
+    sin solicitud). Solo si tampoco hay tipos definidos en la especificación
+    (o la muestra no tiene especificación) se manda una sola etiqueta
     genérica -- mismo fallback que ya usa el PDF.
 
     Esas etiquetas lógicas se agrupan de a 2 por ETIQUETA FÍSICA
@@ -1866,8 +1892,11 @@ def imprimir_etiqueta_directo(
 
     datos_base = _datos_etiqueta_para_impresion(cursor, id_muestra)
     id_solicitud = datos_base.pop("id_solicitud", None)
+    id_especificacion = datos_base.pop("id_especificacion", None)
 
     tipos_confirmados = obtener_muestras_confirmadas(cursor, id_solicitud) if id_solicitud else []
+    if not tipos_confirmados and id_especificacion:
+        tipos_confirmados = obtener_tipos_de_especificacion(cursor, id_especificacion)
 
     etiquetas = []
     if tipos_confirmados:

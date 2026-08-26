@@ -609,6 +609,94 @@
   }
 }
 
+/* Libro de Ingresos -- vista INTERACTIVA (pantalla): 17 columnas, más que
+   las 12 de Reporte de Testigos de arriba -- mismo mecanismo de
+   reporte-tabla-scroll, pero con más min-width para que ninguna columna
+   quede apretada. Esta tabla vive dentro de un contenedor .no-print (ver
+   LibroIngresosPage.jsx: la vista de pantalla y la de impresión son dos
+   tablas separadas, no la misma con estilos condicionales), así que no
+   hace falta resetearla para @media print -- nunca se muestra al
+   imprimir. */
+.reporte-tabla-scroll .libro-ingresos-tabla {
+  min-width: 2200px;
+}
+
+/* Libro de Ingresos -- vista interactiva: con 17 columnas la tabla ya
+   necesita scroll horizontal sí o sí, así que el padding lateral normal de
+   .screen-content (pensado para pantallas con menos columnas, como
+   Consulta de Muestras) le resta ancho útil sin necesidad. Se cancela ese
+   padding con márgenes negativos solo en el wrapper de esta tabla -- no se
+   toca .screen-content ni .reporte-tabla-scroll en general, así que el
+   resto de las pantallas (incluido Reporte de Testigos) queda igual. */
+.libro-ingresos-scroll {
+  margin-left: calc(-1 * var(--sp-5));
+  margin-right: calc(-1 * var(--sp-5));
+  width: calc(100% + var(--sp-5) * 2);
+}
+
+/* Libro de Ingresos -- vista de IMPRESIÓN/PDF: tabla propia, aparte de la
+   interactiva de arriba (ver .print-only en LibroIngresosPage.jsx). Dos
+   renglones por muestra para que las 17 columnas entren en una página
+   Oficio horizontal: el primer renglón (9 columnas de identificación) es
+   una fila de tabla normal, con encabezado; el segundo (8 datos
+   operativos) es una sola fila corrida, indentada, con línea separadora
+   hacia la próxima muestra.
+   .libro-ingresos-print fuerza el ancho real: .printable (compartido con
+   otros reportes en A4 vertical, como Recorrido de Muestra) trae
+   max-width:900px pensado para esa hoja angosta -- acá se ignora ese
+   límite en vez de depender del reset de @media print, para que este
+   reporte use el ancho completo de Oficio horizontal sin atarse al de los
+   demás. Con ese ancho real liberado, la fuente ya no necesita ser
+   microscópica (7-8px de la versión anterior, pensada para el ~60% de
+   ancho que quedaba atrapado por ese max-width). */
+.libro-ingresos-print {
+  max-width: none;
+  width: 100%;
+}
+
+.libro-ingresos-print-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.libro-ingresos-print-tabla th {
+  text-align: left;
+  padding: 5px 8px;
+  border-bottom: 1px solid #999;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #444;
+}
+
+.libro-ingresos-print-fila1 td {
+  padding: 5px 8px 2px;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+/* Descripción y Proveedor (6ta y 7ma columna del renglón 1) son las únicas
+   con texto largo -- se les permite ajustar de línea en vez de desbordar,
+   el resto (fechas, códigos) queda en una sola línea. */
+.libro-ingresos-print-fila1 td:nth-child(6),
+.libro-ingresos-print-fila1 td:nth-child(7) {
+  white-space: normal;
+  max-width: 260px;
+}
+
+.libro-ingresos-print-fila2 td {
+  padding: 0 8px 6px 22px;
+  font-size: 10px;
+  color: #333;
+  border-bottom: 1px solid #ddd;
+}
+
+.libro-ingresos-print-fila2 span {
+  display: inline-block;
+  margin-right: 16px;
+}
+
 /* --- Secciones acordeón (reportes) --- */
 .acordeon-header {
   display: flex;

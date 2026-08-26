@@ -972,6 +972,32 @@ def _obtener_muestras_confirmadas(cursor, id_solicitud: int):
     return cursor.fetchall()
 
 
+def _obtener_tipos_de_especificacion(cursor, id_especificacion: int):
+    """Fallback para una muestra SIN Solicitud de Muestreo asociada (creada
+    por "Nueva Muestra"): no existe fila en lims_solicitud_muestras sin una
+    solicitud, así que hasta ahora se generaba una sola etiqueta genérica
+    aunque la especificación definiera varios tipos de muestra (análisis,
+    contramuestra, testigo, ad-hoc) -- bug real detectado con PT019 (4 tipos
+    definidos, solo salía 1 etiqueta). Se lee directo de
+    lims_especificacion_muestras (la definición, no la confirmación) y se
+    genera una etiqueta por tipo -- mismos nombres de columna que
+    _obtener_muestras_confirmadas (tipo_muestra, cantidad_real, unidad,
+    laboratorio_nombre) para que el llamador no tenga que distinguir el
+    origen. cantidad_real acá es la cantidad PLANEADA de la especificación
+    (no hay una "real" propia de esta muestra puntual sin confirmación)."""
+    cursor.execute(
+        """
+        SELECT em.tipo_muestra, em.cantidad AS cantidad_real, em.unidad, lab.nombre AS laboratorio_nombre
+        FROM lims_especificacion_muestras em
+        LEFT JOIN lims_laboratorios lab ON lab.id_laboratorio = em.id_laboratorio
+        WHERE em.id_especificacion = ?
+        ORDER BY em.orden
+        """,
+        id_especificacion,
+    )
+    return cursor.fetchall()
+
+
 def _generar_pdf_etiquetas_de_solicitud(cursor, row) -> bytes:
     """Arma el PDF de etiquetas para una solicitud ya cargada (fila de
     lims_solicitudes_muestreo) -- función compartida para que "Descargar
@@ -1487,3 +1513,4 @@ obtener_solicitud_o_404 = _obtener_solicitud_o_404
 generar_pdf_etiquetas_de_solicitud = _generar_pdf_etiquetas_de_solicitud
 iniciales_muestreador = _iniciales_muestreador
 obtener_muestras_confirmadas = _obtener_muestras_confirmadas
+obtener_tipos_de_especificacion = _obtener_tipos_de_especificacion
