@@ -19,6 +19,7 @@ from fastapi.responses import Response
 from app.core.security import get_current_user, require_rol
 from app.db.connections import erp_db, limss_db
 from app.schemas.muestras import (
+    CantidadEtiquetasResponse,
     ContactoLaboratorioCreate,
     ContactoLaboratorioResponse,
     ContactoLaboratorioUpdate,
@@ -55,7 +56,13 @@ from app.api.routes.solicitudes_muestreo import (
     obtener_solicitud_o_404,
     obtener_tipos_de_especificacion,
 )
-from app.services.impresion_sato import generar_sbpl_etiqueta, generar_sbpl_etiqueta_estado, generar_sbpl_etiqueta_par, imprimir_sbpl
+from app.services.impresion_sato import (
+    armar_pares_etiquetas_muestra,
+    generar_sbpl_etiqueta,
+    generar_sbpl_etiqueta_estado,
+    generar_sbpl_etiqueta_par,
+    imprimir_sbpl,
+)
 from app.services.pdf_solicitud_muestreo import generar_pdf_etiqueta_muestra, generar_pdf_etiquetas_v2
 from app.schemas.facturas import EnvioSinFacturar
 from app.schemas.recorrido import RecorridoResponse
@@ -1840,32 +1847,9 @@ def _datos_etiqueta_para_impresion(cursor, id_muestra: int) -> dict:
     }
 
 
-def _armar_pares_etiquetas_muestra(etiquetas: list[dict]) -> list[tuple[dict, Optional[dict]]]:
-    """Agrupa la lista de etiquetas de a 2, en el orden en que vienen -- la
-    primera etiqueta física lleva las muestras 1 y 2, la segunda las 3 y 4,
-    así sucesivamente (ver generar_sbpl_etiqueta_par: rollo continuo, dos
-    muestras por etiqueta física en vez de una). Con cantidad impar, el
-    último par queda con la segunda mitad en None -- la última etiqueta
-    física lleva una sola muestra arriba, la mitad de abajo vacía, nunca se
-    repite la de arriba."""
-    return [
-        (etiquetas[i], etiquetas[i + 1] if i + 1 < len(etiquetas) else None)
-        for i in range(0, len(etiquetas), 2)
-    ]
 
-
-@router.post("/{id_muestra}/imprimir-directo", response_model=ImprimirDirectoResponse)
-def imprimir_etiqueta_directo(
-    id_muestra: int,
-    body: ImprimirDirectoBody,
-    user: dict = Depends(require_rol("muestreador", "analista_qc", "qa", "admin")),
-    conn: pyodbc.Connection = Depends(limss_db),
-):
-    """Alternativa a "Descargar PDF" (no la reemplaza): arma el comando SBPL
-    y lo manda directo, como trabajo RAW, a una impresora SATO configurada
-    en lims_impresoras_etiquetas -- ver app/services/impresion_sato.py.
-
-    Una etiqueta lógica por cada tipo de muestra confirmado en la
+def _armar_etiquetas_logicas_de_muestra(cursor, id_muestra: int) -> list[dict]:
+    """Una etiqueta lógica por cada tipo de muestra confirmado en la
     especificación (análisis, contramuestra, testigo, ad-hoc, etc.) --
     misma fuente de datos (obtener_muestras_confirmadas, SIN filtrar por
     tipo -- trae todas las filas confirmadas de lims_solicitud_muestras) y
@@ -1879,17 +1863,10 @@ def imprimir_etiqueta_directo(
     (o la muestra no tiene especificación) se manda una sola etiqueta
     genérica -- mismo fallback que ya usa el PDF.
 
-    Esas etiquetas lógicas se agrupan de a 2 por ETIQUETA FÍSICA
-    (_armar_pares_etiquetas_muestra + generar_sbpl_etiqueta_par): el rollo
-    es continuo, así que combinar dos muestras en una misma etiqueta física
-    (una arriba, una abajo) reduce a la mitad la cantidad de etiquetas
-    físicas usadas."""
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM lims_impresoras_etiquetas WHERE id_impresora = ? AND activa = 1", body.id_impresora)
-    impresora = cursor.fetchone()
-    if not impresora:
-        raise HTTPException(status_code=404, detail="La impresora indicada no existe o está inactiva")
-
+    Factorizada de imprimir_etiqueta_directo para que el conteo previo (ver
+    GET /{id_muestra}/etiquetas-cantidad, para mostrar "se van a imprimir N"
+    ANTES de mandar el trabajo real) use exactamente la misma resolución que
+    el envío real, en vez de dos caminos que puedan divergir."""
     datos_base = _datos_etiqueta_para_impresion(cursor, id_muestra)
     id_solicitud = datos_base.pop("id_solicitud", None)
     id_especificacion = datos_base.pop("id_especificacion", None)
@@ -1916,12 +1893,63 @@ def imprimir_etiqueta_directo(
             etiquetas.append(d)
     else:
         etiquetas.append(datos_base)
+    return etiquetas
+
+
+@router.get("/{id_muestra}/etiquetas-cantidad", response_model=CantidadEtiquetasResponse)
+def contar_etiquetas_a_imprimir(
+    id_muestra: int,
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Cuántas etiquetas lógicas y físicas (agrupadas de a 2, ver
+    armar_pares_etiquetas_muestra en impresion_sato.py) se van a generar
+    para esta muestra si se
+    imprime por SATO -- mismo cálculo que imprimir_etiqueta_directo, para
+    poder mostrarle al usuario "se van a imprimir N" ANTES de mandar el
+    trabajo real a la impresora (mismo criterio ya usado para CUARENTENA,
+    donde la cantidad -- una etiqueta por bulto -- se conoce de antemano sin
+    tener que armar el trabajo de impresión primero)."""
+    cursor = conn.cursor()
+    etiquetas = _armar_etiquetas_logicas_de_muestra(cursor, id_muestra)
+    return CantidadEtiquetasResponse(
+        cantidad_muestras=len(etiquetas),
+        cantidad_etiquetas_fisicas=len(armar_pares_etiquetas_muestra(etiquetas)),
+    )
+
+
+@router.post("/{id_muestra}/imprimir-directo", response_model=ImprimirDirectoResponse)
+def imprimir_etiqueta_directo(
+    id_muestra: int,
+    body: ImprimirDirectoBody,
+    user: dict = Depends(require_rol("muestreador", "analista_qc", "qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Alternativa a "Descargar PDF" (no la reemplaza): arma el comando SBPL
+    y lo manda directo, como trabajo RAW, a una impresora SATO configurada
+    en lims_impresoras_etiquetas -- ver app/services/impresion_sato.py.
+
+    La lista de etiquetas lógicas se arma en _armar_etiquetas_logicas_de_
+    muestra (ver ahí el criterio completo de resolución/fallback).
+
+    Esas etiquetas lógicas se agrupan de a 2 por ETIQUETA FÍSICA
+    (armar_pares_etiquetas_muestra + generar_sbpl_etiqueta_par): el rollo
+    es continuo, así que combinar dos muestras en una misma etiqueta física
+    (una arriba, una abajo) reduce a la mitad la cantidad de etiquetas
+    físicas usadas."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM lims_impresoras_etiquetas WHERE id_impresora = ? AND activa = 1", body.id_impresora)
+    impresora = cursor.fetchone()
+    if not impresora:
+        raise HTTPException(status_code=404, detail="La impresora indicada no existe o está inactiva")
+
+    etiquetas = _armar_etiquetas_logicas_de_muestra(cursor, id_muestra)
 
     # Dos muestras por etiqueta física (rollo continuo -- ver
-    # generar_sbpl_etiqueta_par y _armar_pares_etiquetas_muestra): agrupadas
+    # generar_sbpl_etiqueta_par y armar_pares_etiquetas_muestra): agrupadas
     # de a 2 en el mismo orden en que viene `etiquetas`, un solo trabajo de
     # impresión por par en vez de uno por etiqueta.
-    pares = _armar_pares_etiquetas_muestra(etiquetas)
+    pares = armar_pares_etiquetas_muestra(etiquetas)
     enviadas = 0
     for arriba, abajo in pares:
         sbpl_bytes = generar_sbpl_etiqueta_par(

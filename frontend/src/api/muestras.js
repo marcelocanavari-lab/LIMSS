@@ -57,6 +57,9 @@ export const muestrasApi = {
 
   // Impresión directa (SATO/SBPL, sin pasar por el PDF)
   imprimirDirecto: (id, idImpresora) => api.post(`/api/muestras/${id}/imprimir-directo`, { id_impresora: idImpresora }),
+  // Preview de cantidad ANTES de mandar el trabajo real -- mismo criterio
+  // ya usado para CUARENTENA (cantidad conocida de antemano).
+  contarEtiquetas: (id) => api.get(`/api/muestras/${id}/etiquetas-cantidad`),
   // Etiquetas APROBADO/RECHAZADO -- el backend bloquea si el dictamen no
   // coincide con el estado de la etiqueta que se quiere imprimir.
   imprimirAprobado: (id, idImpresora, cantidad = 1) => api.post(`/api/muestras/${id}/imprimir-aprobado`, { id_impresora: idImpresora, cantidad }),

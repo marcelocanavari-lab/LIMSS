@@ -508,6 +508,28 @@ ANCHO_CARACTER_XS_PT = 17
 TAMANO_CELDA_QR_CONDENSADA_MM = 0.6
 
 
+def armar_pares_etiquetas_muestra(etiquetas: list[dict]) -> list[tuple[dict, Optional[dict]]]:
+    """Agrupa la lista de etiquetas de a 2, en el orden en que vienen -- la
+    primera etiqueta física lleva las muestras 1 y 2, la segunda las 3 y 4,
+    así sucesivamente (ver generar_sbpl_etiqueta_par: rollo continuo, dos
+    muestras por etiqueta física en vez de una). Con cantidad impar, el
+    último par queda con la segunda mitad en None -- la última etiqueta
+    física lleva una sola muestra arriba, la mitad de abajo vacía, nunca se
+    repite la de arriba.
+
+    Vive acá (no en app/api/routes/muestras.py, donde se usó originalmente)
+    para que app/api/routes/solicitudes_muestreo.py también pueda
+    reutilizarla al imprimir etiquetas SATO de una solicitud todavía
+    PENDIENTE (sin id_muestra real) -- solicitudes_muestreo.py ya no puede
+    importar de muestras.py porque muestras.py importa de
+    solicitudes_muestreo.py (import circular), pero ambos ya importan de
+    este módulo de impresión."""
+    return [
+        (etiquetas[i], etiquetas[i + 1] if i + 1 < len(etiquetas) else None)
+        for i in range(0, len(etiquetas), 2)
+    ]
+
+
 def generar_sbpl_etiqueta_par(
     etiqueta_arriba: dict, etiqueta_abajo: Optional[dict],
     ancho_mm: int, alto_mm: int, dpi: int, cantidad_copias: int = 1,
@@ -522,13 +544,18 @@ def generar_sbpl_etiqueta_par(
 
     Layout condensado (fuente <XS>, ver ANCHO_CARACTER_XS_PT) de los MISMOS
     campos que generar_sbpl_etiqueta -- tipo de muestra, N° de solicitud,
-    código, nombre del material, N° de IR/LOTE, cantidad, laboratorio (solo
-    si la especificación de esa muestra puntual lo tiene definido), fecha +
-    iniciales del muestreador, QR. Cantidad/Laboratorio se habían quedado
-    afuera en un ajuste anterior (regresión real: dejaban de imprimirse) --
-    hay espacio de sobra en la mitad disponible como para no tener que
-    sacar nada, hoy 8 renglones de texto usan ~230pt de los ~339pt de cada
-    mitad (100x85mm a 203dpi).
+    código, nombre del material (hasta 2 renglones, a 2x -- ver
+    MULT_DESTACADO), N° de IR/LOTE (también a 2x), cantidad, laboratorio
+    (solo si la especificación de esa muestra puntual lo tiene definido),
+    fecha + iniciales del muestreador, QR. Cantidad/Laboratorio se habían
+    quedado afuera en un ajuste anterior (regresión real: dejaban de
+    imprimirse) -- hay espacio de sobra en la mitad disponible como para no
+    tener que sacar nada: hasta 9 renglones de texto (con nombre en 2
+    líneas) usan ~310pt de los ~339pt de cada mitad (100x85mm a 203dpi).
+    Nombre e IR/LOTE se destacan a 2x para que se vean del mismo tamaño
+    relativo que en el PDF de esta misma etiqueta (ver la nota de
+    MULT_DESTACADO más abajo) -- antes estaban a 1x, igual que el resto de
+    los campos, notablemente más chicos que su equivalente en PDF.
 
     `etiqueta_arriba`/`etiqueta_abajo`: mismo dict que ya arma
     imprimir_etiqueta_directo para generar_sbpl_etiqueta (titulo,
@@ -547,6 +574,21 @@ def generar_sbpl_etiqueta_par(
     # inventado.
     salto = round(mm_a_puntos(5, dpi) * ANCHO_CARACTER_XS_PT / ANCHO_CARACTER_XM_PT)
 
+    # Nombre del producto e IR/LOTE: destacados a 2x (mismo criterio de
+    # "un paso de <L> más grande que el resto" que ya usan generar_sbpl_
+    # etiqueta y generar_sbpl_etiqueta_estado para estos mismos dos campos)
+    # -- <XS> a 1x mide ~6pt tipográficos (17 dots a 203dpi), notablemente
+    # más chico que los ~11.2pt (14pt*_ESCALA_ETIQUETA=0.8) que usa el PDF
+    # de esta misma etiqueta para nombre e IR/LOTE (ver _dibujar_etiqueta en
+    # pdf_solicitud_muestreo.py) -- 2x (~12pt) es el múltiplo entero más
+    # cercano disponible en SBPL (no hay fracciones, ver <L> en el
+    # encabezado del archivo). AVANCE_2X_XS sigue el mismo criterio que
+    # AVANCE_2X en generar_sbpl_etiqueta_estado: el glifo a 2x mide el
+    # doble, así que el avance es salto + un alto de glifo base (no
+    # simplemente salto*2, eso dejaría de más aire del que corresponde).
+    MULT_DESTACADO = 2
+    AVANCE_2X_XS = salto + ANCHO_CARACTER_XS_PT
+
     comandos = [_cmd("A")]
 
     diagnostico = []  # (nombre, v, h, alto, ancho) -- mismo criterio que generar_sbpl_etiqueta_estado
@@ -557,23 +599,24 @@ def generar_sbpl_etiqueta_par(
     comandos.append(_cmd("A1", f"{alto_pt:04d}{ancho_pt:04d}"))
 
     def dibujar_mitad(datos: Optional[dict], v_base: int, etiqueta_diag: str):
-        """Una mitad completa (hasta 8 renglones de texto -- 7 si no hay
-        laboratorio -- + QR) -- no dibuja nada si datos es None (mitad
-        vacía, cantidad impar de muestras)."""
+        """Una mitad completa (hasta 9 renglones de texto -- 8 si el nombre
+        entra en 1 sola línea, 8 si no hay laboratorio, 7 si ambas cosas --
+        + QR) -- no dibuja nada si datos es None (mitad vacía, cantidad
+        impar de muestras)."""
         if not datos:
             return
         v = v_base + margen
         h = margen
 
-        def campo(texto: str, avance: int = None, nombre_diag: str = None):
+        def campo(texto: str, avance: int = None, nombre_diag: str = None, multiplicador: int = MULTIPLICADOR_BASE):
             nonlocal v
             comandos.append(_cmd("V", f"{v:04d}"))
             comandos.append(_cmd("H", f"{h:04d}"))
-            comandos.append(_cmd("L", "0101"))
+            comandos.append(_cmd("L", f"{multiplicador:02d}{multiplicador:02d}"))
             comandos.append(_cmd("XS", texto))
             diagnostico.append((
                 f"{etiqueta_diag} {nombre_diag or texto[:16]}", v, h,
-                ANCHO_CARACTER_XS_PT, len(texto) * ANCHO_CARACTER_XS_PT,
+                ANCHO_CARACTER_XS_PT * multiplicador, len(texto) * ANCHO_CARACTER_XS_PT * multiplicador,
             ))
             v += avance if avance is not None else salto
 
@@ -583,21 +626,32 @@ def generar_sbpl_etiqueta_par(
         # espacio libre real a la izquierda del QR, en vez de un límite fijo
         # de caracteres que podría chocar contra él (ver el diagnóstico de
         # superposición más abajo, que hubiera marcado esto si se dejaba
-        # fijo).
+        # fijo). max_chars_nombre usa el ancho de carácter a MULT_DESTACADO
+        # (el nombre ahora se dibuja a ese tamaño, no a 1x).
         codigo_qr = _texto(datos.get("identificador"))
         tamano_celda_qr = max(1, min(32, mm_a_puntos(TAMANO_CELDA_QR_CONDENSADA_MM, dpi)))
         ancho_qr_pt = _modulos_qr(len(codigo_qr)) * tamano_celda_qr
         margen_derecho_qr_pt = mm_a_puntos(MARGEN_DERECHO_QR_PT_MM, dpi)
         h_qr = ancho_pt - ancho_qr_pt - margen_derecho_qr_pt - ANCHO_CARACTER_XM_PT
         gap_texto_qr_pt = mm_a_puntos(2, dpi)
-        max_chars_nombre = max(10, (h_qr - gap_texto_qr_pt - h) // ANCHO_CARACTER_XS_PT)
+        max_chars_nombre = max(10, (h_qr - gap_texto_qr_pt - h) // (ANCHO_CARACTER_XS_PT * MULT_DESTACADO))
 
         campo(_texto(datos.get("titulo")), nombre_diag="Tipo")
         campo(_texto(datos.get("identificador")), nombre_diag="N solicitud")
         campo(_texto(datos.get("erp_codart")), nombre_diag="Codigo")
-        campo(_texto(datos.get("erp_desart"))[:max_chars_nombre], nombre_diag="Nombre")
+
+        # Nombre a 2x, hasta 2 renglones (mismo criterio "a dos renglones"
+        # que pide igualar al PDF) -- _envolver_texto corta por palabra
+        # completa, mismo helper que ya usa generar_sbpl_etiqueta_estado
+        # para el mismo problema (SBPL no tiene wrap automático).
+        for linea in _envolver_texto(_texto(datos.get("erp_desart")), max_chars_nombre, 2):
+            campo(linea, avance=AVANCE_2X_XS, nombre_diag="Nombre", multiplicador=MULT_DESTACADO)
+
         etiqueta_ref = datos.get("etiqueta_referencia") or "IR"
-        campo(f"{etiqueta_ref}: {_texto(datos.get('nro_ir'))}", nombre_diag=etiqueta_ref)
+        campo(
+            f"{etiqueta_ref}: {_texto(datos.get('nro_ir'))}",
+            avance=AVANCE_2X_XS, nombre_diag=etiqueta_ref, multiplicador=MULT_DESTACADO,
+        )
 
         # Cantidad y Laboratorio -- se habían perdido al pasar a este layout
         # condensado (quedaron afuera de la lista de campos de ese pedido);

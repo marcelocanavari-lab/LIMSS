@@ -24,6 +24,15 @@ export default function RemitoImprimirPage() {
   const [generando, setGenerando] = useState(false);
   const [pdfError, setPdfError] = useState('');
 
+  // Historial completo de remitos generados (append-only: "Generar uno
+  // nuevo" nunca sobrescribe uno existente, ver el docstring del módulo en
+  // envios.py) -- antes solo se veía el más reciente, lo que podía llevar a
+  // mirar/descargar un remito viejo sin darse cuenta de que no tenía una
+  // corrección posterior a su generación.
+  const [remitos, setRemitos] = useState([]);
+  const [accionHistorialId, setAccionHistorialId] = useState(null); // id_remito con Ver/Descargar en curso
+  const [errorHistorial, setErrorHistorial] = useState('');
+
   // Constancia de recepción (copia firmada por el laboratorio)
   const [mostrarFormRecepcion, setMostrarFormRecepcion] = useState(false);
   const [fechaRecepcion, setFechaRecepcion] = useState(hoyISO());
@@ -44,6 +53,14 @@ export default function RemitoImprimirPage() {
 
   useEffect(cargarRemito, [id, idEnvio]);
 
+  function cargarHistorialRemitos() {
+    if (!remito?.id_envio) return;
+    enviosApi
+      .listarRemitos(remito.id_envio)
+      .then(setRemitos)
+      .catch((err) => setErrorHistorial(err instanceof ApiError ? err.message : 'No se pudo cargar el historial de remitos'));
+  }
+
   useEffect(() => {
     if (!remito?.id_envio) return;
     setBuscandoPdf(true);
@@ -58,6 +75,7 @@ export default function RemitoImprimirPage() {
         }
       })
       .finally(() => setBuscandoPdf(false));
+    cargarHistorialRemitos();
   }, [remito?.id_envio]);
 
   async function handleGenerar() {
@@ -67,6 +85,7 @@ export default function RemitoImprimirPage() {
       await enviosApi.generarRemitoPdf(remito.id_envio);
       const actualizado = await enviosApi.obtenerRemitoPdf(remito.id_envio);
       setRemitoPdf(actualizado);
+      cargarHistorialRemitos();
     } catch (err) {
       setPdfError(err instanceof ApiError ? err.message : 'No se pudo generar el remito');
     } finally {
@@ -89,6 +108,41 @@ export default function RemitoImprimirPage() {
     document.body.appendChild(a);
     a.click();
     a.remove();
+  }
+
+  // Ver/descargar un remito PUNTUAL del historial (no necesariamente el
+  // vigente) -- se trae bajo demanda al hacer clic, no de antemano para
+  // toda la lista.
+  async function verRemitoHistorico(r) {
+    setErrorHistorial('');
+    setAccionHistorialId(r.id_remito);
+    try {
+      const { blob } = await enviosApi.obtenerRemitoPorId(r.id_remito);
+      window.open(URL.createObjectURL(blob), '_blank');
+    } catch (err) {
+      setErrorHistorial(err instanceof ApiError ? err.message : 'No se pudo abrir el remito');
+    } finally {
+      setAccionHistorialId(null);
+    }
+  }
+
+  async function descargarRemitoHistorico(r) {
+    setErrorHistorial('');
+    setAccionHistorialId(r.id_remito);
+    try {
+      const { blob } = await enviosApi.obtenerRemitoPorId(r.id_remito);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `LIMSS_${r.nro_remito_interno}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (err) {
+      setErrorHistorial(err instanceof ApiError ? err.message : 'No se pudo descargar el remito');
+    } finally {
+      setAccionHistorialId(null);
+    }
   }
 
   async function verCopiaFirmada() {
@@ -184,6 +238,54 @@ export default function RemitoImprimirPage() {
             )}
 
             {pdfError && <div className="alert alert-danger" style={{ marginTop: 'var(--sp-3)' }}>{pdfError}</div>}
+          </div>
+        )}
+
+        {remitos.length > 1 && (
+          <div className="card no-print" style={{ marginBottom: 'var(--sp-4)' }}>
+            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-2)' }}>Historial de remitos</h2>
+            <p style={{ color: 'var(--ink-2)', fontSize: 'var(--fs-sm)', marginBottom: 'var(--sp-3)' }}>
+              Cada "Generar uno nuevo" crea un documento adicional, nunca modifica los anteriores -- si corregiste un dato
+              después de emitir alguno de estos, esa corrección solo va a estar reflejada en un remito generado después
+              del cambio.
+            </p>
+            <table className="data-table data-table-compact">
+              <thead>
+                <tr>
+                  <th>N° de remito</th>
+                  <th>Generado el</th>
+                  <th></th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {remitos.map((r, i) => (
+                  <tr key={r.id_remito}>
+                    <td style={{ fontFamily: 'var(--font-mono)' }}>{r.nro_remito_interno}</td>
+                    <td>{new Date(r.fecha_generacion).toLocaleString()}</td>
+                    <td>{i === 0 && <span className="badge badge-ok">Vigente</span>}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <button
+                        className="btn btn-ghost"
+                        onClick={() => verRemitoHistorico(r)}
+                        disabled={accionHistorialId === r.id_remito}
+                      >
+                        {accionHistorialId === r.id_remito ? <span className="spinner" /> : 'Ver'}
+                      </button>
+                      <button
+                        className="btn btn-ghost"
+                        style={{ marginLeft: 'var(--sp-2)' }}
+                        onClick={() => descargarRemitoHistorico(r)}
+                        disabled={accionHistorialId === r.id_remito}
+                      >
+                        Descargar
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {errorHistorial && <div className="alert alert-danger" style={{ marginTop: 'var(--sp-3)' }}>{errorHistorial}</div>}
           </div>
         )}
 

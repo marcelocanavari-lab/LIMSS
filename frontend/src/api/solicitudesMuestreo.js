@@ -61,4 +61,13 @@ export const solicitudesMuestreoApi = {
   // Etiquetas CUARENTENA -- una por bulto (nro_bultos), impresión directa SATO.
   imprimirCuarentena: (id, idImpresora) =>
     api.post(`/api/solicitudes-muestreo/${id}/imprimir-cuarentena`, { id_impresora: idImpresora }),
+
+  // Etiquetas de MUESTRA por SATO para una solicitud TODAVÍA PENDIENTE (sin
+  // id_muestra real) -- misma fuente de datos que "Etiquetas (PDF)" para
+  // ese mismo caso (ver _armar_etiquetas_logicas_de_solicitud en el
+  // backend). Para una solicitud ya ejecutada, se sigue usando
+  // muestrasApi.imprimirDirecto/contarEtiquetas con el id_muestra real.
+  imprimirDirecto: (id, idImpresora) =>
+    api.post(`/api/solicitudes-muestreo/${id}/imprimir-directo`, { id_impresora: idImpresora }),
+  contarEtiquetas: (id) => api.get(`/api/solicitudes-muestreo/${id}/etiquetas-cantidad`),
 };

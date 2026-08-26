@@ -56,7 +56,7 @@ from app.schemas.solicitudes_muestreo import (
     SolicitudMuestreoResponse,
     UsuarioDisponible,
 )
-from app.schemas.muestras import ImprimirDirectoBody, ImprimirDirectoResponse
+from app.schemas.muestras import CantidadEtiquetasResponse, ImprimirDirectoBody, ImprimirDirectoResponse
 from app.services import audit, storage
 from app.services.bultos import expandir_bultos, guardar_grupos_bultos, obtener_grupos_bultos
 from app.services.especificaciones import guardar_checklist_muestreo, obtener_checklist_muestreo, tiene_ensayos_analisis
@@ -68,8 +68,13 @@ from app.services.erp_ir import (
     solicitud_activa_existente,
 )
 from app.services.erp_materiales import asignar_numero_analisis_si_corresponde, tiene_numero_analisis
-from app.services.formato import formatear_cantidad
-from app.services.impresion_sato import generar_sbpl_etiqueta_estado, imprimir_sbpl
+from app.services.formato import etiqueta_referencia, formatear_cantidad, titulo_etiqueta_por_tipo
+from app.services.impresion_sato import (
+    armar_pares_etiquetas_muestra,
+    generar_sbpl_etiqueta_estado,
+    generar_sbpl_etiqueta_par,
+    imprimir_sbpl,
+)
 from app.services.pdf_solicitud_muestreo import (
     generar_pdf_etiquetas,
     generar_pdf_etiquetas_v2,
@@ -1038,6 +1043,143 @@ def descargar_etiquetas(
         content=pdf_bytes, media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="{row.nro_solicitud}_etiquetas.pdf"'},
     )
+
+
+def _armar_etiquetas_logicas_de_solicitud(cursor, row) -> list[dict]:
+    """Misma resolución que _generar_pdf_etiquetas_de_solicitud (PDF) de
+    arriba, pero devolviendo etiquetas lógicas en el formato que espera
+    generar_sbpl_etiqueta_par -- para que "Etiquetas (SATO)" funcione en una
+    solicitud TODAVÍA PENDIENTE (sin id_muestra real, ver imprimir_etiquetas_
+    directo_de_solicitud más abajo) exactamente igual que ya funciona
+    "Etiquetas (PDF)" para ese mismo caso, en vez de un camino nuevo con
+    otra fuente de datos.
+
+    Usa row (la solicitud) en vez de una fila real de lims_muestras -- no
+    tiene tipo_referencia propio (esa columna es de lims_muestras, no de
+    lims_solicitudes_muestreo), así que la referencia es siempre "IR" para
+    este caso, igual que ya asume _dibujar_etiqueta en pdf_solicitud_
+    muestreo.py (getattr(solicitud, "tipo_referencia", "ir"))."""
+    iniciales = _iniciales_muestreador(cursor, row.id_muestreador)
+    datos_base = {
+        "identificador": row.nro_solicitud,
+        "erp_codart": row.erp_CODART.strip() if row.erp_CODART else None,
+        "erp_desart": row.erp_DESART.strip() if row.erp_DESART else None,
+        "nro_ir": row.erp_nro_ir,
+        "etiqueta_referencia": etiqueta_referencia(getattr(row, "tipo_referencia", "ir")),
+        "fecha": row.fecha_solicitud,
+        "iniciales_muestreador": iniciales,
+    }
+
+    # Igual que el PDF: si ya hay tipos confirmados (lims_solicitud_muestras
+    # -- puede pasar incluso antes de ejecutar el muestreo, ver el
+    # comentario de "Muestras a tomar" en CargaResultadosOrdenTrabajoPage.jsx),
+    # una etiqueta lógica por tipo. Si no, cae al modelo legacy de 2
+    # etiquetas fijas (análisis + contramuestra) leídas directo de la
+    # especificación -- mismo fallback que generar_pdf_etiquetas.
+    tipos_confirmados = _obtener_muestras_confirmadas(cursor, row.id_solicitud)
+    if tipos_confirmados:
+        etiquetas = []
+        for t in tipos_confirmados:
+            d = dict(datos_base)
+            d["titulo"] = titulo_etiqueta_por_tipo(t.tipo_muestra)
+            d["cantidad_muestra_texto"] = (
+                f"{formatear_cantidad(t.cantidad_real)} {t.unidad or ''}".strip() if t.cantidad_real is not None else None
+            )
+            d["laboratorio_nombre"] = t.laboratorio_nombre
+            etiquetas.append(d)
+        return etiquetas
+
+    cantidades = _obtener_cantidades(cursor, row.id_especificacion)
+
+    def _cantidad_o_none(cantidad, unidad):
+        return f"{formatear_cantidad(cantidad)} {unidad or ''}".strip() if cantidad is not None else None
+
+    d_analisis = dict(datos_base)
+    d_analisis["titulo"] = "MUESTRA PARA ANÁLISIS"
+    d_analisis["cantidad_muestra_texto"] = _cantidad_o_none(cantidades.get("cantidad_muestra"), cantidades.get("unidad_muestra"))
+    d_analisis["laboratorio_nombre"] = row.laboratorio_nombre
+
+    d_contra = dict(datos_base)
+    d_contra["titulo"] = "CONTRAMUESTRA"
+    d_contra["cantidad_muestra_texto"] = _cantidad_o_none(cantidades.get("cantidad_contramuestra"), cantidades.get("unidad_contramuestra"))
+    d_contra["laboratorio_nombre"] = None
+
+    return [d_analisis, d_contra]
+
+
+@router.get("/{id_solicitud}/etiquetas-cantidad", response_model=CantidadEtiquetasResponse)
+def contar_etiquetas_a_imprimir_de_solicitud(
+    id_solicitud: int,
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Preview de cantidad para "Etiquetas (SATO)" en una solicitud
+    PENDIENTE -- misma idea que GET /api/muestras/{id_muestra}/etiquetas-
+    cantidad, pero a partir de la solicitud directamente (sin id_muestra
+    real todavía)."""
+    cursor = conn.cursor()
+    row = _obtener_solicitud_o_404(cursor, id_solicitud)
+    etiquetas = _armar_etiquetas_logicas_de_solicitud(cursor, row)
+    return CantidadEtiquetasResponse(
+        cantidad_muestras=len(etiquetas),
+        cantidad_etiquetas_fisicas=len(armar_pares_etiquetas_muestra(etiquetas)),
+    )
+
+
+@router.post("/{id_solicitud}/imprimir-directo", response_model=ImprimirDirectoResponse)
+def imprimir_etiquetas_directo_de_solicitud(
+    id_solicitud: int,
+    body: ImprimirDirectoBody,
+    user: dict = Depends(require_rol("muestreador", "analista_qc", "qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Alternativa SATO a "Descargar etiquetas" (PDF) para una solicitud
+    TODAVÍA PENDIENTE (sin id_muestra real) -- antes el botón "Etiquetas
+    (SATO)" quedaba oculto en ese caso porque el único camino de impresión
+    directa (POST /api/muestras/{id_muestra}/imprimir-directo) necesitaba
+    una fila real de lims_muestras. Este endpoint usa la misma fuente de
+    datos que ya usa el PDF para una solicitud pendiente (ver
+    _armar_etiquetas_logicas_de_solicitud), agrupadas de a 2 por etiqueta
+    física igual que el resto de las etiquetas de muestra.
+
+    Para una solicitud YA EJECUTADA (con id_muestra), el frontend sigue
+    usando el endpoint de muestras.py sin cambios -- éste es específicamente
+    para el caso sin muestra todavía."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM lims_impresoras_etiquetas WHERE id_impresora = ? AND activa = 1", body.id_impresora)
+    impresora = cursor.fetchone()
+    if not impresora:
+        raise HTTPException(status_code=404, detail="La impresora indicada no existe o está inactiva")
+
+    row = _obtener_solicitud_o_404(cursor, id_solicitud)
+    etiquetas = _armar_etiquetas_logicas_de_solicitud(cursor, row)
+
+    pares = armar_pares_etiquetas_muestra(etiquetas)
+    enviadas = 0
+    for arriba, abajo in pares:
+        sbpl_bytes = generar_sbpl_etiqueta_par(
+            arriba, abajo, impresora.ancho_mm, impresora.alto_mm, impresora.resolucion_dpi, cantidad_copias=body.cantidad,
+        )
+        nombre_trabajo = f"Etiqueta {arriba['identificador']}"
+        if abajo:
+            nombre_trabajo += f" + {abajo['identificador']}"
+        try:
+            imprimir_sbpl(impresora, sbpl_bytes, nombre_trabajo=nombre_trabajo)
+        except RuntimeError as e:
+            detalle = str(e)
+            if enviadas:
+                detalle += f" (se enviaron {enviadas} de {len(pares)} etiquetas antes de este error)"
+            raise HTTPException(status_code=502, detail=detalle)
+        enviadas += 1
+
+    audit.registrar(
+        conn, entidad="etiqueta", accion="imprimir_directo",
+        id_usuario=user["id_usuario"], id_entidad=id_solicitud,
+        valor_nuevo={"id_impresora": body.id_impresora, "ruta_red": impresora.ruta_red, "cantidad_etiquetas": enviadas},
+    )
+
+    plural = "s" if enviadas != 1 else ""
+    return ImprimirDirectoResponse(ok=True, mensaje=f"{enviadas} etiqueta{plural} enviada{plural} a {impresora.nombre}")
 
 
 _MEDIA_TYPES_PROTOCOLO_PROVEEDOR = {

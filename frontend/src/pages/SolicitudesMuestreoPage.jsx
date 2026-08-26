@@ -135,6 +135,23 @@ export default function SolicitudesMuestreoPage() {
   const [imprimiendoCuarentena, setImprimiendoCuarentena] = useState(false);
   const [mensajeCuarentena, setMensajeCuarentena] = useState(null); // { tipo: 'ok'|'error', texto }
 
+  // ── Modal: imprimir etiquetas de MUESTRA directo por SATO ──────────
+  // Mismo patrón que el modal de Cuarentena de arriba y que ya usan
+  // Consulta de Muestras/Impresión de Etiquetas -- el botón "Etiquetas"
+  // de esta pantalla solo ofrecía PDF (verEtiquetas), nunca se conectó al
+  // mecanismo de impresión directa ya usado en el resto del sistema.
+  const [etiquetaMuestraSolicitud, setEtiquetaMuestraSolicitud] = useState(null);
+  const [impresorasEtiquetaMuestra, setImpresorasEtiquetaMuestra] = useState([]);
+  const [idImpresoraEtiquetaMuestra, setIdImpresoraEtiquetaMuestra] = useState('');
+  const [imprimiendoEtiquetaMuestra, setImprimiendoEtiquetaMuestra] = useState(false);
+  const [mensajeEtiquetaMuestra, setMensajeEtiquetaMuestra] = useState(null); // { tipo: 'ok'|'error', texto }
+  // Cantidad a imprimir (mismo criterio que el aviso de Cuarentena arriba,
+  // "se van a imprimir N etiquetas" antes de confirmar) -- acá la cantidad
+  // no viene ya armada en la fila de la solicitud como nro_bultos, así que
+  // se pide en el mismo momento en que se abre el modal (ver GET
+  // /{id_muestra}/etiquetas-cantidad, mismos datos que ya usa el PDF).
+  const [cantidadEtiquetaMuestra, setCantidadEtiquetaMuestra] = useState(null);
+
   // ── Modal: completar datos (cualquier solicitud pendiente) ──
   const [completandoId, setCompletandoId] = useState(null);
   const [completarLaboratorios, setCompletarLaboratorios] = useState([]);
@@ -376,6 +393,62 @@ export default function SolicitudesMuestreoPage() {
       await abrirPdfConAuth(`/api/solicitudes-muestreo/${s.id_solicitud}/etiquetas`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudieron descargar las etiquetas');
+    }
+  }
+
+  // Si la solicitud YA tiene id_muestra (muestreo ejecutado), se usa el
+  // endpoint de muestras.py que resuelve todo a partir de la muestra real
+  // (mismo mecanismo que ya usan MuestraEtiquetaPage/ConsultaMuestraDetalle
+  // Page/ImpresionEtiquetasPage). Si todavía es PENDIENTE (sin id_muestra),
+  // se usa el endpoint de solicitudes-muestreo.py, que arma las mismas
+  // etiquetas directo desde la especificación -- igual que ya hace
+  // "Etiquetas (PDF)" para ese mismo caso (antes SATO quedaba oculto acá
+  // porque el único camino de impresión directa necesitaba una muestra
+  // real; ahora ambos caminos ofrecen las mismas dos opciones).
+  function contarEtiquetasParaSolicitud(s) {
+    return s.id_muestra ? muestrasApi.contarEtiquetas(s.id_muestra) : solicitudesMuestreoApi.contarEtiquetas(s.id_solicitud);
+  }
+
+  function imprimirDirectoParaSolicitud(s, idImpresora) {
+    return s.id_muestra
+      ? muestrasApi.imprimirDirecto(s.id_muestra, idImpresora)
+      : solicitudesMuestreoApi.imprimirDirecto(s.id_solicitud, idImpresora);
+  }
+
+  function abrirImprimirEtiquetaMuestra(s) {
+    setEtiquetaMuestraSolicitud(s);
+    setMensajeEtiquetaMuestra(null);
+    setCantidadEtiquetaMuestra(null);
+    contarEtiquetasParaSolicitud(s)
+      .then(setCantidadEtiquetaMuestra)
+      .catch(() => setMensajeEtiquetaMuestra({ tipo: 'error', texto: 'No se pudo calcular la cantidad de etiquetas a imprimir' }));
+    if (impresorasEtiquetaMuestra.length === 0) {
+      muestrasApi
+        .listarImpresoras(true)
+        .then((data) => {
+          setImpresorasEtiquetaMuestra(data);
+          if (data.length === 1) setIdImpresoraEtiquetaMuestra(String(data[0].id_impresora));
+        })
+        .catch(() => setMensajeEtiquetaMuestra({ tipo: 'error', texto: 'No se pudo cargar el listado de impresoras' }));
+    }
+  }
+
+  function cerrarImprimirEtiquetaMuestra() {
+    setEtiquetaMuestraSolicitud(null);
+    setCantidadEtiquetaMuestra(null);
+  }
+
+  async function confirmarImprimirEtiquetaMuestra() {
+    if (!idImpresoraEtiquetaMuestra || !etiquetaMuestraSolicitud) return;
+    setImprimiendoEtiquetaMuestra(true);
+    setMensajeEtiquetaMuestra(null);
+    try {
+      const resp = await imprimirDirectoParaSolicitud(etiquetaMuestraSolicitud, Number(idImpresoraEtiquetaMuestra));
+      setMensajeEtiquetaMuestra({ tipo: 'ok', texto: resp.mensaje });
+    } catch (err) {
+      setMensajeEtiquetaMuestra({ tipo: 'error', texto: err instanceof ApiError ? err.message : 'No se pudo imprimir la etiqueta' });
+    } finally {
+      setImprimiendoEtiquetaMuestra(false);
     }
   }
 
@@ -653,7 +726,8 @@ export default function SolicitudesMuestreoPage() {
                     </td>
                     <td>{formatFecha(s.fecha_solicitud)}</td>
                     <td className="acciones-compactas">
-                      <button className="btn btn-ghost" onClick={() => verEtiquetas(s)}>Etiquetas</button>
+                      <button className="btn btn-ghost" onClick={() => verEtiquetas(s)}>Etiquetas (PDF)</button>
+                      <button className="btn btn-ghost" onClick={() => abrirImprimirEtiquetaMuestra(s)}>Etiquetas (SATO)</button>
                       {!!s.nro_bultos && (
                         <button className="btn btn-ghost" onClick={() => abrirImprimirCuarentena(s)}>Cuarentena</button>
                       )}
@@ -1016,6 +1090,74 @@ export default function SolicitudesMuestreoPage() {
                 disabled={imprimiendoCuarentena || !idImpresoraCuarentena}
               >
                 {imprimiendoCuarentena ? <span className="spinner" /> : 'Imprimir'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {etiquetaMuestraSolicitud && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 'var(--sp-4)',
+          }}
+          onClick={cerrarImprimirEtiquetaMuestra}
+        >
+          <div className="card" style={{ width: '90%', maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-2)' }}>
+              Imprimir etiquetas de muestra -- {etiquetaMuestraSolicitud.nro_solicitud}
+            </h2>
+
+            {cantidadEtiquetaMuestra ? (
+              <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', marginBottom: 'var(--sp-3)' }}>
+                Se van a imprimir {cantidadEtiquetaMuestra.cantidad_etiquetas_fisicas} etiqueta
+                {cantidadEtiquetaMuestra.cantidad_etiquetas_fisicas === 1 ? '' : 's'} física
+                {cantidadEtiquetaMuestra.cantidad_etiquetas_fisicas === 1 ? '' : 's'} ({cantidadEtiquetaMuestra.cantidad_muestras} muestra
+                {cantidadEtiquetaMuestra.cantidad_muestras === 1 ? '' : 's'} confirmada
+                {cantidadEtiquetaMuestra.cantidad_muestras === 1 ? '' : 's'}, dos por etiqueta) para {etiquetaMuestraSolicitud.nro_solicitud}.
+              </p>
+            ) : !mensajeEtiquetaMuestra && (
+              <div className="state-block" style={{ marginBottom: 'var(--sp-3)' }}><span className="spinner" /></div>
+            )}
+
+            {impresorasEtiquetaMuestra.length === 0 && !mensajeEtiquetaMuestra ? (
+              <div className="state-block"><span className="spinner" /></div>
+            ) : impresorasEtiquetaMuestra.length === 0 ? null : (
+              <div className="field">
+                <label className="field-label" htmlFor="impresoraEtiquetaMuestra">Impresora</label>
+                <select
+                  id="impresoraEtiquetaMuestra"
+                  className="field-input"
+                  value={idImpresoraEtiquetaMuestra}
+                  onChange={(e) => setIdImpresoraEtiquetaMuestra(e.target.value)}
+                  disabled={imprimiendoEtiquetaMuestra}
+                >
+                  <option value="">Seleccioná una impresora...</option>
+                  {impresorasEtiquetaMuestra.map((imp) => (
+                    <option key={imp.id_impresora} value={imp.id_impresora}>{imp.nombre} ({imp.modelo})</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {mensajeEtiquetaMuestra && (
+              <div className={`alert ${mensajeEtiquetaMuestra.tipo === 'ok' ? 'alert-ok' : 'alert-danger'}`} style={{ marginBottom: 'var(--sp-3)' }}>
+                {mensajeEtiquetaMuestra.texto}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+              <button type="button" className="btn btn-ghost" onClick={cerrarImprimirEtiquetaMuestra} disabled={imprimiendoEtiquetaMuestra}>
+                Cerrar
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={confirmarImprimirEtiquetaMuestra}
+                disabled={imprimiendoEtiquetaMuestra || !idImpresoraEtiquetaMuestra}
+              >
+                {imprimiendoEtiquetaMuestra ? <span className="spinner" /> : 'Imprimir'}
               </button>
             </div>
           </div>

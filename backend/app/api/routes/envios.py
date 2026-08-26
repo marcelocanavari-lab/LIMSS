@@ -114,7 +114,11 @@ def _fila_a_remito_pdf(fila) -> RemitoPdfResponse:
         id_remito=fila.id_remito,
         id_envio=fila.id_envio,
         nro_remito_interno=fila.nro_remito_interno,
-        url_descarga=f"/api/envios/{fila.id_envio}/remito",
+        # Apunta a ESTE remito puntual (ver descargar_remito_por_id más
+        # abajo), no al "más reciente" del envío -- así un documento del
+        # historial (ver listar_remitos) siempre baja a sí mismo, nunca a
+        # otro que haya sido generado después.
+        url_descarga=f"/api/envios/remitos/{fila.id_remito}",
         id_usuario_genera=fila.id_usuario,
         fecha_generacion=fila.fecha_generacion,
         tiene_copia_firmada=bool(fila.pdf_copia_firmada),
@@ -210,6 +214,57 @@ def descargar_remito(
     fila = cursor.fetchone()
     if not fila:
         raise HTTPException(status_code=404, detail="Todavía no se generó un remito para este envío")
+
+    ruta = storage.ruta_absoluta(fila.pdf_path)
+    if not os.path.exists(ruta):
+        raise HTTPException(status_code=404, detail="El archivo no se encuentra en el servidor")
+
+    return FileResponse(
+        ruta, media_type="application/pdf", filename=os.path.basename(ruta),
+        headers={
+            "X-Remito-Numero": fila.nro_remito_interno,
+            "X-Remito-Fecha": fila.fecha_generacion.isoformat(),
+        },
+    )
+
+
+@router.get("/{id_envio}/remitos", response_model=list[RemitoPdfResponse])
+def listar_remitos(
+    id_envio: int,
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Historial COMPLETO de remitos generados para este envío -- el
+    mecanismo sigue siendo append-only (ver el docstring del módulo, arriba
+    de todo): "Generar uno nuevo" siempre crea un documento adicional,
+    nunca sobrescribe uno existente. Hasta ahora solo se exponía el más
+    reciente (ver descargar_remito), lo que podía llevar a que alguien
+    corrigiera un dato en la base, mirara/descargara el remito de antes de
+    la corrección sin darse cuenta de que no la tiene, y no supiera que
+    hacía falta generar uno nuevo para que quedara reflejada en un
+    documento. Este endpoint expone la lista entera, más reciente primero
+    (el frontend lo destaca como "vigente"), para que quede claro de un
+    vistazo cuándo se generó cada versión."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM lims_remitos WHERE id_envio = ? ORDER BY id_remito DESC", id_envio)
+    return [_fila_a_remito_pdf(f) for f in cursor.fetchall()]
+
+
+@router.get("/remitos/{id_remito}")
+def descargar_remito_por_id(
+    id_remito: int,
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Descarga un remito PUNTUAL del historial (ver listar_remitos), a
+    diferencia de descargar_remito (GET /{id_envio}/remito) que siempre
+    sirve el más reciente -- necesario para poder abrir/descargar cualquier
+    versión anterior, no solo la vigente."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM lims_remitos WHERE id_remito = ?", id_remito)
+    fila = cursor.fetchone()
+    if not fila:
+        raise HTTPException(status_code=404, detail="Remito no encontrado")
 
     ruta = storage.ruta_absoluta(fila.pdf_path)
     if not os.path.exists(ruta):

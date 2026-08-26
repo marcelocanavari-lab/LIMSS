@@ -193,6 +193,15 @@ class ImprimirDirectoResponse(BaseModel):
     mensaje: str
 
 
+class CantidadEtiquetasResponse(BaseModel):
+    """Preview de cuántas etiquetas se van a generar para una muestra si se
+    imprime por SATO -- para mostrar "se van a imprimir N" ANTES de mandar
+    el trabajo real (mismo criterio ya usado para CUARENTENA, cantidad
+    conocida de antemano)."""
+    cantidad_muestras: int
+    cantidad_etiquetas_fisicas: int
+
+
 # ── Impresión de Etiquetas (acceso general desde el Dashboard) ────
 #
 # Búsqueda unificada solicitud + muestra: CUARENTENA se imprime al ingreso

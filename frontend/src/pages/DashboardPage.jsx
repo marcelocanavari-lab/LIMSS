@@ -23,7 +23,6 @@ const QUICK_LINKS = [
   { label: 'Novedades de Empaque', ruta: '/maestros/novedades-empaque', roles: GESTION },
   { label: 'Archivo de Contramuestras', ruta: '/cajas', roles: GESTION },
   { label: 'Administración', ruta: '/admin', roles: ['admin'] },
-  { label: 'Auditoría', ruta: '/auditoria', roles: ['admin'] },
 ];
 
 const ESTADOS_TESTIGO = [
