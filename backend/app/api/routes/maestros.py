@@ -463,7 +463,16 @@ def crear_especificacion(
 
 @router.get("/especificaciones", response_model=list[EspecificacionResponse])
 def listar_especificaciones(
-    vigente: Optional[bool] = Query(True, description="true=solo vigentes, false=solo obsoletas, omitir=todas"),
+    # Bug real: el default estaba en True, así que omitir el parámetro (lo
+    # que hace el frontend al tocar "Todas las versiones", ver
+    # EspecificacionesPage.jsx) terminaba filtrando igual que vigente=true
+    # -- la descripción ya decía "omitir=todas" pero el código no lo hacía.
+    # Detectado con datos reales: 219 especificaciones recién importadas con
+    # vigente=0 quedaban invisibles incluso con "Todas las versiones"
+    # activo. Ningún otro llamador depende del default viejo (los otros tres
+    # ya pasan vigente=true explícito cuando lo necesitan, ver
+    # SolicitudesMuestreoPage.jsx/MuestraNuevaPage.jsx).
+    vigente: Optional[bool] = Query(None, description="true=solo vigentes, false=solo obsoletas, omitir=todas"),
     buscar: str = Query(""),
     tipo_material: Optional[str] = Query(None, pattern=r"^(materia_prima|granel|semi_elaborado|producto_terminado|material_empaque)$"),
     user: dict = Depends(get_current_user),
