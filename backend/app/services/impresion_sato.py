@@ -732,17 +732,29 @@ def generar_sbpl_etiqueta_par(
 
 def _envolver_texto(texto: str, max_chars: int, max_lineas: int) -> list[str]:
     """Reparte `texto` en hasta `max_lineas` líneas de como máximo
-    `max_chars` cada una, cortando por palabra completa -- SBPL no tiene
-    wrap automático (<XM> imprime todo en una sola línea), así que hay que
-    partirlo antes de mandarlo. Si sobran palabras después de llenar
-    `max_lineas`, la última línea queda truncada con "…" (mismo criterio que
-    _truncar_a_ancho en pdf_solicitud_muestreo.py para el mismo problema en
-    el PDF)."""
+    `max_chars` cada una -- SBPL no tiene wrap automático (<XM>/<XS>
+    imprimen todo en una sola línea), así que hay que partirlo antes de
+    mandarlo. Todos los renglones salvo el último cortan por PALABRA
+    completa (no parten una palabra a la mitad en un renglón que sigue
+    teniendo más abajo). El ÚLTIMO renglón permitido, en cambio, corta por
+    CARÁCTER si hace falta -- mismo criterio que _truncar_a_ancho en
+    pdf_solicitud_muestreo.py para el mismo problema en el PDF -- para
+    aprovechar el espacio disponible completo antes de agregar "...": cortar
+    por palabra completa ahí también dejaba espacio en blanco de sobra sin
+    usar cada vez que la siguiente palabra entera no entraba (bug real: con
+    la fuente 2x del nombre, "MAGNESIO..." solo usaba 11 de 18 caracteres
+    disponibles en el renglón, aunque entraran varias letras más de la
+    palabra siguiente).
+
+    "..." son tres puntos ASCII normales -- no el carácter Unicode de
+    elipsis "…" (un solo carácter): ese no tiene representación en latin-1
+    (el encoding final de _cmd, ver más abajo) y se imprimía como "?"."""
     palabras = texto.split()
     lineas: list[str] = []
     actual = ""
     i = 0
-    while i < len(palabras) and len(lineas) < max_lineas:
+    # Renglones 1..(max_lineas-1): cortan por palabra completa.
+    while i < len(palabras) and len(lineas) < max_lineas - 1:
         candidato = f"{actual} {palabras[i]}".strip()
         if len(candidato) <= max_chars or not actual:
             actual = candidato
@@ -750,13 +762,21 @@ def _envolver_texto(texto: str, max_chars: int, max_lineas: int) -> list[str]:
         else:
             lineas.append(actual)
             actual = ""
-    if actual:
-        lineas.append(actual)
-    if i < len(palabras) and lineas:
-        # Quedaron palabras sin entrar -- la última línea se trunca con "…"
-        # en vez de perderlas en silencio sin ninguna marca visual.
-        ultima = lineas[-1]
-        lineas[-1] = ultima[: max_chars - 1].rstrip() + "…" if len(ultima) >= max_chars - 1 else ultima + "…"
+
+    # Último renglón permitido: todo lo que quede (ya acumulado + resto de
+    # palabras sin procesar), cortado por carácter si no entra entero.
+    resto = " ".join(palabras[i:])
+    if actual and resto:
+        resto = f"{actual} {resto}"
+    elif actual:
+        resto = actual
+
+    if resto:
+        if len(resto) <= max_chars:
+            lineas.append(resto)
+        else:
+            sufijo = "..."
+            lineas.append(resto[: max(0, max_chars - len(sufijo))].rstrip() + sufijo)
     return lineas or [""]
 
 

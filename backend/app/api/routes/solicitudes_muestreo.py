@@ -197,7 +197,7 @@ def _obtener_solicitud_o_404(cursor, id_solicitud: int):
     return row
 
 
-def _verificar_completa_para_ejecutar(row) -> None:
+def _verificar_completa_para_ejecutar(cursor, row) -> None:
     """Antes de generar el envío o confirmar el muestreo, la solicitud tiene
     que tener laboratorio y muestreador asignados -- son los únicos datos
     que hacen falta para poder ejecutar (determinan quién muestrea y contra
@@ -206,9 +206,21 @@ def _verificar_completa_para_ejecutar(row) -> None:
     muestreo (ver PUT .../completar-datos y POST .../protocolo-proveedor) --
     no tiene sentido hacer esperar al muestreador por eso. El agente puede
     dejar laboratorio/muestreador en blanco cuando no los puede resolver
-    solo con el ERP (ver app/services/agente_muestreo.py)."""
+    solo con el ERP (ver app/services/agente_muestreo.py).
+
+    Laboratorio NO se exige si la especificación no tiene ningún ensayo de
+    etapa 'analisis' (mismo chequeo que ya usa _crear_muestra_desde_
+    solicitud para decidir el estado inicial de la muestra, tiene_ensayos_
+    analisis) -- bug real detectado con la especificación 410 (Material de
+    Empaque sin ensayos de análisis ni checklist, 0 filas en lims_
+    especificacion_ensayos): no hay ningún laboratorio que asignar (no hay
+    ensayo al que asignárselo), así que exigirlo bloqueaba ejecutar el
+    muestreo sin ninguna forma real de completarlo -- completar-datos nunca
+    autocompletó el campo para este caso (no existe esa lógica en ese
+    endpoint, no es una regresión), simplemente la validación de acá nunca
+    contempló la excepción que sí existe más adelante en el flujo."""
     faltantes = []
-    if row.id_laboratorio is None:
+    if row.id_laboratorio is None and tiene_ensayos_analisis(cursor, row.id_especificacion):
         faltantes.append("laboratorio")
     if row.id_muestreador is None:
         faltantes.append("muestreador")
@@ -1378,7 +1390,7 @@ def generar_envio_anticipado(
             status_code=409,
             detail=f"La solicitud está '{row.estado}', no se puede generar un envío anticipado",
         )
-    _verificar_completa_para_ejecutar(row)
+    _verificar_completa_para_ejecutar(cursor, row)
 
     id_muestra, codigo_muestra = _crear_muestra_desde_solicitud(conn, cursor, row, datos_muestreo_pendientes=True)
     cursor.execute(
@@ -1422,7 +1434,7 @@ def confirmar_orden_trabajo(
             status_code=409,
             detail=f"La solicitud está '{row.estado}', no se puede ejecutar el muestreo",
         )
-    _verificar_completa_para_ejecutar(row)
+    _verificar_completa_para_ejecutar(cursor, row)
 
     # Datos de recepción del proveedor (Libro de Ingresos) -- si vienen
     # usuarios, tienen que existir y estar activos (mismo criterio que
