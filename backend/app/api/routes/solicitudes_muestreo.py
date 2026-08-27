@@ -120,6 +120,15 @@ def _g(row, atributo: str):
     return getattr(row, atributo, None)
 
 
+def _tiene_columna_sin_vencimiento_confirmado(cursor) -> bool:
+    """sin_vencimiento_confirmado (ver migrations_solicitud_vencimiento_
+    confirmado.sql) puede no haberse corrido todavía en este entorno --
+    mientras tanto, no se exige ni se persiste (mismo criterio de
+    tolerancia que _tiene_columnas_muestra_adhoc)."""
+    cursor.execute("SELECT COL_LENGTH('lims_solicitudes_muestreo', 'sin_vencimiento_confirmado') AS c")
+    return cursor.fetchone().c is not None
+
+
 _SELECT_SOLICITUD = """
     SELECT s.*, lab.nombre AS laboratorio_nombre, u.nombre + ' ' + u.apellido AS usuario_qa,
            um.nombre + ' ' + um.apellido AS muestreador_nombre
@@ -1351,11 +1360,13 @@ def ensayos_para_orden(
         id_solicitud=row.id_solicitud, nro_solicitud=row.nro_solicitud,
         erp_CODART=row.erp_CODART, erp_DESART=row.erp_DESART, estado=row.estado,
         id_especificacion=row.id_especificacion,
+        fecha_vencimiento_sugerida=_a_fecha(row.fecha_vencimiento),
         datos_fisicos=DatosFisicosMuestreo(
             aspecto_externo=row.aspecto_externo, cierre=row.cierre,
             aspecto_interno=row.aspecto_interno, precintos=row.precintos,
             identificacion_contenedor=_g(row, "identificacion_contenedor"),
             fecha_vencimiento_real=_a_fecha(_g(row, "fecha_vencimiento_real")),
+            sin_vencimiento_confirmado=bool(_g(row, "sin_vencimiento_confirmado")),
             fecha_reanalisis_real=_a_fecha(_g(row, "fecha_reanalisis_real")),
             aspecto_mp=_g(row, "aspecto_mp"),
             materias_extranas=row.materias_extranas, olor=row.olor, color=row.color,
@@ -1436,6 +1447,21 @@ def confirmar_orden_trabajo(
         )
     _verificar_completa_para_ejecutar(cursor, row)
 
+    df = body.datos_fisicos
+    tiene_columna_sin_vencimiento = _tiene_columna_sin_vencimiento_confirmado(cursor)
+    if tiene_columna_sin_vencimiento and df.fecha_vencimiento_real is None and not df.sin_vencimiento_confirmado:
+        # Confirmación explícita obligatoria (ver migrations_solicitud_
+        # vencimiento_confirmado.sql): no alcanza con dejar el campo vacío
+        # sin marcar nada -- tiene que quedar claro si nadie lo revisó
+        # todavía o si se revisó el envase y el material genuinamente no
+        # tiene vencimiento. Se tolera si el entorno todavía no corrió esa
+        # migración (columna ausente), igual que el resto de estos campos.
+        raise HTTPException(
+            status_code=400,
+            detail="Confirmá la fecha de vencimiento del material (revisá el envase físico) o marcá "
+                   "que no tiene vencimiento antes de ejecutar el muestreo.",
+        )
+
     # Datos de recepción del proveedor (Libro de Ingresos) -- si vienen
     # usuarios, tienen que existir y estar activos (mismo criterio que
     # id_laboratorio/id_muestreador en completar_datos), para no guardar una
@@ -1447,7 +1473,6 @@ def confirmar_orden_trabajo(
             if not cursor.fetchone():
                 raise HTTPException(status_code=404, detail=f"El usuario indicado en {campo} no existe o está inactivo")
 
-    df = body.datos_fisicos
     cursor.execute(
         """
         UPDATE lims_solicitudes_muestreo
@@ -1476,6 +1501,12 @@ def confirmar_orden_trabajo(
         )
     except pyodbc.Error:
         pass
+
+    if tiene_columna_sin_vencimiento:
+        cursor.execute(
+            "UPDATE lims_solicitudes_muestreo SET sin_vencimiento_confirmado = ? WHERE id_solicitud = ?",
+            1 if df.sin_vencimiento_confirmado else 0, id_solicitud,
+        )
 
     try:
         # Columnas agregadas en la migración del Libro de Ingresos -- mismo

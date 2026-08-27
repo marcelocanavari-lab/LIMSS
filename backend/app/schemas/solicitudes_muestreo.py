@@ -250,6 +250,14 @@ class DatosFisicosMuestreo(BaseModel):
     precintos: Optional[str] = Field(None, max_length=200)
     identificacion_contenedor: Optional[str] = Field(None, max_length=200)
     fecha_vencimiento_real: Optional[date] = None
+    # Distingue "el muestreador todavía no revisó el vencimiento" (ambos en
+    # False/None) de "revisó el envase y confirmó que este material
+    # genuinamente no tiene vencimiento" -- antes fecha_vencimiento_real en
+    # NULL representaba las dos situaciones por igual, así que quedaba
+    # cargado solo cuando alguien se acordaba de hacerlo a mano, sin ninguna
+    # exigencia real de revisarlo (ver confirmar_orden_trabajo, que ahora
+    # exige uno de los dos si la especificación está resuelta contra un IR).
+    sin_vencimiento_confirmado: bool = False
     fecha_reanalisis_real: Optional[date] = None
     aspecto_mp: Optional[str] = Field(None, max_length=200)
     materias_extranas: Optional[str] = Field(None, max_length=200)
@@ -290,6 +298,14 @@ class EnsayosParaOrdenResponse(BaseModel):
     # existente) y armar acá la confirmación de "Muestras a tomar" -- sin
     # esto no hay forma de saber contra qué especificación consultar.
     id_especificacion: Optional[int] = None
+    # Vencimiento que ya trae la solicitud (resuelto contra el ERP al
+    # crearla, ver crear_solicitud) -- se ofrece como valor sugerido/
+    # precargado en Ejecutar Muestreo para que la persona lo confirme en vez
+    # de tener que volver a tipearlo, pero SIEMPRE pidiendo confirmación
+    # explícita (ver datos_fisicos.sin_vencimiento_confirmado): que el campo
+    # venga con un valor no exime de revisarlo. None si el ERP no tenía
+    # vencimiento cargado (sentinel o NULL, ya normalizado en el origen).
+    fecha_vencimiento_sugerida: Optional[date] = None
     datos_fisicos: DatosFisicosMuestreo
     checklist_muestreo: list[ChecklistMuestreoItem] = []
 

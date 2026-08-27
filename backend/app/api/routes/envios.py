@@ -56,12 +56,19 @@ _SELECT_DATOS_REMITO = """
            u.nombre + ' ' + u.apellido AS usuario_muestreo_nombre,
            lab.nombre AS laboratorio_nombre, lab.direccion AS laboratorio_direccion,
            lab.contacto AS laboratorio_contacto,
-           c.nombre AS contacto_nombre, c.cargo AS contacto_cargo
+           c.nombre AS contacto_nombre, c.cargo AS contacto_cargo,
+           -- Vencimiento confirmado a mano durante el muestreo físico (ver
+           -- Ejecutar Muestreo/completar-datos), cuando la muestra viene de
+           -- una Solicitud de Muestreo -- puede no haber ninguna
+           -- (LEFT JOIN, ver el bug real de más abajo: una muestra creada
+           -- por "Nueva Muestra" no tiene solicitud asociada).
+           s.fecha_vencimiento_real
     FROM lims_envios e
     INNER JOIN lims_muestras m ON m.id_muestra = e.id_muestra
     INNER JOIN lims_usuarios u ON u.id_usuario = m.id_usuario_muestreo
     INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = e.id_laboratorio
     LEFT JOIN lims_laboratorio_contactos c ON c.id_contacto = e.id_contacto
+    LEFT JOIN lims_solicitudes_muestreo s ON s.id_muestra = m.id_muestra
 """
 
 
@@ -109,6 +116,31 @@ def _obtener_ensayos_remito(cursor, id_envio: int):
     return cursor.fetchall()
 
 
+def _tiene_sin_vencimiento_confirmado(cursor, id_envio: int) -> bool:
+    """True si la Solicitud de Muestreo de este envío tiene confirmado a
+    mano (ver Ejecutar Muestreo) que el material NO tiene vencimiento --
+    consulta aparte de _SELECT_DATOS_REMITO (que ya trae fecha_vencimiento_
+    real por LEFT JOIN) para poder tolerar que la columna sin_vencimiento_
+    confirmado (ver migrations_solicitud_vencimiento_confirmado.sql)
+    todavía no exista en este entorno sin romper el SELECT principal por un
+    nombre de columna inválido."""
+    cursor.execute("SELECT COL_LENGTH('lims_solicitudes_muestreo', 'sin_vencimiento_confirmado') AS c")
+    if cursor.fetchone().c is None:
+        return False
+    cursor.execute(
+        """
+        SELECT s.sin_vencimiento_confirmado
+        FROM lims_envios e
+        INNER JOIN lims_muestras m ON m.id_muestra = e.id_muestra
+        INNER JOIN lims_solicitudes_muestreo s ON s.id_muestra = m.id_muestra
+        WHERE e.id_envio = ?
+        """,
+        id_envio,
+    )
+    fila = cursor.fetchone()
+    return bool(fila.sin_vencimiento_confirmado) if fila else False
+
+
 def _fila_a_remito_pdf(fila) -> RemitoPdfResponse:
     return RemitoPdfResponse(
         id_remito=fila.id_remito,
@@ -150,23 +182,42 @@ def generar_remito(
         # no calza, no debe impedir generar el remito.
         principios_activos = []
 
-    vencimiento_lote = None
-    try:
-        if datos.tipo_referencia == "ir":
-            # erp_n01id ya resuelto (ver investigación de colisiones de
-            # NUMCOMO+año) -- se usa directo en vez de volver a resolver
-            # datos.nro_referencia por texto, así una colisión que aparezca
-            # después para el mismo IR no puede traer el comprobante
-            # equivocado. Sin erp_n01id (muestras creadas antes de este
-            # campo) se cae al camino de siempre.
-            if datos.erp_n01id is not None:
-                vencimiento_lote = obtener_vencimiento_por_n01id(erp, datos.erp_n01id)
+    # Prioriza fecha_vencimiento_real (cargada a mano en la Solicitud de
+    # Muestreo al ejecutar el muestreo físico -- ver completar-datos/
+    # orden-trabajo-digital) sobre la consulta en vivo al ERP, mismo
+    # criterio que _fecha_envio_real_para_pdf ya aplica para testigos en
+    # este mismo módulo. Bug real detectado en producción: el ERP puede no
+    # tener vencimiento cargado para un comprobante (VENCOM = sentinel
+    # 1899-12-30) mientras que el vencimiento real del lote sí se confirmó
+    # a mano durante el muestreo -- antes ese dato cargado quedaba
+    # completamente ignorado porque _SELECT_DATOS_REMITO nunca hacía join
+    # con lims_solicitudes_muestreo. Solo se cae a la consulta ERP cuando no
+    # hay ese dato confirmado (p.ej. una muestra creada por "Nueva Muestra",
+    # sin Solicitud de Muestreo asociada).
+    #
+    # Si la persona confirmó explícitamente en Ejecutar Muestreo que el
+    # material NO tiene vencimiento (ver migrations_solicitud_vencimiento_
+    # confirmado.sql / sin_vencimiento_confirmado), eso es definitivo -- no
+    # se vuelve a consultar el ERP encima de una confirmación humana real.
+    sin_vencimiento_confirmado = _tiene_sin_vencimiento_confirmado(cursor, datos.id_envio)
+    vencimiento_lote = _a_fecha(datos.fecha_vencimiento_real) if datos.fecha_vencimiento_real else None
+    if vencimiento_lote is None and not sin_vencimiento_confirmado:
+        try:
+            if datos.tipo_referencia == "ir":
+                # erp_n01id ya resuelto (ver investigación de colisiones de
+                # NUMCOMO+año) -- se usa directo en vez de volver a resolver
+                # datos.nro_referencia por texto, así una colisión que aparezca
+                # después para el mismo IR no puede traer el comprobante
+                # equivocado. Sin erp_n01id (muestras creadas antes de este
+                # campo) se cae al camino de siempre.
+                if datos.erp_n01id is not None:
+                    vencimiento_lote = obtener_vencimiento_por_n01id(erp, datos.erp_n01id)
+                else:
+                    vencimiento_lote = obtener_vencimiento_ir(erp, datos.nro_referencia)
             else:
-                vencimiento_lote = obtener_vencimiento_ir(erp, datos.nro_referencia)
-        else:
-            vencimiento_lote = obtener_vencimiento_lote_produccion(erp, datos.nro_referencia)
-    except Exception:
-        vencimiento_lote = None
+                vencimiento_lote = obtener_vencimiento_lote_produccion(erp, datos.nro_referencia)
+        except Exception:
+            vencimiento_lote = None
 
     anio = date.today().year
     cursor.execute(

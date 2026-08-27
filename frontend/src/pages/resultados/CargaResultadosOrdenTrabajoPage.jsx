@@ -8,7 +8,8 @@ import { muestrasApi } from '../../api/muestras';
 import { ApiError, abrirPdfConAuth } from '../../api/client';
 
 const CAMPO_FISICO_VACIO = {
-  identificacion_contenedor: '', fecha_vencimiento_real: '', fecha_reanalisis_real: '',
+  identificacion_contenedor: '', fecha_vencimiento_real: '', sin_vencimiento_confirmado: false,
+  fecha_reanalisis_real: '',
   aspecto_mp: '', materias_extranas: '', olor: '', color: '',
   observaciones_muestreo: '', nro_bultos_muestreados: '',
 };
@@ -82,9 +83,18 @@ export default function CargaResultadosOrdenTrabajoPage() {
       .then(async (data) => {
         setDatos(data);
         const df = data.datos_fisicos || {};
+        // Precarga con el vencimiento que ya trae el ERP (resuelto al crear
+        // la solicitud) como valor sugerido/editable -- pero NUNCA pisa un
+        // valor que la persona ya haya confirmado a mano en una carga
+        // anterior de esta misma pantalla (df.fecha_vencimiento_real). Si
+        // el ERP no tenía nada (sentinel o NULL, ya viene limpio) y tampoco
+        // hay nada confirmado todavía, el campo arranca vacío -- hay que
+        // revisarlo y decidir, no queda con un valor puesto sin que nadie
+        // lo haya mirado.
         setCamposFisicos({
           identificacion_contenedor: df.identificacion_contenedor || '',
-          fecha_vencimiento_real: df.fecha_vencimiento_real || '',
+          fecha_vencimiento_real: df.fecha_vencimiento_real || data.fecha_vencimiento_sugerida || '',
+          sin_vencimiento_confirmado: !!df.sin_vencimiento_confirmado,
           fecha_reanalisis_real: df.fecha_reanalisis_real || '',
           aspecto_mp: df.aspecto_mp || '',
           materias_extranas: df.materias_extranas || '',
@@ -185,6 +195,10 @@ export default function CargaResultadosOrdenTrabajoPage() {
         return;
       }
     }
+    if (!camposFisicos.fecha_vencimiento_real && !camposFisicos.sin_vencimiento_confirmado) {
+      setError('Confirmá la fecha de vencimiento del material (revisá el envase físico) o marcá que no tiene vencimiento.');
+      return;
+    }
 
     setGuardando(true);
     try {
@@ -206,6 +220,7 @@ export default function CargaResultadosOrdenTrabajoPage() {
         datos_fisicos: {
           identificacion_contenedor: camposFisicos.identificacion_contenedor.trim() || null,
           fecha_vencimiento_real: camposFisicos.fecha_vencimiento_real || null,
+          sin_vencimiento_confirmado: camposFisicos.sin_vencimiento_confirmado,
           fecha_reanalisis_real: camposFisicos.fecha_reanalisis_real || null,
           aspecto_mp: camposFisicos.aspecto_mp.trim() || null,
           materias_extranas: camposFisicos.materias_extranas.trim() || null,
@@ -414,9 +429,36 @@ export default function CargaResultadosOrdenTrabajoPage() {
                 <label className="field-label">Identificación del contenedor</label>
                 <input className="field-input" value={camposFisicos.identificacion_contenedor} onChange={(e) => actualizarCampoFisico('identificacion_contenedor', e.target.value)} disabled={guardando || soloLectura} />
               </div>
-              <div className="field" style={{ flex: '1 1 200px' }}>
-                <label className="field-label">Fecha de vencimiento real</label>
-                <input className="field-input" type="date" value={camposFisicos.fecha_vencimiento_real} onChange={(e) => actualizarCampoFisico('fecha_vencimiento_real', e.target.value)} disabled={guardando || soloLectura} />
+              <div className="field" style={{ flex: '1 1 260px' }}>
+                <label className="field-label">Fecha de vencimiento real *</label>
+                <input
+                  className="field-input"
+                  type="date"
+                  value={camposFisicos.fecha_vencimiento_real}
+                  onChange={(e) => {
+                    const valor = e.target.value;
+                    // Cargar una fecha real y tildar "no tiene vencimiento"
+                    // son mutuamente excluyentes -- si se escribe una fecha,
+                    // se destilda el checkbox automáticamente.
+                    setCamposFisicos((prev) => ({ ...prev, fecha_vencimiento_real: valor, sin_vencimiento_confirmado: valor ? false : prev.sin_vencimiento_confirmado }));
+                  }}
+                  disabled={guardando || soloLectura || camposFisicos.sin_vencimiento_confirmado}
+                />
+                {datos?.fecha_vencimiento_sugerida && camposFisicos.fecha_vencimiento_real === datos.fecha_vencimiento_sugerida && (
+                  <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--ink-2)' }}>Sugerido por el ERP -- confirmá o corregí si no coincide con el envase.</span>
+                )}
+                <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', marginTop: 'var(--sp-2)', fontSize: 'var(--fs-sm)', cursor: soloLectura ? 'default' : 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={camposFisicos.sin_vencimiento_confirmado}
+                    onChange={(e) => {
+                      const marcado = e.target.checked;
+                      setCamposFisicos((prev) => ({ ...prev, sin_vencimiento_confirmado: marcado, fecha_vencimiento_real: marcado ? '' : prev.fecha_vencimiento_real }));
+                    }}
+                    disabled={guardando || soloLectura}
+                  />
+                  Este material no tiene fecha de vencimiento
+                </label>
               </div>
               <div className="field" style={{ flex: '1 1 200px' }}>
                 <label className="field-label">Fecha de reanálisis real</label>
