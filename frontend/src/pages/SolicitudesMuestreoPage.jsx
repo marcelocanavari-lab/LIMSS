@@ -168,6 +168,15 @@ export default function SolicitudesMuestreoPage() {
   const [completarProtocoloProveedor, setCompletarProtocoloProveedor] = useState(null);
   const [completarDocumentacionProveedorActual, setCompletarDocumentacionProveedorActual] = useState('');
   const [completarDocumentacionProveedor, setCompletarDocumentacionProveedor] = useState(null);
+  // Recepción del proveedor (Libro de Ingresos) -- movido acá desde
+  // Ejecutar Muestreo: el muestreador no maneja la factura ni sabe quién
+  // recibió/rotuló administrativamente, es información que carga QA en
+  // este mismo paso (ver completar_datos en el backend).
+  const [completarFechaFacturaProveedor, setCompletarFechaFacturaProveedor] = useState('');
+  const [completarNumeroFacturaProveedor, setCompletarNumeroFacturaProveedor] = useState('');
+  const [completarIdUsuarioRecibio, setCompletarIdUsuarioRecibio] = useState('');
+  const [completarIdUsuarioRotulo, setCompletarIdUsuarioRotulo] = useState('');
+  const [usuariosActivos, setUsuariosActivos] = useState([]);
   const [errorCompletar, setErrorCompletar] = useState('');
   const [guardandoCompletar, setGuardandoCompletar] = useState(false);
 
@@ -184,6 +193,10 @@ export default function SolicitudesMuestreoPage() {
   useEffect(cargar, [estado, idMuestreadorFiltro]);
 
   useEffect(() => {
+    solicitudesMuestreoApi.listarUsuariosActivos().then(setUsuariosActivos).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (!puedeCrear) return;
     solicitudesMuestreoApi.listarMuestreadores().then((data) => {
       setMuestreadoresFiltro(data);
@@ -196,8 +209,6 @@ export default function SolicitudesMuestreoPage() {
     setMaterial(null);
     setLineasMaterial(null);
     setEspecificacion(null);
-    setMuestrasDefinidas([]);
-    setMuestrasConfirmadas({});
     setLaboratorios([]);
     setIdLaboratorio('');
     setIdMuestreador('');
@@ -228,8 +239,6 @@ export default function SolicitudesMuestreoPage() {
 
   async function cargarEspecificacionDeMaterial(linea) {
     setEspecificacion(null);
-    setMuestrasDefinidas([]);
-    setMuestrasConfirmadas({});
     setLaboratorios([]);
     setIdLaboratorio('');
     setAdvertenciaEspec('');
@@ -357,6 +366,23 @@ export default function SolicitudesMuestreoPage() {
     setErrorForm('');
     setGuardando(true);
     try {
+      await intentarCrearSolicitud(false);
+    } catch (err) {
+      setErrorForm(err instanceof ApiError ? err.message : 'No se pudo generar la solicitud');
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  // Separado de handleCrearSolicitud para poder reintentar una sola vez con
+  // confirmar_duplicado_ir=true sin repetir las validaciones de arriba --
+  // ver 409 "ir_duplicado" más abajo. El agente automático nunca duplica
+  // (bloqueo duro, sin excepción, ver solicitud_activa_existente en el
+  // backend); acá, en cambio, puede ser legítimo necesitar una segunda
+  // solicitud para el mismo IR (ej. análisis adicionales pedidos después),
+  // así que solo se avisa con los datos de la existente y se deja confirmar.
+  async function intentarCrearSolicitud(confirmarDuplicadoIr) {
+    try {
       const nueva = await solicitudesMuestreoApi.crear({
         erp_nro_ir: material.referencia,
         erp_n01id: material.N01Id ?? null,
@@ -373,6 +399,7 @@ export default function SolicitudesMuestreoPage() {
         grupos_bultos: gruposBultosParaApi(gruposBultos),
         metodologia_analisis: metodologiaAnalisis.trim() || null,
         fabricante: fabricante.trim() || null,
+        confirmar_duplicado_ir: confirmarDuplicadoIr,
       }, protocoloProveedor, documentacionProveedor);
       cerrarModal();
       cargar();
@@ -382,9 +409,19 @@ export default function SolicitudesMuestreoPage() {
         // la solicitud ya se creó igual; si falla la apertura del PDF no bloqueamos el flujo
       }
     } catch (err) {
-      setErrorForm(err instanceof ApiError ? err.message : 'No se pudo generar la solicitud');
-    } finally {
-      setGuardando(false);
+      if (!confirmarDuplicadoIr && err instanceof ApiError && err.status === 409 && err.detail?.error === 'ir_duplicado') {
+        const d = err.detail;
+        const seguir = window.confirm(
+          `Ya existe la solicitud ${d.nro_solicitud} (${labelEstado(d.estado)}, ${formatFecha(d.fecha_solicitud)}) para este IR. ` +
+          '¿Confirmás que necesitás generar una nueva de todas formas?',
+        );
+        if (seguir) {
+          await intentarCrearSolicitud(true);
+          return;
+        }
+        return;
+      }
+      throw err;
     }
   }
 
@@ -498,6 +535,10 @@ export default function SolicitudesMuestreoPage() {
     setCompletarProtocoloProveedor(null);
     setCompletarDocumentacionProveedorActual(s.documentacion_proveedor_nombre_original || '');
     setCompletarDocumentacionProveedor(null);
+    setCompletarFechaFacturaProveedor(s.fecha_factura_proveedor || '');
+    setCompletarNumeroFacturaProveedor(s.numero_factura_proveedor || '');
+    setCompletarIdUsuarioRecibio(s.id_usuario_recibio ? String(s.id_usuario_recibio) : '');
+    setCompletarIdUsuarioRotulo(s.id_usuario_rotulo ? String(s.id_usuario_rotulo) : '');
     setCompletarLaboratorios([]);
     try {
       const detalle = await solicitudesMuestreoApi.obtener(s.id_solicitud);
@@ -512,13 +553,33 @@ export default function SolicitudesMuestreoPage() {
         const ensayos = await maestrosApi.listarEnsayosEspecificacion(detalle.id_especificacion);
         const labs = [];
         const vistos = new Set();
+        const conteoPorLab = new Map();
         for (const en of ensayos) {
-          if (en.id_laboratorio && !vistos.has(en.id_laboratorio)) {
-            vistos.add(en.id_laboratorio);
-            labs.push({ id_laboratorio: en.id_laboratorio, nombre: en.laboratorio_nombre });
+          if (en.id_laboratorio) {
+            if (!vistos.has(en.id_laboratorio)) {
+              vistos.add(en.id_laboratorio);
+              labs.push({ id_laboratorio: en.id_laboratorio, nombre: en.laboratorio_nombre });
+            }
+            conteoPorLab.set(en.id_laboratorio, (conteoPorLab.get(en.id_laboratorio) || 0) + 1);
           }
         }
         setCompletarLaboratorios(labs);
+
+        // Sugerir el laboratorio predominante -- si todos o la mayoría de
+        // los ensayos de análisis de la especificación apuntan al mismo
+        // laboratorio, precargar ese id (el campo sigue editable, es solo
+        // una sugerencia). Si la solicitud ya tenía un laboratorio cargado
+        // (precargado arriba, al abrir el formulario) no se pisa. Sin
+        // mayoría clara -- ensayos repartidos entre laboratorios distintos
+        // sin que ninguno predomine, incluido un empate -- se deja vacío,
+        // a criterio del usuario, igual que antes de esta sugerencia.
+        if (!s.id_laboratorio && conteoPorLab.size > 0) {
+          const totalConLab = [...conteoPorLab.values()].reduce((a, b) => a + b, 0);
+          const [idLabTop, countTop] = [...conteoPorLab.entries()].sort((a, b) => b[1] - a[1])[0];
+          if (countTop > totalConLab / 2) {
+            setCompletarIdLaboratorio(String(idLabTop));
+          }
+        }
       }
     } catch (err) {
       setErrorCompletar(err instanceof ApiError ? err.message : 'No se pudieron cargar los laboratorios disponibles');
@@ -544,6 +605,10 @@ export default function SolicitudesMuestreoPage() {
         grupos_bultos: gruposBultosParaApi(completarGruposBultos),
         metodologia_analisis: completarMetodologiaAnalisis.trim() || null,
         fabricante: completarFabricante.trim() || null,
+        fecha_factura_proveedor: completarFechaFacturaProveedor || null,
+        numero_factura_proveedor: completarNumeroFacturaProveedor.trim() || null,
+        id_usuario_recibio: completarIdUsuarioRecibio ? Number(completarIdUsuarioRecibio) : null,
+        id_usuario_rotulo: completarIdUsuarioRotulo ? Number(completarIdUsuarioRotulo) : null,
       });
       // Protocolo y documentación del proveedor van por endpoints aparte (son
       // archivos, no campos del body de completar-datos) -- se pueden subir
@@ -1374,6 +1439,57 @@ export default function SolicitudesMuestreoPage() {
                   onChange={(e) => setCompletarFabricante(e.target.value)}
                   disabled={guardandoCompletar}
                 />
+              </div>
+            </div>
+
+            <h3 style={{ fontSize: 'var(--fs-md)', margin: 'var(--sp-4) 0 var(--sp-2)' }}>Recepción del proveedor</h3>
+            <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
+              <div className="field" style={{ flex: '1 1 200px' }}>
+                <label className="field-label">Fecha de factura (opcional)</label>
+                <input
+                  className="field-input"
+                  type="date"
+                  value={completarFechaFacturaProveedor}
+                  onChange={(e) => setCompletarFechaFacturaProveedor(e.target.value)}
+                  disabled={guardandoCompletar}
+                />
+              </div>
+              <div className="field" style={{ flex: '1 1 200px' }}>
+                <label className="field-label">N° de factura (opcional)</label>
+                <input
+                  className="field-input"
+                  value={completarNumeroFacturaProveedor}
+                  onChange={(e) => setCompletarNumeroFacturaProveedor(e.target.value)}
+                  disabled={guardandoCompletar}
+                />
+              </div>
+              <div className="field" style={{ flex: '1 1 200px' }}>
+                <label className="field-label">Recibió (opcional)</label>
+                <select
+                  className="field-input"
+                  value={completarIdUsuarioRecibio}
+                  onChange={(e) => setCompletarIdUsuarioRecibio(e.target.value)}
+                  disabled={guardandoCompletar}
+                >
+                  <option value="">Seleccioná un usuario...</option>
+                  {usuariosActivos.map((u) => (
+                    <option key={u.id_usuario} value={u.id_usuario}>{u.nombre_completo}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field" style={{ flex: '1 1 200px', marginBottom: 0 }}>
+                <label className="field-label">Rotuló (opcional)</label>
+                <select
+                  className="field-input"
+                  value={completarIdUsuarioRotulo}
+                  onChange={(e) => setCompletarIdUsuarioRotulo(e.target.value)}
+                  disabled={guardandoCompletar}
+                >
+                  <option value="">Seleccioná un usuario...</option>
+                  {usuariosActivos.map((u) => (
+                    <option key={u.id_usuario} value={u.id_usuario}>{u.nombre_completo}</option>
+                  ))}
+                </select>
               </div>
             </div>
 

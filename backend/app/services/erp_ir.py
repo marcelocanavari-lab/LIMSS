@@ -201,17 +201,24 @@ def solicitud_activa_existente(cursor, erp_nro_ir: str):
     de los dos, el otro no podría importarla). `cursor` es de LIMSS, no del
     ERP -- pese a vivir en este archivo, no consulta el ERP.
 
-    Ni el agente ni la creación manual deben generar una segunda solicitud
-    para un IR que ya tiene una activa -- ni contra otra que generó el
-    agente en una evaluación anterior, ni contra una que un analista ya
-    haya cargado a mano. Anuladas quedan afuera a propósito: anular libera
-    el IR para que se pueda generar una solicitud válida después (mismo
-    criterio que el índice único filtrado de la base, ver
-    migrations_solicitudes_ir_unico_agente.sql, que solo cubre
-    origen='agente' -- esta función es el respaldo a nivel aplicación para
-    el resto de los casos)."""
+    El agente nunca debe generar una segunda solicitud para un IR que ya
+    tiene una activa (ver agente_muestreo.py: si existente is not None, no
+    crea nada, marca resultado='ir_ya_tiene_solicitud' -- bloqueo duro, sin
+    excepción). La creación MANUAL, en cambio, solo usa este resultado para
+    mostrar un aviso con los datos de la solicitud existente y pedir
+    confirmación explícita antes de igual crear una nueva -- puede ser
+    legítimo necesitar una segunda (ej. análisis adicionales pedidos
+    después), ver crear_solicitud en routes/solicitudes_muestreo.py. Trae
+    estado y fecha_solicitud (no solo el id/nro) porque el aviso manual los
+    necesita para mostrarlos.
+
+    Anuladas quedan afuera a propósito: anular libera el IR para que se
+    pueda generar una solicitud válida después (mismo criterio que el
+    índice único filtrado de la base, ver migrations_solicitudes_ir_unico_
+    agente.sql, que solo cubre origen='agente' -- esta función es el
+    respaldo a nivel aplicación para el resto de los casos)."""
     cursor.execute(
-        "SELECT TOP 1 id_solicitud, nro_solicitud FROM lims_solicitudes_muestreo "
+        "SELECT TOP 1 id_solicitud, nro_solicitud, estado, fecha_solicitud FROM lims_solicitudes_muestreo "
         "WHERE erp_nro_ir = ? AND estado <> 'anulada' ORDER BY id_solicitud DESC",
         erp_nro_ir,
     )

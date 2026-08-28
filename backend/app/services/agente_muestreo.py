@@ -24,6 +24,7 @@ from app.api.routes.solicitudes_muestreo import generar_nro_solicitud
 from app.core.config import get_settings
 from app.db.connections import get_erp_conn, get_limss_conn
 from app.services import audit
+from app.services.formato import normalizar_unidad
 from app.services.erp_ir import (
     comprobantes_ir_nuevos,
     formatear_nro_ir,
@@ -254,7 +255,7 @@ def _crear_solicitud_desde_agente(cursor, linea, id_especificacion: int, nro_ir_
         nro_solicitud, nro_ir_normalizado, linea.N01Id, linea.IdM21, linea.CODART.strip(), linea.DESART, id_especificacion,
         id_laboratorio, id_usuario_agente,
         linea.proveedor_codigo, linea.proveedor, _a_datetime(fecha_ingreso), _a_datetime(fecha_vencimiento),
-        cantidad_ingresada, linea.unidad,
+        cantidad_ingresada, normalizar_unidad(linea.unidad),
     )
     cursor.execute("SELECT @@IDENTITY AS id")
     id_solicitud = int(cursor.fetchone().id)

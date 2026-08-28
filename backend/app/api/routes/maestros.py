@@ -44,6 +44,7 @@ from app.schemas.maestros import (
     TestigoResponse,
 )
 from app.services import audit, storage
+from app.services.formato import normalizar_unidad
 from app.services.erp_articulos import buscar_articulos
 from app.services.erp_ir import resolver_codsar_por_codart
 
@@ -71,8 +72,8 @@ def _insertar_especificacion(
              nombre_quimico, formula_molecular, peso_molecular, envasado_almacenamiento, erp_codsar)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        erp_IdM21, erp_CODART, erp_DESART, tipo_material, cantidad_muestra, unidad_muestra,
-        cantidad_contramuestra, unidad_contramuestra, version, user_id,
+        erp_IdM21, erp_CODART, erp_DESART, tipo_material, cantidad_muestra, normalizar_unidad(unidad_muestra),
+        cantidad_contramuestra, normalizar_unidad(unidad_contramuestra), version, user_id,
         accion_terapeutica, sinonimia, nro_cas, nombre_quimico, formula_molecular, peso_molecular,
         envasado_almacenamiento, erp_codsar,
     )
@@ -658,7 +659,8 @@ def editar_cantidades_especificacion(
         SET cantidad_muestra = ?, unidad_muestra = ?, cantidad_contramuestra = ?, unidad_contramuestra = ?
         WHERE id_especificacion = ?
         """,
-        body.cantidad_muestra, body.unidad_muestra, body.cantidad_contramuestra, body.unidad_contramuestra,
+        body.cantidad_muestra, normalizar_unidad(body.unidad_muestra),
+        body.cantidad_contramuestra, normalizar_unidad(body.unidad_contramuestra),
         id_especificacion,
     )
 
@@ -866,7 +868,7 @@ def agregar_ensayo_especificacion(
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             id_especificacion, body.id_ensayo_maestro, body.orden, body.etapa, body.metodologia, body.tipo_dato,
-            body.limite_inferior, body.limite_superior, body.unidad_medida, body.valor_requerido,
+            body.limite_inferior, body.limite_superior, normalizar_unidad(body.unidad_medida), body.valor_requerido,
             body.especificacion_texto, 1 if body.obligatorio else 0, 1 if body.requerido_por_defecto else 0,
             body.id_laboratorio, body.analito,
         )
@@ -880,7 +882,7 @@ def agregar_ensayo_especificacion(
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             id_especificacion, body.id_ensayo_maestro, body.orden, body.etapa, body.metodologia, body.tipo_dato,
-            body.limite_inferior, body.limite_superior, body.unidad_medida, body.valor_requerido,
+            body.limite_inferior, body.limite_superior, normalizar_unidad(body.unidad_medida), body.valor_requerido,
             body.especificacion_texto, 1 if body.obligatorio else 0, 1 if body.requerido_por_defecto else 0,
             body.id_laboratorio,
         )
@@ -935,7 +937,7 @@ def editar_ensayo_especificacion(
             WHERE id_espec_ensayo = ?
             """,
             body.id_ensayo_maestro, body.orden, body.etapa, body.metodologia, body.tipo_dato,
-            body.limite_inferior, body.limite_superior, body.unidad_medida, body.valor_requerido,
+            body.limite_inferior, body.limite_superior, normalizar_unidad(body.unidad_medida), body.valor_requerido,
             body.especificacion_texto, 1 if body.obligatorio else 0, 1 if body.requerido_por_defecto else 0,
             body.id_laboratorio, body.analito, id_espec_ensayo,
         )
@@ -949,7 +951,7 @@ def editar_ensayo_especificacion(
             WHERE id_espec_ensayo = ?
             """,
             body.id_ensayo_maestro, body.orden, body.etapa, body.metodologia, body.tipo_dato,
-            body.limite_inferior, body.limite_superior, body.unidad_medida, body.valor_requerido,
+            body.limite_inferior, body.limite_superior, normalizar_unidad(body.unidad_medida), body.valor_requerido,
             body.especificacion_texto, 1 if body.obligatorio else 0, 1 if body.requerido_por_defecto else 0,
             body.id_laboratorio, id_espec_ensayo,
         )
@@ -1064,7 +1066,7 @@ def crear_muestra_especificacion(
                 (id_especificacion, tipo_muestra, cantidad, unidad, genera_etiqueta, id_laboratorio, orden)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            id_especificacion, body.tipo_muestra, body.cantidad, body.unidad,
+            id_especificacion, body.tipo_muestra, body.cantidad, normalizar_unidad(body.unidad),
             1 if body.genera_etiqueta else 0, body.id_laboratorio, orden,
         )
     except pyodbc.IntegrityError:
@@ -1115,7 +1117,7 @@ def editar_muestra_especificacion(
             SET tipo_muestra = ?, cantidad = ?, unidad = ?, genera_etiqueta = ?, id_laboratorio = ?
             WHERE id = ?
             """,
-            body.tipo_muestra, body.cantidad, body.unidad, 1 if body.genera_etiqueta else 0, body.id_laboratorio,
+            body.tipo_muestra, body.cantidad, normalizar_unidad(body.unidad), 1 if body.genera_etiqueta else 0, body.id_laboratorio,
             id_muestra,
         )
     except pyodbc.IntegrityError:

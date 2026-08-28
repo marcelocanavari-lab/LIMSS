@@ -68,7 +68,7 @@ from app.services.erp_ir import (
     solicitud_activa_existente,
 )
 from app.services.erp_materiales import asignar_numero_analisis_si_corresponde, tiene_numero_analisis
-from app.services.formato import etiqueta_referencia, formatear_cantidad, titulo_etiqueta_por_tipo
+from app.services.formato import etiqueta_referencia, formatear_cantidad, normalizar_unidad, titulo_etiqueta_por_tipo
 from app.services.impresion_sato import (
     armar_pares_etiquetas_muestra,
     generar_sbpl_etiqueta_estado,
@@ -195,6 +195,10 @@ def _fila_a_solicitud(row, cursor=None) -> SolicitudMuestreoResponse:
         documentacion_proveedor_nombre_original=_g(row, "documentacion_proveedor_nombre_original"),
         origen=_g(row, "origen") or "manual",
         erp_n01id=_g(row, "erp_n01id"),
+        fecha_factura_proveedor=_a_fecha(_g(row, "fecha_factura_proveedor")),
+        numero_factura_proveedor=_g(row, "numero_factura_proveedor"),
+        id_usuario_recibio=_g(row, "id_usuario_recibio"),
+        id_usuario_rotulo=_g(row, "id_usuario_rotulo"),
     )
 
 
@@ -588,23 +592,32 @@ def crear_solicitud(
 
     cursor = conn.cursor()
 
-    # Duplicados por IR (bug real confirmado: la creación manual nunca tuvo
-    # esta validación, a diferencia del agente -- ver
-    # app.services.erp_ir.solicitud_activa_existente, compartida con
-    # agente_muestreo.py). Se calcula acá el nro_ir_normalizado (antes se
-    # calculaba más abajo, después de subir archivos) para poder fallar
-    # rápido, sin dejar un protocolo_proveedor huérfano en storage/ si la
-    # solicitud termina rechazada por duplicado. Criterio conservador: ante
-    # un IR con una solicitud activa (de cualquier origen, no anulada), se
-    # bloquea -- para crear una segunda hay que anular la anterior primero,
-    # mismo criterio que ya usa el índice único filtrado de la base.
+    # Duplicados por IR -- a diferencia del agente (bloqueo duro, nunca
+    # genera una segunda solicitud para un IR con una activa, ver
+    # solicitud_activa_existente en app/services/erp_ir.py), la creación
+    # MANUAL solo avisa: puede ser legítimo necesitar una segunda solicitud
+    # para el mismo IR (ej. análisis adicionales pedidos después). Se
+    # calcula acá el nro_ir_normalizado (antes se calculaba más abajo,
+    # después de subir archivos) para poder fallar rápido, sin dejar un
+    # protocolo_proveedor huérfano en storage/ si la persona todavía no
+    # confirmó. Sin confirmar_duplicado_ir, se devuelve 409 con los datos de
+    # la solicitud existente para que el frontend arme el aviso; con
+    # confirmar_duplicado_ir=True (la persona ya vio ese aviso y confirmó),
+    # se sigue de largo y se crea igual.
     nro_ir_normalizado = formatear_nro_ir(linea.NUMCOMO, linea.FECCOR)
     existente = solicitud_activa_existente(cursor, nro_ir_normalizado)
-    if existente:
+    if existente and not body.confirmar_duplicado_ir:
         raise HTTPException(
             status_code=409,
-            detail=f"Ya existe una solicitud activa para el IR '{nro_ir_normalizado}': {existente.nro_solicitud}. "
-                   "Anulala primero si necesitás generar una nueva.",
+            detail={
+                "error": "ir_duplicado",
+                "mensaje": f"Ya existe la solicitud {existente.nro_solicitud} para este IR. "
+                           "¿Confirmás que necesitás generar una nueva de todas formas?",
+                "id_solicitud": existente.id_solicitud,
+                "nro_solicitud": existente.nro_solicitud,
+                "estado": existente.estado,
+                "fecha_solicitud": existente.fecha_solicitud.isoformat(),
+            },
         )
 
     cursor.execute("SELECT 1 FROM lims_laboratorios WHERE id_laboratorio = ? AND activo = 1", body.id_laboratorio)
@@ -684,7 +697,7 @@ def crear_solicitud(
         body.id_laboratorio, body.id_muestreador, body.observaciones, user["id_usuario"],
         body.proveedor_codigo, body.proveedor_nombre, body.lote_proveedor.strip() if body.lote_proveedor else None,
         _a_datetime(fecha_ingreso), _a_datetime(fecha_vencimiento),
-        _a_datetime(body.fecha_reanalisis), body.pais_origen, cantidad_ingresada, linea.unidad, body.nro_bultos,
+        _a_datetime(body.fecha_reanalisis), body.pais_origen, cantidad_ingresada, normalizar_unidad(linea.unidad), body.nro_bultos,
         body.metodologia_analisis, body.fabricante, ruta_protocolo_proveedor, protocolo_proveedor.filename,
         ruta_documentacion_proveedor, nombre_documentacion_proveedor,
     )
@@ -707,13 +720,22 @@ def crear_solicitud(
     # a confirmar_orden_trabajo (Ejecutar Muestreo), el único paso común a
     # solicitudes manuales y del agente. Ver OrdenTrabajoDigitalBody.muestras.
 
+    valor_nuevo = {
+        "nro_solicitud": nro_solicitud, "erp_nro_ir": nro_ir_normalizado,
+        "id_laboratorio": body.id_laboratorio, "id_muestreador": body.id_muestreador,
+    }
+    if existente:
+        # Se llegó hasta acá con una solicitud activa preexistente para este
+        # IR solo porque la persona confirmó el aviso (existente and not
+        # body.confirmar_duplicado_ir ya habría cortado con 409 más arriba)
+        # -- se deja constancia en la auditoría de cuál era la existente y
+        # que la creación fue una duplicación deliberada, no un descuido.
+        valor_nuevo["duplicado_ir_confirmado"] = True
+        valor_nuevo["solicitud_existente"] = existente.nro_solicitud
     audit.registrar(
         conn, entidad="solicitud_muestreo", accion="crear",
         id_usuario=user["id_usuario"], id_entidad=id_solicitud,
-        valor_nuevo={
-            "nro_solicitud": nro_solicitud, "erp_nro_ir": nro_ir_normalizado,
-            "id_laboratorio": body.id_laboratorio, "id_muestreador": body.id_muestreador,
-        },
+        valor_nuevo=valor_nuevo,
     )
 
     return _fila_a_solicitud(_obtener_solicitud_o_404(cursor, id_solicitud), cursor)
@@ -748,6 +770,16 @@ def completar_datos(
     nro_bultos = body.nro_bultos if body.nro_bultos is not None else row.nro_bultos
     metodologia_analisis = body.metodologia_analisis if body.metodologia_analisis is not None else row.metodologia_analisis
     fabricante = body.fabricante if body.fabricante is not None else row.fabricante
+    # Datos de recepción del proveedor (Libro de Ingresos) -- movidos acá
+    # desde Ejecutar Muestreo (ver OrdenTrabajoDigitalBody): es QA quien
+    # maneja la factura del proveedor y sabe quién recibió/rotuló, no el
+    # muestreador. _g porque las columnas son de una migración que puede no
+    # estar corrida todavía en este entorno (ver el UPDATE tolerante más
+    # abajo).
+    fecha_factura_proveedor = body.fecha_factura_proveedor if body.fecha_factura_proveedor is not None else _g(row, "fecha_factura_proveedor")
+    numero_factura_proveedor = body.numero_factura_proveedor if body.numero_factura_proveedor is not None else _g(row, "numero_factura_proveedor")
+    id_usuario_recibio = body.id_usuario_recibio if body.id_usuario_recibio is not None else _g(row, "id_usuario_recibio")
+    id_usuario_rotulo = body.id_usuario_rotulo if body.id_usuario_rotulo is not None else _g(row, "id_usuario_rotulo")
 
     if body.id_laboratorio is not None:
         cursor.execute("SELECT 1 FROM lims_laboratorios WHERE id_laboratorio = ? AND activo = 1", id_laboratorio)
@@ -772,6 +804,16 @@ def completar_datos(
         if muestreador.rol not in _ROLES_MUESTREADOR_O_SUPERIOR:
             raise HTTPException(status_code=400, detail="El usuario asignado no tiene un rol habilitado para muestrear")
 
+    # Recepción del proveedor: si vienen usuarios, tienen que existir y
+    # estar activos (mismo criterio que id_muestreador arriba), para no
+    # guardar una referencia a un usuario borrado/desactivado que después
+    # el reporte del Libro de Ingresos no pueda resolver.
+    for id_usuario, campo in ((body.id_usuario_recibio, "id_usuario_recibio"), (body.id_usuario_rotulo, "id_usuario_rotulo")):
+        if id_usuario is not None:
+            cursor.execute("SELECT 1 FROM lims_usuarios WHERE id_usuario = ? AND activo = 1", id_usuario)
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail=f"El usuario indicado en {campo} no existe o está inactivo")
+
     # Grupos de bultos: con al menos un grupo, reemplaza los grupos ya
     # cargados (completar-datos se puede llamar más de una vez sobre la
     # misma solicitud pendiente) y nro_bultos pasa a ser la suma calculada
@@ -792,6 +834,23 @@ def completar_datos(
         id_laboratorio, id_muestreador, lote_proveedor, _a_datetime(fecha_reanalisis),
         pais_origen, nro_bultos, metodologia_analisis, fabricante, id_solicitud,
     )
+    try:
+        # Columnas agregadas en la migración del Libro de Ingresos -- si el
+        # entorno todavía no la corrió, se omiten sin bloquear el resto de
+        # completar-datos (mismo criterio de tolerancia que el resto del
+        # módulo, ver _g).
+        cursor.execute(
+            """
+            UPDATE lims_solicitudes_muestreo
+            SET fecha_factura_proveedor = ?, numero_factura_proveedor = ?,
+                id_usuario_recibio = ?, id_usuario_rotulo = ?
+            WHERE id_solicitud = ?
+            """,
+            _a_datetime(fecha_factura_proveedor), numero_factura_proveedor,
+            id_usuario_recibio, id_usuario_rotulo, id_solicitud,
+        )
+    except pyodbc.Error:
+        pass
 
     audit.registrar(
         conn, entidad="solicitud_muestreo", accion="completar_datos",
@@ -947,7 +1006,7 @@ def _guardar_muestras_confirmadas(cursor, id_solicitud: int, id_especificacion: 
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 id_solicitud, m.id_espec_muestra, m.cantidad_real, 1 if m.confirmada else 0,
-                m.tipo_muestra, m.unidad, 0 if m.id_espec_muestra is not None else 1,
+                m.tipo_muestra, normalizar_unidad(m.unidad), 0 if m.id_espec_muestra is not None else 1,
             )
         else:
             cursor.execute(
@@ -1462,17 +1521,6 @@ def confirmar_orden_trabajo(
                    "que no tiene vencimiento antes de ejecutar el muestreo.",
         )
 
-    # Datos de recepción del proveedor (Libro de Ingresos) -- si vienen
-    # usuarios, tienen que existir y estar activos (mismo criterio que
-    # id_laboratorio/id_muestreador en completar_datos), para no guardar una
-    # referencia a un usuario borrado/desactivado que después el reporte no
-    # pueda resolver.
-    for id_usuario, campo in ((body.id_usuario_recibio, "id_usuario_recibio"), (body.id_usuario_rotulo, "id_usuario_rotulo")):
-        if id_usuario is not None:
-            cursor.execute("SELECT 1 FROM lims_usuarios WHERE id_usuario = ? AND activo = 1", id_usuario)
-            if not cursor.fetchone():
-                raise HTTPException(status_code=404, detail=f"El usuario indicado en {campo} no existe o está inactivo")
-
     cursor.execute(
         """
         UPDATE lims_solicitudes_muestreo
@@ -1507,24 +1555,6 @@ def confirmar_orden_trabajo(
             "UPDATE lims_solicitudes_muestreo SET sin_vencimiento_confirmado = ? WHERE id_solicitud = ?",
             1 if df.sin_vencimiento_confirmado else 0, id_solicitud,
         )
-
-    try:
-        # Columnas agregadas en la migración del Libro de Ingresos -- mismo
-        # criterio de tolerancia que el bloque de arriba: si el entorno
-        # todavía no la corrió, se omiten sin bloquear el resto de la
-        # confirmación.
-        cursor.execute(
-            """
-            UPDATE lims_solicitudes_muestreo
-            SET fecha_factura_proveedor = ?, numero_factura_proveedor = ?,
-                id_usuario_recibio = ?, id_usuario_rotulo = ?
-            WHERE id_solicitud = ?
-            """,
-            _a_datetime(body.fecha_factura_proveedor), body.numero_factura_proveedor,
-            body.id_usuario_recibio, body.id_usuario_rotulo, id_solicitud,
-        )
-    except pyodbc.Error:
-        pass
 
     if row.id_muestra is not None:
         cursor.execute(

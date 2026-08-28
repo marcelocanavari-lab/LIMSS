@@ -1,6 +1,6 @@
 from typing import NamedTuple, Optional
 
-from app.services.formato import formatear_cantidad
+from app.services.formato import formatear_cantidad, normalizar_unidad
 
 
 class BultoIndividual(NamedTuple):
@@ -92,6 +92,6 @@ def guardar_grupos_bultos(cursor, id_solicitud: int, grupos: list) -> Optional[i
                 (id_solicitud, cantidad_bultos, cantidad_unidades, unidad_medida, orden)
             VALUES (?, ?, ?, ?, ?)
             """,
-            id_solicitud, g.cantidad_bultos, g.cantidad_unidades, g.unidad_medida, i,
+            id_solicitud, g.cantidad_bultos, g.cantidad_unidades, normalizar_unidad(g.unidad_medida), i,
         )
     return sum(g.cantidad_bultos for g in grupos)

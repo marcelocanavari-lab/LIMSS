@@ -39,6 +39,15 @@ export const muestrasApi = {
   editarMuestra: (id, data) => api.patch(`/api/muestras/${id}`, data),
   obtenerRecorrido: (id) => api.get(`/api/muestras/${id}/recorrido`),
 
+  // Vincular especificación -- caso real: la muestra se creó antes de que
+  // la especificación de su artículo existiera en Datos Maestros, así que
+  // quedó con id_especificacion NULL sin ningún mecanismo para reconectarla
+  // después (ver especificacion_candidata/vincular_especificacion en el
+  // backend).
+  especificacionCandidata: (id) => api.get(`/api/muestras/${id}/especificacion-candidata`),
+  vincularEspecificacion: (id, idEspecificacion) =>
+    api.post(`/api/muestras/${id}/vincular-especificacion`, { id_especificacion: idEspecificacion }),
+
   // Checklist de muestreo (etapa 'muestreo' de la especificación) -- mismo
   // mecanismo que usa Ejecutar Muestreo, expuesto acá directo por
   // id_muestra para las muestras creadas con Nueva Muestra (sin solicitud).

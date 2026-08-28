@@ -117,6 +117,21 @@ class MuestraResponse(BaseModel):
     erp_n01id: Optional[int] = None
 
 
+# ── Vincular especificación (muestra creada antes de que la especificación
+# ── de su artículo existiera en Datos Maestros, ver GET/POST más abajo) ──
+
+class EspecificacionCandidata(BaseModel):
+    id_especificacion: int
+    erp_CODART: str
+    erp_DESART: str
+    tipo_material: str
+    version: str
+
+
+class VincularEspecificacionBody(BaseModel):
+    id_especificacion: int
+
+
 # ── Laboratorios ───────────────────────────────────────────────
 
 class LaboratorioCreate(BaseModel):
@@ -125,6 +140,11 @@ class LaboratorioCreate(BaseModel):
     contacto: Optional[str] = Field(None, max_length=100)
     email: Optional[str] = Field(None, max_length=100)
     telefono: Optional[str] = Field(None, max_length=30)
+    # Ver migrations_laboratorio_requiere_coas.sql -- si está en True, al
+    # generar el remito se adjunta el protocolo del proveedor (COAS) ya
+    # cargado en la solicitud, o se avisa antes de continuar si todavía no
+    # está cargado (ver generar_remito en envios.py).
+    requiere_coas_proveedor: bool = False
 
 
 class LaboratorioResponse(LaboratorioCreate):
@@ -139,6 +159,7 @@ class LaboratorioUpdate(BaseModel):
     email: Optional[str] = Field(None, max_length=100)
     telefono: Optional[str] = Field(None, max_length=30)
     activo: bool
+    requiere_coas_proveedor: bool = False
 
 
 # ── Impresoras de etiquetas (SATO, impresión directa vía SBPL) ────
@@ -375,6 +396,26 @@ class RemitoResponse(BaseModel):
     tiene_copia_firmada: bool = False
     fecha_recepcion: Optional[date] = None
     recibido_por: Optional[str] = None
+    # Vencimiento confirmado en Ejecutar Muestreo (ver DatosFisicosMuestreo
+    # en solicitudes_muestreo.py) -- para que RemitoImprimirPage.jsx pueda
+    # avisar ANTES de generar el PDF si nadie lo revisó todavía (ninguno de
+    # los dos campos cargado), en vez de que la persona recién se entere
+    # mirando el documento ya generado.
+    fecha_vencimiento_confirmada: Optional[date] = None
+    sin_vencimiento_confirmado: bool = False
+    # False solo cuando la muestra no tiene ninguna Solicitud de Muestreo
+    # asociada (creada directo con Nueva Muestra) -- ese mecanismo de
+    # confirmación vive en lims_solicitudes_muestreo, así que para esas
+    # muestras nunca puede haber una confirmación explícita y el aviso de
+    # vencimiento sin confirmar no debe dispararse (bug real: SAMP-2026-0010).
+    tiene_solicitud_muestreo: bool = True
+    # COAS del proveedor (ver requiere_coas_proveedor en lims_laboratorios y
+    # protocolo_proveedor_path en lims_solicitudes_muestreo) -- mismo
+    # criterio de aviso previo que los dos campos de arriba: si el
+    # laboratorio lo requiere y todavía no está cargado, RemitoImprimirPage.jsx
+    # avisa antes de generar en vez de que el remito salga sin adjuntarlo.
+    laboratorio_requiere_coas: bool = False
+    tiene_protocolo_proveedor: bool = False
 
 
 # ── Etiquetas (REQ-ENV-003) ───────────────────────────────────────

@@ -79,6 +79,33 @@ export default function RemitoImprimirPage() {
   }, [remito?.id_envio]);
 
   async function handleGenerar() {
+    // Aviso antes de generar/regenerar si nadie confirmó todavía el
+    // vencimiento (ni una fecha real cargada, ni el checkbox "no tiene
+    // vencimiento" tildado en Ejecutar Muestreo) -- no bloquea, solo evita
+    // que se genere el documento sin que la persona se haya dado cuenta de
+    // que ese dato quedó sin revisar. Si ya está confirmado como "sin
+    // vencimiento" a propósito, no se pregunta nada -- ese caso ya está
+    // resuelto. tiene_solicitud_muestreo=false (Nueva Muestra directa, sin
+    // Solicitud asociada) tampoco pregunta -- ese mecanismo de confirmación
+    // vive en la Solicitud, así que para esas muestras nunca puede existir
+    // una confirmación y no corresponde pedirla (bug real: SAMP-2026-0010).
+    if (remito.tiene_solicitud_muestreo && !remito.fecha_vencimiento_confirmada && !remito.sin_vencimiento_confirmado) {
+      const seguir = window.confirm(
+        'Esta muestra no tiene fecha de vencimiento cargada ni confirmada como "sin vencimiento". ¿Generar el remito igual?',
+      );
+      if (!seguir) return;
+    }
+    // Mismo patrón que el aviso de vencimiento de arriba: el laboratorio
+    // destino puede exigir el COAS del proveedor (ver requiere_coas_proveedor
+    // en Laboratorios) -- si todavía no está cargado en la solicitud, se
+    // avisa antes de generar en vez de que el remito salga al laboratorio
+    // sin el protocolo adjunto y nadie lo note hasta que sea tarde.
+    if (remito.laboratorio_requiere_coas && !remito.tiene_protocolo_proveedor) {
+      const seguir = window.confirm(
+        'Este laboratorio requiere el protocolo del proveedor, pero no está cargado para esta solicitud. ¿Generar el remito igual?',
+      );
+      if (!seguir) return;
+    }
     setPdfError('');
     setGenerando(true);
     try {

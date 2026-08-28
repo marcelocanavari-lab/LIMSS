@@ -5,7 +5,7 @@ import TopBar from '../../components/TopBar';
 import { muestrasApi } from '../../api/muestras';
 import { ApiError } from '../../api/client';
 
-const FORM_VACIO = { nombre: '', direccion: '', contacto: '', email: '', telefono: '', activo: true };
+const FORM_VACIO = { nombre: '', direccion: '', contacto: '', email: '', telefono: '', activo: true, requiere_coas_proveedor: false };
 const CONTACTO_VACIO = { nombre: '', cargo: '', email: '', telefono: '' };
 
 function ContactosModal({ laboratorio, puedeGestionar, puedeEliminar, onClose }) {
@@ -235,6 +235,7 @@ export default function LaboratoriosPage() {
       email: lab.email || '',
       telefono: lab.telefono || '',
       activo: lab.activo,
+      requiere_coas_proveedor: !!lab.requiere_coas_proveedor,
     });
     setFormError('');
     setMostrarForm(true);
@@ -260,6 +261,7 @@ export default function LaboratoriosPage() {
         contacto: form.contacto.trim() || null,
         email: form.email.trim() || null,
         telefono: form.telefono.trim() || null,
+        requiere_coas_proveedor: form.requiere_coas_proveedor,
       };
       if (editandoId) {
         await muestrasApi.editarLaboratorio(editandoId, { ...datos, activo: form.activo });
@@ -323,6 +325,15 @@ export default function LaboratoriosPage() {
               <label className="field-label" htmlFor="telefono">Teléfono</label>
               <input id="telefono" className="field-input" value={form.telefono} onChange={(e) => actualizarCampo('telefono', e.target.value)} disabled={guardando} />
             </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', marginBottom: 'var(--sp-4)' }}>
+              <input
+                type="checkbox"
+                checked={form.requiere_coas_proveedor}
+                onChange={(e) => actualizarCampo('requiere_coas_proveedor', e.target.checked)}
+                disabled={guardando}
+              />
+              Requiere COAS del proveedor
+            </label>
             {editandoId && (
               <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', marginBottom: 'var(--sp-4)' }}>
                 <input

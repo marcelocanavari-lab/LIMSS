@@ -96,6 +96,14 @@ class SolicitudMuestreoCreate(BaseModel):
     grupos_bultos: list[BultoGrupoInput] = []
     metodologia_analisis: Optional[str] = Field(None, max_length=200)
     fabricante: Optional[str] = Field(None, max_length=200)
+    # Si ya existe una solicitud activa (no anulada) para este mismo IR,
+    # crear_solicitud devuelve 409 con los datos de esa solicitud en vez de
+    # crear -- a menos que venga en True, que es como el frontend confirma
+    # que la persona vio ese aviso y quiere generar una nueva de todas
+    # formas (ej. análisis adicionales pedidos después). Solo aplica a la
+    # creación MANUAL -- el agente automático nunca genera un duplicado, ver
+    # solicitud_activa_existente en app/services/erp_ir.py.
+    confirmar_duplicado_ir: bool = False
     # La confirmación de la tabla "Muestras a tomar" se movió a Ejecutar
     # Muestreo (OrdenTrabajoDigitalBody.muestras, más abajo) -- antes se
     # pedía acá, al crear, pero eso dejaba a las solicitudes del agente sin
@@ -175,6 +183,15 @@ class SolicitudMuestreoResponse(BaseModel):
     # N01Id del comprobante ya resuelto (ver SolicitudMuestreoCreate.erp_n01id)
     # -- None en solicitudes creadas antes de este campo.
     erp_n01id: Optional[int] = None
+    # Recepción del proveedor (Libro de Ingresos) -- cargados por QA al
+    # completar la solicitud (ver SolicitudMuestreoCompletar/completar_datos,
+    # movidos ahí desde Ejecutar Muestreo). Se exponen acá para que el
+    # formulario de "Completar" pueda precargarlos si ya se habían cargado
+    # en una llamada anterior, mismo criterio que lote_proveedor/pais_origen.
+    fecha_factura_proveedor: Optional[date] = None
+    numero_factura_proveedor: Optional[str] = None
+    id_usuario_recibio: Optional[int] = None
+    id_usuario_rotulo: Optional[int] = None
 
 
 class SolicitudMuestreoCompletar(BaseModel):
@@ -200,6 +217,15 @@ class SolicitudMuestreoCompletar(BaseModel):
     grupos_bultos: list[BultoGrupoInput] = []
     metodologia_analisis: Optional[str] = Field(None, max_length=200)
     fabricante: Optional[str] = Field(None, max_length=200)
+    # Datos de recepción del proveedor (Libro de Ingresos) -- movidos acá
+    # desde OrdenTrabajoDigitalBody (Ejecutar Muestreo): el muestreador no
+    # maneja la factura del proveedor ni sabe quién recibió/rotuló
+    # administrativamente el ingreso, es información que maneja QA, mismo
+    # momento que el resto de los datos manuales de este schema.
+    fecha_factura_proveedor: Optional[date] = None
+    numero_factura_proveedor: Optional[str] = Field(None, max_length=50)
+    id_usuario_recibio: Optional[int] = None
+    id_usuario_rotulo: Optional[int] = None
 
 
 class EnsayoSolicitudMuestreo(BaseModel):
@@ -318,15 +344,6 @@ class OrdenTrabajoDigitalBody(BaseModel):
     # confirmar el muestreo, mismo momento para solicitudes manuales y del
     # agente (ver MuestraConfirmadaInput).
     muestras: list[MuestraConfirmadaInput] = []
-    # Datos de recepción del proveedor (Libro de Ingresos) -- se cargan en
-    # este mismo momento, junto con el resto de Ejecutar Muestreo, para
-    # solicitudes manuales y del agente por igual (mismo criterio que
-    # "Muestras a tomar" arriba). Los 4 son opcionales acá a nivel schema
-    # para no romper clientes viejos, pero la pantalla los pide juntos.
-    fecha_factura_proveedor: Optional[date] = None
-    numero_factura_proveedor: Optional[str] = Field(None, max_length=50)
-    id_usuario_recibio: Optional[int] = None
-    id_usuario_rotulo: Optional[int] = None
 
 
 class OrdenTrabajoDigitalResponse(BaseModel):

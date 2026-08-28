@@ -36,6 +36,21 @@ def formatear_decimal_significativo(valor: Optional[Union[int, float, Decimal]])
     return f"{entero}.{frac}"
 
 
+def normalizar_unidad(valor: Optional[str]) -> Optional[str]:
+    """Unidades de medida siempre en minúsculas ("g", "kg", "ml", no "G",
+    "KG", "ML") -- se cargan a mano en varios formularios de Datos Maestros
+    (especificaciones, testigos, grupos de bultos) y también llegan tal
+    cual las tiene el ERP (lims_solicitudes_muestreo.unidad_cantidad, desde
+    linea.unidad), que las guarda en mayúsculas. Se normaliza acá, en el
+    único lugar donde escribe cada INSERT/UPDATE de estas columnas, en vez
+    de en cada pantalla que las muestra, para que el dato quede consistente
+    también en exports/reportes que leen directo de la base."""
+    if valor is None:
+        return None
+    limpio = valor.strip()
+    return limpio.lower() if limpio else None
+
+
 def titulo_etiqueta_por_tipo(tipo_muestra: Optional[str]) -> str:
     """Título de la etiqueta de muestra según el tipo confirmado
     (lims_solicitud_muestras.tipo_muestra) -- mismo texto en el PDF

@@ -795,7 +795,12 @@ def generar_sbpl_etiqueta_estado(datos: dict, titulo: str, ancho_mm: int, alto_m
         "Ref", ver app/services/formato.py), fecha_ingreso, fecha_vencimiento
         (date u None), bulto_actual, bulto_total (int), cantidad_texto (ya
         formateada, ver formatear_cantidad), cantidad_valor (el mismo dato
-        SIN formatear ni unidad -- Optional[float], lo que va en el QR)."""
+        SIN formatear ni unidad -- Optional[float], lo que va en el QR).
+
+    La grilla de 6 casilleros lleva una segunda fila, de la mitad de alto,
+    debajo de la de saldo -- para que la persona que usa el insumo anote
+    sus iniciales junto a cada anotación de saldo (mismo casillero de
+    saldo, columna alineada)."""
     ancho_pt = mm_a_puntos(ancho_mm, dpi)
     alto_pt = mm_a_puntos(alto_mm, dpi)
 
@@ -897,30 +902,43 @@ def generar_sbpl_etiqueta_estado(datos: dict, titulo: str, ancho_mm: int, alto_m
     # recuadro exterior al que pegarse, a diferencia de la etiqueta de
     # muestra) y alto igual al que ya ocupa UN renglón del nombre del
     # producto (AVANCE_2X -- la misma medida que usan las 2 líneas
-    # reservadas para erp_desart más arriba, no un valor nuevo). El
-    # contorno y las 5 divisiones internas se arman con 7 líneas verticales
-    # (<FW> modo "Rule", ver nota del módulo) más 2 horizontales -- mismo
-    # mecanismo que el recuadro de generar_sbpl_etiqueta.
+    # reservadas para erp_desart más arriba, no un valor nuevo).
+    #
+    # Debajo, una segunda fila de los mismos 6 casilleros (misma columna que
+    # el de saldo arriba), de la mitad de alto -- para anotar las iniciales
+    # de quien hizo esa anotación de saldo; ocupan mucho menos espacio que
+    # un número de varios dígitos, no hace falta el mismo alto.
+    #
+    # El contorno de las dos filas y las 5 divisiones internas de cada una
+    # se arman con 7 líneas verticales (<FW> modo "Rule", ver nota del
+    # módulo) que atraviesan las DOS filas de punta a punta -- un solo trazo
+    # por columna en vez de uno por fila -- más 3 horizontales (techo de
+    # saldo, límite saldo/iniciales, piso de iniciales). Mismo mecanismo que
+    # el recuadro de generar_sbpl_etiqueta.
     CANTIDAD_CASILLEROS = 6
     alto_grilla_pt = AVANCE_2X
+    alto_grilla_iniciales_pt = alto_grilla_pt // 2
+    alto_total_grillas_pt = alto_grilla_pt + alto_grilla_iniciales_pt
     ancho_grilla_pt = ancho_pt - 2 * margen
     h_grilla = margen
     v_grilla = v
 
-    comandos.append(_cmd("V", f"{v_grilla:04d}"))
-    comandos.append(_cmd("H", f"{h_grilla:04d}"))
-    comandos.append(_cmd("FW", f"{GROSOR_RECUADRO_PT:02d}H{ancho_grilla_pt:04d}"))
-    comandos.append(_cmd("V", f"{v_grilla + alto_grilla_pt:04d}"))
-    comandos.append(_cmd("H", f"{h_grilla:04d}"))
-    comandos.append(_cmd("FW", f"{GROSOR_RECUADRO_PT:02d}H{ancho_grilla_pt:04d}"))
+    for v_linea_h in (v_grilla, v_grilla + alto_grilla_pt, v_grilla + alto_total_grillas_pt):
+        comandos.append(_cmd("V", f"{v_linea_h:04d}"))
+        comandos.append(_cmd("H", f"{h_grilla:04d}"))
+        comandos.append(_cmd("FW", f"{GROSOR_RECUADRO_PT:02d}H{ancho_grilla_pt:04d}"))
     for i in range(CANTIDAD_CASILLEROS + 1):
         h_linea = h_grilla + round(i * ancho_grilla_pt / CANTIDAD_CASILLEROS)
         comandos.append(_cmd("V", f"{v_grilla:04d}"))
         comandos.append(_cmd("H", f"{h_linea:04d}"))
-        comandos.append(_cmd("FW", f"{GROSOR_RECUADRO_PT:02d}V{alto_grilla_pt:04d}"))
-    diagnostico.append(("Grilla 6 casilleros", v_grilla, h_grilla, alto_grilla_pt, ancho_grilla_pt))
+        comandos.append(_cmd("FW", f"{GROSOR_RECUADRO_PT:02d}V{alto_total_grillas_pt:04d}"))
+    diagnostico.append(("Grilla 6 casilleros (saldo)", v_grilla, h_grilla, alto_grilla_pt, ancho_grilla_pt))
+    diagnostico.append((
+        "Grilla 6 casilleros (iniciales)", v_grilla + alto_grilla_pt, h_grilla,
+        alto_grilla_iniciales_pt, ancho_grilla_pt,
+    ))
 
-    v = v_grilla + alto_grilla_pt + mm_a_puntos(GAP_ANTES_CODIGOS_MM, dpi)
+    v = v_grilla + alto_total_grillas_pt + mm_a_puntos(GAP_ANTES_CODIGOS_MM, dpi)
 
     # QR (inventario rápido) y código de barras CODE128, mismo dato
     # combinado (código de artículo + IR/LOTE), el QR además con la

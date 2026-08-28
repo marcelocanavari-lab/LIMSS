@@ -54,7 +54,7 @@ def _dibujar_separador(titulo: str, nombre_original: Optional[str]) -> bytes:
     return buffer.getvalue()
 
 
-def _imagen_a_pdf(ruta_absoluta: str) -> bytes:
+def imagen_a_pdf(ruta_absoluta: str) -> bytes:
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     ancho_pagina, alto_pagina = A4
@@ -75,17 +75,19 @@ def _imagen_a_pdf(ruta_absoluta: str) -> bytes:
     return buffer.getvalue()
 
 
-def _paginas_de_adjunto(ruta_absoluta: str) -> list:
+def paginas_de_adjunto(ruta_absoluta: str) -> list:
     """Lista de páginas (pypdf) de un adjunto -- convierte a PDF primero si
     es una imagen. Devuelve [] si el archivo no existe o no se puede leer
     (adjunto corrupto/ilegible): no debe impedir generar el resto del
-    legajo, ver el criterio ya usado en generar_pdf_remito_testigo."""
+    legajo, ver el criterio ya usado en generar_pdf_remito_testigo. Público
+    porque también lo reutiliza generar_remito (envios.py) para adjuntar el
+    COAS del proveedor a la copia del remito que va al laboratorio."""
     if not os.path.exists(ruta_absoluta):
         return []
     extension = os.path.splitext(ruta_absoluta)[1].lower()
     try:
         if extension in _EXTENSIONES_IMAGEN:
-            return list(PdfReader(io.BytesIO(_imagen_a_pdf(ruta_absoluta))).pages)
+            return list(PdfReader(io.BytesIO(imagen_a_pdf(ruta_absoluta))).pages)
         return list(PdfReader(ruta_absoluta).pages)
     except Exception:
         return []
@@ -101,7 +103,7 @@ def generar_pdf_legajo(recorrido: RecorridoResponse, adjuntos: list[AdjuntoLegaj
         writer.add_page(page)
 
     for adjunto in adjuntos:
-        paginas = _paginas_de_adjunto(adjunto.ruta_absoluta)
+        paginas = paginas_de_adjunto(adjunto.ruta_absoluta)
         if not paginas:
             continue
         for page in PdfReader(io.BytesIO(_dibujar_separador(adjunto.titulo, adjunto.nombre_original))).pages:

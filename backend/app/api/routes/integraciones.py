@@ -33,6 +33,7 @@ from app.schemas.integraciones import (
 )
 from app.services import agente_muestreo, audit
 from app.services.erp_materiales import asignar_numero_analisis_si_corresponde, tiene_numero_analisis
+from app.services.formato import normalizar_unidad
 
 router = APIRouter(prefix="/api/integraciones", tags=["Integraciones eBR"])
 
@@ -88,7 +89,7 @@ def crear_muestra_desde_integracion(
             """,
             codigo_muestra, body.erp_IdM21, codart, espec.erp_DESART, espec.id_especificacion,
             body.id_usuario_limss, body.tipo_referencia, body.nro_referencia,
-            body.observaciones, body.cantidad_enviada, body.unidad_enviada, numero_analisis,
+            body.observaciones, body.cantidad_enviada, normalizar_unidad(body.unidad_enviada), numero_analisis,
         )
     else:
         cursor.execute(
@@ -101,7 +102,7 @@ def crear_muestra_desde_integracion(
             """,
             codigo_muestra, body.erp_IdM21, codart, espec.erp_DESART, espec.id_especificacion,
             body.id_usuario_limss, body.tipo_referencia, body.nro_referencia,
-            body.observaciones, body.cantidad_enviada, body.unidad_enviada,
+            body.observaciones, body.cantidad_enviada, normalizar_unidad(body.unidad_enviada),
         )
     cursor.execute("SELECT @@IDENTITY AS id")
     id_muestra = int(cursor.fetchone().id)

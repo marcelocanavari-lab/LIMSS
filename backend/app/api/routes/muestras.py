@@ -26,6 +26,7 @@ from app.schemas.muestras import (
     EnsayoSolicitado,
     EnvioCreate,
     EnvioResponse,
+    EspecificacionCandidata,
     EtiquetaResponse,
     FacturaResumenEnvio,
     ImpresoraEtiquetaCreate,
@@ -46,6 +47,7 @@ from app.schemas.muestras import (
     RemitoResponse,
     TestigoEnviado,
     TestigoRemito,
+    VincularEspecificacionBody,
 )
 from app.api.routes.facturas import _tiene_tabla_factura_detalle, ensayos_de_envio
 from app.api.routes.solicitudes_muestreo import (
@@ -69,7 +71,7 @@ from app.schemas.recorrido import RecorridoResponse
 from app.schemas.solicitudes_muestreo import ChecklistMuestreoItem, ChecklistMuestreoRespuesta
 from app.services import audit, storage
 from app.services.bultos import expandir_bultos, obtener_grupos_bultos
-from app.services.formato import etiqueta_referencia, formatear_cantidad, titulo_etiqueta_por_tipo
+from app.services.formato import etiqueta_referencia, formatear_cantidad, normalizar_unidad, titulo_etiqueta_por_tipo
 from app.services.especificaciones import guardar_checklist_muestreo, obtener_checklist_muestreo, tiene_ensayos_analisis
 from app.services.erp_ir import buscar_todos_candidatos_ir, formatear_nro_ir, normalizar_fecha_sentinel
 from app.services.erp_lotes import buscar_lote
@@ -84,6 +86,15 @@ router = APIRouter(prefix="/api/muestras", tags=["Muestras y Envíos"])
 
 # ── Helpers internos ─────────────────────────────────────────────
 
+def _g(row, atributo: str):
+    """Lee un atributo que puede no existir todavía en el esquema real
+    (mismo criterio que _g en solicitudes_muestreo.py) -- getattr con
+    default None en vez de romper toda la respuesta por una columna nueva
+    que este entorno todavía no migró (ver requiere_coas_proveedor,
+    migrations_laboratorio_requiere_coas.sql)."""
+    return getattr(row, atributo, None)
+
+
 def _a_fecha(valor) -> Optional[date]:
     """El driver ODBC no devuelve un tipo consistente para columnas DATE en
     este entorno (a veces date/datetime, a veces str); se normaliza siempre
@@ -97,6 +108,71 @@ def _a_fecha(valor) -> Optional[date]:
     return date.fromisoformat(str(valor))
 
 
+def _datos_vencimiento_confirmado(cursor, id_muestra: int) -> tuple[Optional[date], bool, bool]:
+    """(fecha_vencimiento_real, sin_vencimiento_confirmado, tiene_solicitud)
+    de la Solicitud de Muestreo de esta muestra -- consulta aparte del resto
+    de obtener_remito, no un JOIN directo en esa query, para tolerar que
+    sin_vencimiento_confirmado (ver migrations_solicitud_vencimiento_
+    confirmado.sql) todavía no exista en algún entorno sin romper el SELECT
+    principal por un nombre de columna inválido (mismo criterio que
+    _tiene_sin_vencimiento_confirmado en envios.py).
+
+    tiene_solicitud distingue "no confirmado todavía" de "no aplica ningún
+    aviso acá" -- una muestra creada directo con Nueva Muestra (sin
+    Solicitud de Muestreo asociada, ver bug real: SAMP-2026-0010/muestra 30,
+    con vencimiento resuelto en vivo contra el ERP e igual mostraba el aviso
+    de "sin vencimiento") nunca va a tener fila en lims_solicitudes_muestreo,
+    así que jamás puede confirmarse por acá -- el frontend no debe pedir esa
+    confirmación para un caso que estructuralmente no existe."""
+    try:
+        cursor.execute("SELECT COL_LENGTH('lims_solicitudes_muestreo', 'sin_vencimiento_confirmado') AS c")
+        tiene_columna = cursor.fetchone().c is not None
+        campo_sin_vencimiento = "s.sin_vencimiento_confirmado" if tiene_columna else "0"
+        cursor.execute(
+            f"""
+            SELECT s.fecha_vencimiento_real, {campo_sin_vencimiento} AS sin_vencimiento_confirmado
+            FROM lims_solicitudes_muestreo s
+            WHERE s.id_muestra = ?
+            """,
+            id_muestra,
+        )
+        fila = cursor.fetchone()
+    except pyodbc.Error:
+        return None, False, False
+    if not fila:
+        return None, False, False
+    return _a_fecha(fila.fecha_vencimiento_real), bool(fila.sin_vencimiento_confirmado), True
+
+
+def _datos_coas(cursor, id_muestra: int, id_laboratorio: int) -> tuple[bool, bool]:
+    """(laboratorio_requiere_coas, tiene_protocolo_proveedor) -- para que el
+    frontend pueda avisar ANTES de generar el remito si el laboratorio
+    exige el COAS del proveedor y todavía no está cargado en la Solicitud
+    de Muestreo (mismo mecanismo que _laboratorio_requiere_coas en
+    envios.py, que es el que efectivamente adjunta el archivo al generar).
+    Tolerante a que requiere_coas_proveedor todavía no exista en este
+    entorno (ver migrations_laboratorio_requiere_coas.sql)."""
+    cursor.execute("SELECT COL_LENGTH('lims_laboratorios', 'requiere_coas_proveedor') AS c")
+    if cursor.fetchone().c is None:
+        return False, False
+    cursor.execute(
+        "SELECT requiere_coas_proveedor FROM lims_laboratorios WHERE id_laboratorio = ?",
+        id_laboratorio,
+    )
+    fila_lab = cursor.fetchone()
+    laboratorio_requiere_coas = bool(fila_lab.requiere_coas_proveedor) if fila_lab else False
+    if not laboratorio_requiere_coas:
+        return False, False
+
+    cursor.execute(
+        "SELECT protocolo_proveedor_path FROM lims_solicitudes_muestreo WHERE id_muestra = ?",
+        id_muestra,
+    )
+    fila_sol = cursor.fetchone()
+    tiene_protocolo_proveedor = bool(fila_sol.protocolo_proveedor_path) if fila_sol else False
+    return laboratorio_requiere_coas, tiene_protocolo_proveedor
+
+
 def _fila_a_laboratorio(row) -> LaboratorioResponse:
     return LaboratorioResponse(
         id_laboratorio=row.id_laboratorio,
@@ -106,6 +182,7 @@ def _fila_a_laboratorio(row) -> LaboratorioResponse:
         email=row.email,
         telefono=row.telefono,
         activo=bool(row.activo),
+        requiere_coas_proveedor=bool(_g(row, "requiere_coas_proveedor")),
     )
 
 
@@ -176,6 +253,18 @@ def crear_laboratorio(
     cursor.execute("SELECT @@IDENTITY AS id")
     id_laboratorio = int(cursor.fetchone().id)
 
+    try:
+        # Columna agregada en migrations_laboratorio_requiere_coas.sql -- si
+        # todavía no se corrió en este entorno, se omite sin bloquear el
+        # resto del alta (mismo criterio de tolerancia ya usado en
+        # confirmar_orden_trabajo para sin_vencimiento_confirmado).
+        cursor.execute(
+            "UPDATE lims_laboratorios SET requiere_coas_proveedor = ? WHERE id_laboratorio = ?",
+            1 if body.requiere_coas_proveedor else 0, id_laboratorio,
+        )
+    except pyodbc.Error:
+        pass
+
     audit.registrar(
         conn, entidad="laboratorio", accion="crear",
         id_usuario=user["id_usuario"], id_entidad=id_laboratorio,
@@ -216,10 +305,12 @@ def editar_laboratorio(
     campos_anteriores = {
         "nombre": row.nombre, "direccion": row.direccion, "contacto": row.contacto,
         "email": row.email, "telefono": row.telefono, "activo": bool(row.activo),
+        "requiere_coas_proveedor": bool(_g(row, "requiere_coas_proveedor")),
     }
     campos_nuevos = {
         "nombre": body.nombre, "direccion": body.direccion, "contacto": body.contacto,
         "email": body.email, "telefono": body.telefono, "activo": body.activo,
+        "requiere_coas_proveedor": body.requiere_coas_proveedor,
     }
 
     cursor.execute(
@@ -231,6 +322,14 @@ def editar_laboratorio(
         body.nombre, body.direccion, body.contacto, body.email, body.telefono,
         1 if body.activo else 0, id_laboratorio,
     )
+    try:
+        # Ver misma nota de tolerancia en crear_laboratorio.
+        cursor.execute(
+            "UPDATE lims_laboratorios SET requiere_coas_proveedor = ? WHERE id_laboratorio = ?",
+            1 if body.requiere_coas_proveedor else 0, id_laboratorio,
+        )
+    except pyodbc.Error:
+        pass
 
     valor_anterior = {k: v for k, v in campos_anteriores.items() if v != campos_nuevos[k]}
     valor_nuevo = {k: v for k, v in campos_nuevos.items() if v != campos_anteriores[k]}
@@ -776,7 +875,7 @@ def crear_muestra(
     id_especificacion = espec.id_especificacion if espec else None
 
     cantidad_enviada = body.cantidad_enviada
-    unidad_enviada = body.unidad_enviada
+    unidad_enviada = normalizar_unidad(body.unidad_enviada)
     if cantidad_enviada is None and id_especificacion is not None:
         # lims_especificaciones.cantidad_muestra quedó deprecado a favor de
         # lims_especificacion_muestras (una fila por tipo de muestra, soporta
@@ -840,6 +939,94 @@ def crear_muestra(
         conn, entidad="muestra", accion="crear",
         id_usuario=user["id_usuario"], id_entidad=id_muestra,
         valor_nuevo={"codigo_muestra": codigo_muestra, "tipo_referencia": body.tipo_referencia, "nro_referencia": body.nro_referencia},
+    )
+
+    cursor.execute(_SELECT_MUESTRA + " WHERE m.id_muestra = ?", id_muestra)
+    return _fila_a_muestra(cursor.fetchone())
+
+
+@router.get("/{id_muestra}/especificacion-candidata", response_model=Optional[EspecificacionCandidata])
+def especificacion_candidata(
+    id_muestra: int,
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Para el aviso "Vincular especificación" en la ficha de la muestra
+    (caso real: SAMP-2026-0012/S0034 en producción -- crear_muestra resuelve
+    id_especificacion en el momento de crear la muestra; si la especificación
+    del artículo todavía no existía en Datos Maestros en ese momento, queda
+    en NULL para siempre, sin ningún mecanismo para reconectarla después
+    aunque la especificación se cargue más tarde).
+
+    Devuelve la especificación vigente de este mismo erp_IdM21 si ya existe
+    (para que el frontend la muestre y pida confirmar antes de vincular), o
+    None si todavía no hay ninguna -- en ese caso el frontend indica que hay
+    que cargarla primero en Datos Maestros."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT erp_IdM21, id_especificacion FROM lims_muestras WHERE id_muestra = ?", id_muestra)
+    muestra = cursor.fetchone()
+    if not muestra:
+        raise HTTPException(status_code=404, detail="Muestra no encontrada")
+    if muestra.id_especificacion is not None:
+        raise HTTPException(status_code=400, detail="Esta muestra ya tiene una especificación vinculada")
+
+    cursor.execute(
+        "SELECT id_especificacion, RTRIM(erp_CODART) AS erp_CODART, erp_DESART, tipo_material, version "
+        "FROM lims_especificaciones WHERE erp_IdM21 = ? AND vigente = 1",
+        muestra.erp_IdM21,
+    )
+    espec = cursor.fetchone()
+    if not espec:
+        return None
+    return EspecificacionCandidata(
+        id_especificacion=espec.id_especificacion, erp_CODART=espec.erp_CODART,
+        erp_DESART=(espec.erp_DESART or "").strip(), tipo_material=espec.tipo_material, version=espec.version,
+    )
+
+
+@router.post("/{id_muestra}/vincular-especificacion", response_model=MuestraResponse)
+def vincular_especificacion(
+    id_muestra: int,
+    body: VincularEspecificacionBody,
+    user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Confirma la reconexión propuesta por especificacion_candidata --
+    revalida server-side que la especificación indicada realmente corresponda
+    a este artículo (mismo erp_IdM21) y esté vigente, en vez de confiar
+    ciegamente en lo que mandó el frontend (por si cambió algo entre el GET
+    y este POST). Alcance deliberadamente acotado a id_especificacion: no
+    recalcula estado ni numero_analisis retroactivamente -- la muestra puede
+    ya estar en medio de otro paso del flujo (envío, resultados), así que
+    tocar esos campos ahora sería más riesgoso que el problema que se está
+    resolviendo."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT erp_IdM21, id_especificacion FROM lims_muestras WHERE id_muestra = ?", id_muestra)
+    muestra = cursor.fetchone()
+    if not muestra:
+        raise HTTPException(status_code=404, detail="Muestra no encontrada")
+    if muestra.id_especificacion is not None:
+        raise HTTPException(status_code=409, detail="Esta muestra ya tiene una especificación vinculada")
+
+    cursor.execute(
+        "SELECT 1 FROM lims_especificaciones WHERE id_especificacion = ? AND erp_IdM21 = ? AND vigente = 1",
+        body.id_especificacion, muestra.erp_IdM21,
+    )
+    if not cursor.fetchone():
+        raise HTTPException(
+            status_code=400,
+            detail="La especificación indicada no corresponde a este artículo o no está vigente",
+        )
+
+    cursor.execute(
+        "UPDATE lims_muestras SET id_especificacion = ? WHERE id_muestra = ?",
+        body.id_especificacion, id_muestra,
+    )
+    audit.registrar(
+        conn, entidad="muestra", accion="vincular_especificacion",
+        id_usuario=user["id_usuario"], id_entidad=id_muestra,
+        valor_anterior={"id_especificacion": None},
+        valor_nuevo={"id_especificacion": body.id_especificacion},
     )
 
     cursor.execute(_SELECT_MUESTRA + " WHERE m.id_muestra = ?", id_muestra)
@@ -1512,7 +1699,7 @@ def obtener_remito(
     cursor = conn.cursor()
     cursor.execute(
         """
-        SELECT e.id_envio,
+        SELECT e.id_envio, e.id_laboratorio,
                m.codigo_muestra, m.tipo_referencia, m.nro_referencia, m.erp_CODART, m.erp_DESART, m.fecha_muestreo,
                m.cantidad_enviada, m.unidad_enviada,
                u.nombre + ' ' + u.apellido AS usuario_muestreo_nombre,
@@ -1558,6 +1745,11 @@ def obtener_remito(
     )
     remito_pdf = cursor.fetchone()
 
+    fecha_vencimiento_confirmada, sin_vencimiento_confirmado, tiene_solicitud_muestreo = (
+        _datos_vencimiento_confirmado(cursor, id_muestra)
+    )
+    laboratorio_requiere_coas, tiene_protocolo_proveedor = _datos_coas(cursor, id_muestra, row.id_laboratorio)
+
     return RemitoResponse(
         id_remito=remito_pdf.id_remito if remito_pdf else None,
         id_envio=row.id_envio,
@@ -1587,6 +1779,11 @@ def obtener_remito(
         tiene_copia_firmada=bool(remito_pdf.pdf_copia_firmada) if remito_pdf else False,
         fecha_recepcion=_a_fecha(remito_pdf.fecha_recepcion) if remito_pdf else None,
         recibido_por=remito_pdf.recibido_por if remito_pdf else None,
+        fecha_vencimiento_confirmada=fecha_vencimiento_confirmada,
+        sin_vencimiento_confirmado=sin_vencimiento_confirmado,
+        tiene_solicitud_muestreo=tiene_solicitud_muestreo,
+        laboratorio_requiere_coas=laboratorio_requiere_coas,
+        tiene_protocolo_proveedor=tiene_protocolo_proveedor,
     )
 
 

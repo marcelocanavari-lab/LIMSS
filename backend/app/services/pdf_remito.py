@@ -14,6 +14,7 @@ import io
 from datetime import date
 from typing import Optional
 
+from pypdf import PdfReader, PdfWriter
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import cm
@@ -79,7 +80,7 @@ _LABEL_X_OFFSET = 5 * cm  # separación mínima etiqueta -> valor
 
 def _dibujar_copia(
     c: canvas.Canvas, datos, nro_remito_interno: str,
-    ensayos: list, testigos: list, principios_activos: list,
+    ensayos: list, testigos: list,
     vencimiento_lote, etiqueta_copia: str,
 ):
     _, height = A4
@@ -117,24 +118,6 @@ def _dibujar_copia(
         c.drawString(x + offset, y, valor)
         y -= 0.5 * cm
 
-    def campo_multilinea(etiqueta: str, valores: list):
-        """Etiqueta fija a la izquierda; un valor por línea a la derecha --
-        para campos con varios componentes (principios activos)."""
-        nonlocal y
-        if not valores:
-            return
-        c.setFont("Helvetica-Bold", 9)
-        c.drawString(x, y, f"{etiqueta}:")
-        ancho_etiqueta = stringWidth(f"{etiqueta}: ", "Helvetica-Bold", 9)
-        offset = max(_LABEL_X_OFFSET, ancho_etiqueta + 0.3 * cm)
-        c.setFont("Helvetica", 9)
-        for i, valor in enumerate(valores):
-            salto_pagina_si_hace_falta(0.5 * cm)
-            c.drawString(x + offset, y, valor)
-            if i < len(valores) - 1:
-                y -= 0.42 * cm
-        y -= 0.5 * cm
-
     titulo("Laboratorio Lamar SRL")
     titulo("REMITO DE ENVÍO A LABORATORIO EXTERNO")
     c.setFont("Helvetica-Bold", 10)
@@ -159,16 +142,10 @@ def _dibujar_copia(
     campo("Material", f"{datos.erp_CODART} - {datos.erp_DESART}")
     campo(etiqueta_referencia(datos.tipo_referencia), _texto(datos.nro_referencia))
     campo("Fecha de muestreo", _fmt_fecha(datos.fecha_muestreo))
-    campo("Vencimiento del lote", _fmt_vencimiento_lote(vencimiento_lote, datos.tipo_referencia))
+    campo("Vencimiento", _fmt_vencimiento_lote(vencimiento_lote, datos.tipo_referencia))
     campo("Muestreador", _texto(datos.usuario_muestreo_nombre))
     if datos.cantidad_enviada is not None:
         campo("Cantidad de muestra enviada", f"{float(datos.cantidad_enviada)} {datos.unidad_enviada or ''}".strip())
-    if principios_activos:
-        campo_multilinea(
-            "Principio/s activo/s",
-            [f"{p['nombre']} ({p['codigo']})" for p in principios_activos],
-        )
-        campo("Concentración declarada", " / ".join(p["concentracion"] for p in principios_activos))
 
     if ensayos:
         subtitulo("Análisis solicitados")
@@ -315,17 +292,45 @@ def _dibujar_copia(
     c.showPage()
 
 
-def generar_pdf_remito(
+def _generar_copia(
     datos, nro_remito_interno: str,
-    ensayos: Optional[list] = None, testigos: Optional[list] = None,
-    principios_activos: Optional[list] = None, vencimiento_lote=None,
+    ensayos: list, testigos: list,
+    vencimiento_lote, etiqueta_copia: str,
 ) -> bytes:
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
-    for etiqueta_copia in ("ORIGINAL - Para el laboratorio", "DUPLICADO - Para archivo Lamar"):
-        _dibujar_copia(
-            c, datos, nro_remito_interno, ensayos or [], testigos or [],
-            principios_activos or [], vencimiento_lote, etiqueta_copia,
-        )
+    _dibujar_copia(c, datos, nro_remito_interno, ensayos, testigos, vencimiento_lote, etiqueta_copia)
     c.save()
     return buffer.getvalue()
+
+
+def generar_pdf_remito(
+    datos, nro_remito_interno: str,
+    ensayos: Optional[list] = None, testigos: Optional[list] = None,
+    vencimiento_lote=None,
+    paginas_protocolo_proveedor: Optional[list] = None,
+) -> bytes:
+    """Cada copia (ORIGINAL/DUPLICADO) se genera como PDF independiente y se
+    concatenan con pypdf -- necesario para poder insertar el COAS del
+    proveedor (paginas_protocolo_proveedor, ver generar_remito en envios.py)
+    únicamente después de la copia ORIGINAL (la que va al laboratorio), sin
+    que quede adjunto también en la copia DUPLICADO de archivo interno."""
+    ensayos = ensayos or []
+    testigos = testigos or []
+    pdf_original = _generar_copia(
+        datos, nro_remito_interno, ensayos, testigos, vencimiento_lote, "ORIGINAL - Para el laboratorio",
+    )
+    pdf_duplicado = _generar_copia(
+        datos, nro_remito_interno, ensayos, testigos, vencimiento_lote, "DUPLICADO - Para archivo Lamar",
+    )
+
+    writer = PdfWriter()
+    for page in PdfReader(io.BytesIO(pdf_original)).pages:
+        writer.add_page(page)
+    for page in paginas_protocolo_proveedor or []:
+        writer.add_page(page)
+    for page in PdfReader(io.BytesIO(pdf_duplicado)).pages:
+        writer.add_page(page)
+    salida = io.BytesIO()
+    writer.write(salida)
+    return salida.getvalue()

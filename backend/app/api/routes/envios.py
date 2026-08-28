@@ -24,10 +24,10 @@ from app.core.security import get_current_user, require_rol
 from app.db.connections import erp_db, limss_db
 from app.schemas.envios import RemitoPdfResponse
 from app.services import audit, storage
-from app.services.erp_composicion import obtener_principios_activos
 from app.services.erp_ir import obtener_vencimiento_lote as obtener_vencimiento_ir
 from app.services.erp_ir import obtener_vencimiento_por_n01id
 from app.services.erp_lotes import obtener_vencimiento_lote_produccion
+from app.services.pdf_legajo import paginas_de_adjunto
 from app.services.pdf_remito import generar_pdf_remito
 from app.api.routes.testigos_remitos import _fecha_envio_real_para_pdf
 
@@ -62,7 +62,15 @@ _SELECT_DATOS_REMITO = """
            -- una Solicitud de Muestreo -- puede no haber ninguna
            -- (LEFT JOIN, ver el bug real de más abajo: una muestra creada
            -- por "Nueva Muestra" no tiene solicitud asociada).
-           s.fecha_vencimiento_real
+           s.fecha_vencimiento_real,
+           -- Protocolo (COAS) del proveedor, cargado en la Solicitud de
+           -- Muestreo antes de que exista ningún envío (ver
+           -- subir_protocolo_proveedor en solicitudes_muestreo.py) -- se
+           -- adjunta a la copia del remito que va al laboratorio cuando
+           -- ese laboratorio lo requiere (ver requiere_coas_proveedor,
+           -- consultado aparte más abajo por la misma razón de tolerancia
+           -- de columna que sin_vencimiento_confirmado).
+           s.protocolo_proveedor_path, s.protocolo_proveedor_nombre_original
     FROM lims_envios e
     INNER JOIN lims_muestras m ON m.id_muestra = e.id_muestra
     INNER JOIN lims_usuarios u ON u.id_usuario = m.id_usuario_muestreo
@@ -141,6 +149,22 @@ def _tiene_sin_vencimiento_confirmado(cursor, id_envio: int) -> bool:
     return bool(fila.sin_vencimiento_confirmado) if fila else False
 
 
+def _laboratorio_requiere_coas(cursor, id_laboratorio: int) -> bool:
+    """True si el laboratorio destino tiene tildado "Requiere COAS del
+    proveedor" -- mismo criterio de tolerancia de columna que
+    _tiene_sin_vencimiento_confirmado (ver migrations_laboratorio_requiere_
+    coas.sql, columna nueva que puede no existir todavía en este entorno)."""
+    cursor.execute("SELECT COL_LENGTH('lims_laboratorios', 'requiere_coas_proveedor') AS c")
+    if cursor.fetchone().c is None:
+        return False
+    cursor.execute(
+        "SELECT requiere_coas_proveedor FROM lims_laboratorios WHERE id_laboratorio = ?",
+        id_laboratorio,
+    )
+    fila = cursor.fetchone()
+    return bool(fila.requiere_coas_proveedor) if fila else False
+
+
 def _fila_a_remito_pdf(fila) -> RemitoPdfResponse:
     return RemitoPdfResponse(
         id_remito=fila.id_remito,
@@ -174,13 +198,6 @@ def generar_remito(
 
     ensayos = _obtener_ensayos_remito(cursor, id_envio)
     testigos = _obtener_testigos_remito(cursor, id_envio, datos.id_laboratorio, datos.fecha_despacho)
-
-    try:
-        principios_activos = obtener_principios_activos(erp, datos.erp_CODART)
-    except Exception:
-        # Dato complementario -- si el ERP no responde o el formato de OBSERV
-        # no calza, no debe impedir generar el remito.
-        principios_activos = []
 
     # Prioriza fecha_vencimiento_real (cargada a mano en la Solicitud de
     # Muestreo al ejecutar el muestreo físico -- ver completar-datos/
@@ -228,7 +245,20 @@ def generar_remito(
     correlativo = int(ultimo.split("-")[-1]) + 1 if ultimo else 1
     nro_remito_interno = f"REM-{anio}-{correlativo:04d}"
 
-    pdf_bytes = generar_pdf_remito(datos, nro_remito_interno, ensayos, testigos, principios_activos, vencimiento_lote)
+    # COAS del proveedor: si el laboratorio lo requiere y la solicitud lo
+    # tiene cargado, se adjunta a la copia ORIGINAL (para el laboratorio) --
+    # ver generar_pdf_remito. Si el laboratorio lo requiere pero no está
+    # cargado, no se bloquea acá: el aviso de confirmación es responsabilidad
+    # del frontend (mismo patrón que el aviso de vencimiento sin confirmar),
+    # así que el remito se genera igual, sin adjunto.
+    paginas_protocolo_proveedor = None
+    if _laboratorio_requiere_coas(cursor, datos.id_laboratorio) and datos.protocolo_proveedor_path:
+        paginas_protocolo_proveedor = paginas_de_adjunto(storage.ruta_absoluta(datos.protocolo_proveedor_path))
+
+    pdf_bytes = generar_pdf_remito(
+        datos, nro_remito_interno, ensayos, testigos, vencimiento_lote,
+        paginas_protocolo_proveedor=paginas_protocolo_proveedor,
+    )
     ruta_pdf = storage.guardar_pdf_remito(pdf_bytes, nro_remito_interno)
 
     cursor.execute(
