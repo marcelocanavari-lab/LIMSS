@@ -8,6 +8,7 @@ const ITEMS = [
   { label: 'Testigos y Estándares', ruta: '/maestros/testigos' },
   { label: 'Especificaciones', ruta: '/maestros/especificaciones' },
   { label: 'Laboratorios', ruta: '/muestras/laboratorios' },
+  { label: 'Equipos', ruta: '/maestros/equipos' },
 ];
 
 export default function DefinicionesMenuPage() {

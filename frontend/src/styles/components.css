@@ -595,6 +595,20 @@
   .printable .card { break-inside: avoid; }
 }
 
+/* Reportes de Equipos (Historial/Gráfico de Tendencia/Desviaciones) --
+   mismo problema y mismo fix que .libro-ingresos-print más abajo: el
+   .printable compartido trae max-width:900px pensado para reportes
+   angostos en A4 vertical, y confiar solo en el reset genérico de
+   @media print (max-width:100%, ver esa regla abajo) no alcanzó en la
+   práctica la primera vez que se dio este problema (Libro de Ingresos) --
+   se repite acá el mismo override dedicado, sin tocar la regla genérica
+   compartida por el resto de los reportes que sí quieren quedarse angostos
+   (ej. Recorrido de Muestra). */
+.equipos-print-ancho {
+  max-width: none;
+  width: 100%;
+}
+
 /* --- Reporte de Testigos: la tabla es más ancha que la pantalla (muchas
    columnas) -- se scrollea horizontalmente en su propio contenedor en vez
    de desbordar la página, así el fondo de fila (tr) no se corta antes del

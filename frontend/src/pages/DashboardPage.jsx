@@ -21,6 +21,7 @@ const QUICK_LINKS = [
   { label: 'Reportes', ruta: '/menu-reportes', roles: GESTION },
   { label: 'Facturación', ruta: '/facturas', roles: GESTION },
   { label: 'Novedades de Empaque', ruta: '/maestros/novedades-empaque', roles: GESTION },
+  { label: 'Equipos', ruta: '/menu-equipos', roles: GESTION },
   { label: 'Archivo de Contramuestras', ruta: '/cajas', roles: GESTION },
   { label: 'Administración', ruta: '/admin', roles: ['admin'] },
 ];

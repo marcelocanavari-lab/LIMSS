@@ -10,6 +10,11 @@ import DefinicionesMenuPage from './pages/DefinicionesMenuPage';
 import ReportesMenuPage from './pages/ReportesMenuPage';
 import LibroIngresosPage from './pages/reportes/LibroIngresosPage';
 import MuestrasMenuPage from './pages/MuestrasMenuPage';
+import EquiposMenuPage from './pages/EquiposMenuPage';
+import NuevaLecturaPage from './pages/equipos/NuevaLecturaPage';
+import HistorialLecturasPage from './pages/equipos/HistorialLecturasPage';
+import GraficoTendenciaPage from './pages/equipos/GraficoTendenciaPage';
+import ReporteDesviacionesPage from './pages/equipos/ReporteDesviacionesPage';
 import ImpresionEtiquetasPage from './pages/ImpresionEtiquetasPage';
 import UsuariosPage from './pages/UsuariosPage';
 import ErpConfigPage from './pages/ErpConfigPage';
@@ -22,6 +27,8 @@ import EspecificacionesPage from './pages/maestros/EspecificacionesPage';
 import EspecificacionFormPage from './pages/maestros/EspecificacionFormPage';
 import EspecificacionDetallePage from './pages/maestros/EspecificacionDetallePage';
 import CatalogoEnsayosPage from './pages/maestros/CatalogoEnsayosPage';
+import EquiposPage from './pages/maestros/EquiposPage';
+import EquipoVariablesPage from './pages/maestros/EquipoVariablesPage';
 import NovedadesEmpaquePage from './pages/maestros/NovedadesEmpaquePage';
 import TestigosPage from './pages/maestros/TestigosPage';
 import TestigoFormPage from './pages/maestros/TestigoFormPage';
@@ -94,12 +101,21 @@ export default function App() {
           <Route path="/menu-muestras" element={<PrivateRoute roles={GESTION}><MuestrasMenuPage /></PrivateRoute>} />
           <Route path="/impresion-etiquetas" element={<PrivateRoute roles={GESTION}><ImpresionEtiquetasPage /></PrivateRoute>} />
 
+          {/* ── Equipos: Control de Variables (analista_qc, qa, admin) ── */}
+          <Route path="/menu-equipos" element={<PrivateRoute roles={GESTION}><EquiposMenuPage /></PrivateRoute>} />
+          <Route path="/equipos/nueva-lectura" element={<PrivateRoute roles={GESTION}><NuevaLecturaPage /></PrivateRoute>} />
+          <Route path="/equipos/historial" element={<PrivateRoute roles={GESTION}><HistorialLecturasPage /></PrivateRoute>} />
+          <Route path="/equipos/grafico" element={<PrivateRoute roles={GESTION}><GraficoTendenciaPage /></PrivateRoute>} />
+          <Route path="/equipos/reporte-desviaciones" element={<PrivateRoute roles={GESTION}><ReporteDesviacionesPage /></PrivateRoute>} />
+
           {/* ── Datos Maestros (analista_qc, qa, admin) ─────────── */}
           <Route path="/maestros/especificaciones" element={<PrivateRoute roles={GESTION}><EspecificacionesPage /></PrivateRoute>} />
           <Route path="/maestros/especificaciones/nueva" element={<PrivateRoute roles={GESTION}><EspecificacionFormPage modo="crear" /></PrivateRoute>} />
           <Route path="/maestros/especificaciones/:id" element={<PrivateRoute roles={GESTION}><EspecificacionDetallePage /></PrivateRoute>} />
           <Route path="/maestros/especificaciones/:id/revisar" element={<PrivateRoute roles={GESTION}><EspecificacionFormPage modo="revisar" /></PrivateRoute>} />
           <Route path="/maestros/ensayos" element={<PrivateRoute roles={GESTION}><CatalogoEnsayosPage /></PrivateRoute>} />
+          <Route path="/maestros/equipos" element={<PrivateRoute roles={GESTION}><EquiposPage /></PrivateRoute>} />
+          <Route path="/maestros/equipos/:id/variables" element={<PrivateRoute roles={GESTION}><EquipoVariablesPage /></PrivateRoute>} />
           <Route path="/maestros/novedades-empaque" element={<PrivateRoute roles={GESTION}><NovedadesEmpaquePage /></PrivateRoute>} />
 
           <Route path="/maestros/testigos" element={<PrivateRoute roles={GESTION}><TestigosPage /></PrivateRoute>} />

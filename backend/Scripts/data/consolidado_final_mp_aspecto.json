@@ -1,0 +1,698 @@
+[
+  {
+    "archivo": "Acido_cítrico_anhidro.docx",
+    "codigo": "MP003",
+    "nombre": "Ácido cítrico anhidro",
+    "aspecto_texto": "según Eur. Ph. 4°, 2002.: Polvo blanco, cristalino; o cristales granulares, ligeramente delicuescentes en la humedad del aire."
+  },
+  {
+    "archivo": "Amoxicilina_polvo_mp.docx",
+    "codigo": "MP009",
+    "nombre": "Amoxicilina trihidrato polvo",
+    "aspecto_texto": "según Eur. Ph. 4, 2002: polvo cristalino; blanco o casi blanco."
+  },
+  {
+    "archivo": "Espironolactona.docx",
+    "codigo": "MP118",
+    "nombre": "Espironolactona",
+    "aspecto_texto": "(Según USP 30): Polvo cristalino, de color crema claro a tostado claro Tiene un olor entre leve y suave parecido al del mercaptano; es estable al aire."
+  },
+  {
+    "archivo": "Metoclopramida_clorhidrato.docx",
+    "codigo": "MP052",
+    "nombre": "Metoclopramida clorhidrato (monoclorhidrato, monohidrato)",
+    "aspecto_texto": "(según EP 4° ‘02) polvo cristalino o cristales; blanco o casi blanco."
+  },
+  {
+    "archivo": "Acepromazina_maleato.docx",
+    "codigo": "MP001",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Acepromazina maleato",
+    "aspecto_texto": "(según BP. Vet.’99; según USP ’25) polvo cristalino; amarillo; inodoro o casi inodoro."
+  },
+  {
+    "archivo": "Acido_benzoico_exc.docx",
+    "codigo": "MP002",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Ácido benzoico",
+    "aspecto_texto": "según Eur. Ph. 4, 2002: Polvo blanco cristalino, o cristales incoloros; inodoros o con un olor característico muy suave."
+  },
+  {
+    "archivo": "Alcohol_bencílico_exc.docx",
+    "codigo": "MP005",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Alcohol bencílico",
+    "aspecto_texto": "según Eur. Ph. 4°, 2002. Líquido oleoso, límpido, incoloro."
+  },
+  {
+    "archivo": "Alcohol_butilico_exc.docx",
+    "codigo": "MP006",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Alcohol butílico",
+    "aspecto_texto": "Según Index Merck 10th edition (1983). Líquido transparente; incoloro; de olor semejante al del fuel oil, pero más débil; que deja transitoriamente una mancha grasa sobre el papel."
+  },
+  {
+    "archivo": "Alcohol_etílico_Producción.docx",
+    "codigo": "MP079",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Alcohol etílico Producción",
+    "aspecto_texto": "según USP 30 pág 916: Líquido transparente incoloro, móvil y volátil. De olor característico."
+  },
+  {
+    "archivo": "Almidón_de_Maiz__USAR_ÉSTE.docx",
+    "codigo": "MP007",
+    "codigo_detectado_en_doc": true,
+    "nombre": "ALMIDÓN de MAÍZ",
+    "aspecto_texto": "según Eur. Ph. 4, 2002; BP´93; FNA VI: Masa irregular o polvo muy fino; blanco o blanco amarillento; que cruje cuando se lo presiona entre los dedos; insípido e inodoro."
+  },
+  {
+    "archivo": "Almidón_glicolato_sódico.docx",
+    "codigo": "MP097",
+    "codigo_detectado_en_doc": true,
+    "nombre": "ALMIDÓN glicolato sódico",
+    "aspecto_texto": "(según USP 30, página 917): Polvo blanco; insípido e inodoro; de fluidez relativamente libre; disponible en distintos grados de viscosidad."
+  },
+  {
+    "archivo": "Aluminio_hidróxido_gel.docx",
+    "codigo": "MP044",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Aluminio hidróxido gel desecado",
+    "aspecto_texto": "(Según USP 30, pág. 938) Polvo blanco; inodoro; insípido y amorfo."
+  },
+  {
+    "archivo": "Amarillo_Tartrazina.docx",
+    "codigo": "MP082",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Amarillo Tartrazina Color Certificado",
+    "aspecto_texto": "Polvo fino, cristalino, de color anaranjado."
+  },
+  {
+    "archivo": "Amoxicilina_compactada_mp.docx",
+    "codigo": "MP008",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Amoxicilina trihidrato compactada",
+    "aspecto_texto": "según Eur. Ph. 4, 2002: polvo cristalino; blanco o casi blanco."
+  },
+  {
+    "archivo": "Antiespumante_Dow_Corning_Medical_Antifoam_C_Emulsion_equiv_a_Liveo_Medical_Antifoam_C_Emulsion.docx",
+    "codigo": "MP129",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Antiespumante Dow Corning Medical",
+    "aspecto_texto": "(según el fabricante Dupont): Líquido homogéneo, de color casi blanco, sin contaminación de partículas oscuras."
+  },
+  {
+    "archivo": "Azul_Brillante.docx",
+    "codigo": "MP083",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Azul Brillante Color Certificado",
+    "aspecto_texto": "Polvo fino, cristalino, de color bordó-violáceo oscuro, anaranjado."
+  },
+  {
+    "archivo": "Azúcar_exc.docx",
+    "codigo": "MP084",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Azúcar",
+    "aspecto_texto": "según Eur. Ph. 4, 2002: Polvo blanco y cristalino o cristales transparentes, secos y brillantes o cristales blancos"
+  },
+  {
+    "archivo": "Azúcar_impalpable_exc.docx",
+    "codigo": "MP080",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Azúcar impalpable",
+    "aspecto_texto": "(según USP 30, pág.919): Polvo fino blanco, inodoro, con sabor dulce. Es estable al aire."
+  },
+  {
+    "archivo": "Banana__esencia_de.docx",
+    "codigo": "MP034",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Banana, Esencia de",
+    "aspecto_texto": "Líquido transparente; incoloro a ligeramente amarillento. De olor y sabor característicos a"
+  },
+  {
+    "archivo": "Ácido_clorhídrico_Sol__Volumétrica_1_N.docx",
+    "codigo": "MP102",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Ácido clorhídrico Sol. Volumétrica 1 N",
+    "aspecto_texto": "Líquido claro e incoloro."
+  },
+  {
+    "archivo": "Benazepril_clorhidrato.docx",
+    "codigo": "MP119",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Benazepril clorhidrato",
+    "aspecto_texto": "(Según USP 30): Polvo cristalino blanco o casi blanco."
+  },
+  {
+    "archivo": "Benzoato_de_sodio.docx",
+    "codigo": "MP010",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Benzoato de sodio",
+    "aspecto_texto": "según Eur. Ph. 4°, 2002.: Polvo blanco, cristalino, o granular, o escamoso; ligeramente higroscópico."
+  },
+  {
+    "archivo": "Caolín.docx",
+    "codigo": "MP013",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Caolín Coloidal",
+    "aspecto_texto": "(según Eur. Ph. 4° 2002) polvo fino; untuoso; blanco o blanco grisáceo."
+  },
+  {
+    "archivo": "CMC_10000_NUEVA.docx",
+    "codigo": "MP014",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Carboximetilcelulosa Sódica 10.000 cp",
+    "aspecto_texto": "(Según USP 30, pág. 922) Polvo o gránulos incoloros o blancos a casi blancos. Inodoro."
+  },
+  {
+    "archivo": "Cefalexina_compactada_mp.docx",
+    "codigo": "MP016",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Cefalexina monohidr. COMPACTADA",
+    "aspecto_texto": "(según EP 4 2002) polvo blanco o casi blanco; polvo cristalino"
+  },
+  {
+    "archivo": "Cefalexina_polvo_mp.docx",
+    "codigo": "MP017",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Cefalexina monohidrat. POLVO",
+    "aspecto_texto": "(según EP 4 2002) polvo blanco o casi blanco; polvo cristalino"
+  },
+  {
+    "archivo": "Celulosa_microcristalina_PH_101.docx",
+    "codigo": "MP018",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Celulosa microcristalina PH 101",
+    "aspecto_texto": "(Según USP 30, pág. 923) Polvo fino; de color blanco o casi blanco."
+  },
+  {
+    "archivo": "Celulosa_microcristalina_PH_102.docx",
+    "codigo": "MP115",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Celulosa microcristalina PH 102",
+    "aspecto_texto": "(Según USP 30, pág. 923) Polvo fino; de color blanco o casi blanco."
+  },
+  {
+    "archivo": "Cereza_polvo.docx",
+    "codigo": "MP087",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Sabor cereza",
+    "aspecto_texto": "Polvo de color blanco. De olor y sabor característicos a cereza."
+  },
+  {
+    "archivo": "Chocolate__esencia_de.docx",
+    "codigo": "MP089",
+    "codigo_detectado_en_doc": true,
+    "nombre": "- Chocolate, Esencia de",
+    "aspecto_texto": "Líquido transparente; ligeramente amarillento. De olor y sabor característicos a"
+  },
+  {
+    "archivo": "CMC_4000.docx",
+    "codigo": "MP015",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Carboximetilcelulosa sódica 4000 cp",
+    "aspecto_texto": "(Según USP 30, pág. 922) Polvo o gránulos, de color blanco a crema. Inodoro."
+  },
+  {
+    "archivo": "Clindamicina_clorhidrato_mp.docx",
+    "codigo": "MP019",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Clindamicina clorhidrato",
+    "aspecto_texto": "polvo blanco o casi blanco; o polvo cristalino"
+  },
+  {
+    "archivo": "Clormadinona_acetato.docx",
+    "codigo": "MP022",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Clormadinona acetato",
+    "aspecto_texto": "según J. P. XVIII (2021): Polvo cristalino, blanco a blanco amarillento; o a blanco cremoso; inodoro."
+  },
+  {
+    "archivo": "Clorpromazina_mp.docx",
+    "codigo": "MP021",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Clorpromazina clorhidrato",
+    "aspecto_texto": "según Eur. Ph. 4, 2002: Polvo cristalino, blanco o casi blanco."
+  },
+  {
+    "archivo": "Cloruro_de_amonio_exc.docx",
+    "codigo": "MP023",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Cloruro de amonio",
+    "aspecto_texto": "según Eur. Ph. 4, 2002: Polvo cristalino, blanco; o cristales incoloros."
+  },
+  {
+    "archivo": "Cloruro_de_sodio_exc.docx",
+    "codigo": "MP024",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Cloruro de sodio",
+    "aspecto_texto": "según Eur. Ph. 4, 2002: Polvo blanco cristalino; o cristales incoloros; o perlas blancas."
+  },
+  {
+    "archivo": "Creatinina_exc.docx",
+    "codigo": "MP025",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Creatinina",
+    "aspecto_texto": "según Index Merck 10th edition (1983). Polvo cristalino; láminas monoclínicas, u hojuelas."
+  },
+  {
+    "archivo": "Croscarmelosa_sódica.docx",
+    "codigo": "MP026",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Croscarmelosa sódica (Acdisol)",
+    "aspecto_texto": "(Según USP 30, pág. 932) Polvo blanco de libre fluidez."
+  },
+  {
+    "archivo": "DEET__Dietil-m-toluamida_.docx",
+    "codigo": "MP127",
+    "codigo_detectado_en_doc": true,
+    "nombre": "DEET (Dietil-m-toluamida)",
+    "aspecto_texto": "(según Wikipedia): A temperatura ambiente es un líquido ligeramente amarillento."
+  },
+  {
+    "archivo": "Desessartz_sol_concentrada_para_jarabe_de.docx",
+    "codigo": "MP070",
+    "codigo_detectado_en_doc": true,
+    "nombre": "– Desessartz, Sol. concentrada. para jarabe",
+    "aspecto_texto": "Líquido traslúcido, de color pardusco, de olor agradable a azahar y sabor característico."
+  },
+  {
+    "archivo": "Dexametasona_21_fosfato_disódico.docx",
+    "codigo": "MP027",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Dexametasona 21-fosfato disódico",
+    "aspecto_texto": "según Eur. Ph. 4, 2002: Polvo blanco o casi blanco; muy higroscópico."
+  },
+  {
+    "archivo": "Dexametasona_base.docx",
+    "codigo": "MP028",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Dexametasona base",
+    "aspecto_texto": "(según Eur. Pharm. 4ta, 2002): Polvo cristalino blanco o casi blanco."
+  },
+  {
+    "archivo": "Diazepam_mp.docx",
+    "codigo": "MP029",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Diazepam",
+    "aspecto_texto": "según Eur. Ph. 4, 2002; BP’93: polvo cristalino; blanco o casi blanco."
+  },
+  {
+    "archivo": "Dióxido_de_silicio_coloidal.docx",
+    "codigo": "MP004",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Dióxido de silicio coloidal (Aerosil)",
+    "aspecto_texto": "(USP 30, pág. 933) Polvo liviano; blanco; no arenoso; de tamaño de partícula extremadamente fino (aprox. 15 nm)."
+  },
+  {
+    "archivo": "Dulce_de_leche__esencia_de.docx",
+    "codigo": "MP088",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Dulce de leche, Esencia de GP 477",
+    "aspecto_texto": "Líquido transparente; incoloro a ligeramente amarillento. De olor y sabor característicos a"
+  },
+  {
+    "archivo": "EDTA_disódico_exc.docx",
+    "codigo": "MP030",
+    "codigo_detectado_en_doc": false,
+    "nombre": "EDTA disódico",
+    "aspecto_texto": "según Eur. Ph. 4°, 2002.: Polvo blanco, cristalino."
+  },
+  {
+    "archivo": "Enrofloxacina_acontrolar.docx",
+    "codigo": "MP031",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Enrofloxacina",
+    "aspecto_texto": "según CVP 2020 (I): Polvo cristalino amarillo pálido o levemente amarillento, inodoro. Los cristales gradualmente pasan al rojo naranja a la luz del día."
+  },
+  {
+    "archivo": "Eritromicina_estolato.docx",
+    "codigo": "MP032",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Eritromicina estolato",
+    "aspecto_texto": "según Eur. Ph. 4° 2002; polvo blanco; cristalino."
+  },
+  {
+    "archivo": "Estearato_de_magnesio.docx",
+    "codigo": "MP037",
+    "codigo_detectado_en_doc": true,
+    "nombre": "ESTEARATO DE MAGNESIO",
+    "aspecto_texto": "(Según USP 30, pág. 934) Polvo blanco, muy fino, liviano y resbaladizo al tacto."
+  },
+  {
+    "archivo": "Febantel.docx",
+    "codigo": "MP039",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Febantel",
+    "aspecto_texto": "(según Ph. Eur.): Polvo cristalino blanco o casi blanco."
+  },
+  {
+    "archivo": "Fenbendazol.docx",
+    "codigo": "MP040",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Fenbendazol",
+    "aspecto_texto": "según Eur. Ph. 4, 2002: Polvo blanco, o casi blanco."
+  },
+  {
+    "archivo": "Fluralaner.docx",
+    "codigo": "MP117",
+    "codigo_detectado_en_doc": true,
+    "nombre": "FLURALANER",
+    "aspecto_texto": "segúnProveedor: Polvo de color blanco a blanco hueso."
+  },
+  {
+    "archivo": "Furosemida.docx",
+    "codigo": "MP113",
+    "codigo_detectado_en_doc": true,
+    "nombre": "FUROSEMIDA",
+    "aspecto_texto": "( según USP 30 página 938): Polvo cristalino, blanco a ligeramente amarillo, inodoro."
+  },
+  {
+    "archivo": "Glicerina.docx",
+    "codigo": "MP112",
+    "codigo_detectado_en_doc": true,
+    "nombre": "GLICERINA",
+    "aspecto_texto": "segúnUSP 30: Líquido transparente, incoloro, con consistencia de jarabe y sabor dulce. No tiene más que un olor leve característico, que no es acre ni desagradable. Es higroscópico."
+  },
+  {
+    "archivo": "Glucosa_anhidra_para_inyectable.docx",
+    "codigo": "MP041",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Glucosa anhidra para inyectable",
+    "aspecto_texto": "según Eur. Ph. 4° 2002: polvo blanco, cristalino, con sabor dulce."
+  },
+  {
+    "archivo": "Griseofulvina.docx",
+    "codigo": "MP042",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Griseofulvina micronizada",
+    "aspecto_texto": "según Eur. Ph. 4, 2002: Polvo muy fino, blanco o blanco amarillento."
+  },
+  {
+    "archivo": "Hidroxicina_clorh.docx",
+    "codigo": "MP043",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Hidroxicina clorhidrato",
+    "aspecto_texto": "según Eur. Ph. 4, 2002: Polvo cristalino, blanco o casi blanco."
+  },
+  {
+    "archivo": "Hidróxido_de_Sodio_sol__Volumétrica_1_N.docx",
+    "codigo": "MP099",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Hidróxido de Sodio sol. volumétrica1 N.",
+    "aspecto_texto": "Líquido claro e incoloro."
+  },
+  {
+    "archivo": "Hidróxido_de_Sodio_sol__Volumétrica_5_N.docx",
+    "codigo": "MP124",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Hidróxido de Sodio sol. Volumétrica 5 N",
+    "aspecto_texto": "Líquido claro e incoloro."
+  },
+  {
+    "archivo": "Hidróxido_de_potasio.docx",
+    "codigo": "MP100",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Hidróxido de potasio",
+    "aspecto_texto": "según Eur. Ph. 4°, 2002. Masas duras, cristalinas, que se presentan como agujas, pellets o piezas irregularmente recortadas, delicuescentes en aire; higroscópicas y absorbentes del dióxido de carbono."
+  },
+  {
+    "archivo": "Imidacloprid.docx",
+    "codigo": "MP045",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Imidacloprid",
+    "aspecto_texto": "polvo amarillento o amarillo oscuro, sin impurezas visibles"
+  },
+  {
+    "archivo": "Lactosa_monohidratada.docx",
+    "codigo": "MP046",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Lactosa monohidratada",
+    "aspecto_texto": "(Según USP 30 pág. 942) Polvo blanco de libre fluidez."
+  },
+  {
+    "archivo": "Laurilsulfato_de_sodio.docx",
+    "codigo": "MP047",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Lauril sulfato de sodio",
+    "aspecto_texto": "según Eur. Ph. 4ª ed, 2002; cristales o polvo blanco o amarillo pálido"
+  },
+  {
+    "archivo": "Levamisol_clorh.docx",
+    "codigo": "MP048",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Levamisol clorhidrato",
+    "aspecto_texto": "según Eur. Ph. 4, 2002: Polvo blanco o casi blanco."
+  },
+  {
+    "archivo": "Levotiroxina_sódica.docx",
+    "codigo": "MP049",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Levotiroxina sódica",
+    "aspecto_texto": "según Eur. Ph. 4, 2002: Polvo fino, cristalino; casi blanco o ligeramente pardoamari-llento."
+  },
+  {
+    "archivo": "Limón_polvo.docx",
+    "codigo": "MP035",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Limón polvo",
+    "aspecto_texto": "Polvo de color blanco. De olor y sabor característicos a limón."
+  },
+  {
+    "archivo": "Mebendazol.docx",
+    "codigo": "MP050",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Mebendazol",
+    "aspecto_texto": "según Eur. Ph. 4, 2002: polvo blanco o ligeramente amarillento."
+  },
+  {
+    "archivo": "Megestrol_acetato.docx",
+    "codigo": "MP051",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Megestrol acetato",
+    "aspecto_texto": "según Eur. Ph. 4, 2002: polvo cristalino; blanco o casi blanco."
+  },
+  {
+    "archivo": "Metabisulfito_de_sodio.docx",
+    "codigo": "MP067",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Metabisulfito de sodio anhidro",
+    "aspecto_texto": "Según Eur. Ph. 4°, 2002: Polvo cristalino blanco o casi blanco, o cristales incoloros. Según USP 30, página 945: Cristales blancos o polvo cristalino blanco a amarillento, con el olor característico del dióxido de azufre."
+  },
+  {
+    "archivo": "Milbemicina_Oxima.docx",
+    "codigo": "MP120",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Milbemicina oxima",
+    "aspecto_texto": "segúnUSP. Polvo amorfo blanco o casi blanco, oligeramente amarillo."
+  },
+  {
+    "archivo": "N_metil_2_pirrolidona.docx",
+    "codigo": "MP057",
+    "codigo_detectado_en_doc": true,
+    "nombre": "N-metil 2 pirrolidona",
+    "aspecto_texto": "Según SMDS: Líquido incoloro y límpido de olor característico, como aminado."
+  },
+  {
+    "archivo": "Nipagín_sódico.docx",
+    "codigo": "MP054",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Nipagín sódico",
+    "aspecto_texto": "según Eur. Ph. 4°, 2002. Polvo cristalino blanco o casi blanco, o cristales incoloros."
+  },
+  {
+    "archivo": "Nipasol_sódico.docx",
+    "codigo": "MP056",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Nipasol sódico",
+    "aspecto_texto": "según Eur. Ph. 4°, 2002. Polvo cristalino blanco o casi blanco, o cristales incoloros."
+  },
+  {
+    "archivo": "Pamoato_de_pirantel.docx",
+    "codigo": "MP065",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Pamoato de pirantel",
+    "aspecto_texto": "sólido de color amarillo a tostado (según USP 30, pág 949."
+  },
+  {
+    "archivo": "metilparabeno.docx",
+    "codigo": "MP053",
+    "codigo_detectado_en_doc": true,
+    "nombre": "METILPARABENO (NIPAGIN)",
+    "aspecto_texto": "según Eur. Ph. 4°, 2002. Polvo cristalino blanco o casi blanco, o cristales incoloros."
+  },
+  {
+    "archivo": "PVP_K-30.docx",
+    "codigo": "MP058",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Kollidón 30 (PVP) K-30",
+    "aspecto_texto": "(según USP 30, pág. 952) Polvo de color blanco a blanco ligeramente cremoso. Es higroscópico."
+  },
+  {
+    "archivo": "Permetrina.docx",
+    "codigo": "MP059",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Permetrina",
+    "aspecto_texto": "líquido viscoso de color amarillento a pardo (puede cristalizar a baja temperatura)"
+  },
+  {
+    "archivo": "Pimobendán.docx",
+    "codigo": "MP122",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Pimobendán",
+    "aspecto_texto": "(Según EP 10.0): Polvo blanco o blanco amarillento, higroscópico."
+  },
+  {
+    "archivo": "Praziquantel.docx",
+    "codigo": "MP062",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Praziquantel",
+    "aspecto_texto": "según Eur. Ph. 4, 2002: Polvo cristalino; blanco o casi blanco."
+  },
+  {
+    "archivo": "Prednisolona_base.docx",
+    "codigo": "MP063",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Prednisolona base",
+    "aspecto_texto": "(según Eur. Pharm. 4ta, 2002): polvo cristalino blanco o casi blanco, higroscópico."
+  },
+  {
+    "archivo": "Propilenglicol.docx",
+    "codigo": "MP064",
+    "codigo_detectado_en_doc": false,
+    "nombre": "PROPILENGLICOL",
+    "aspecto_texto": "según Eur. Ph. 4ª ed, 2002: líquido viscoso, límpido, incoloro e higroscópico. Observaciones:"
+  },
+  {
+    "archivo": "Pïroxicam_mp.docx",
+    "codigo": "MP060",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Piroxicam .",
+    "aspecto_texto": "según Eur. Ph. 4, 2002: Polvo cristalino, blanco o ligeramente amarillo."
+  },
+  {
+    "archivo": "Rojo_Eritrosina.docx",
+    "codigo": "MP033",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Rojo Eritrosina Color Certificado",
+    "aspecto_texto": "Polvo fino, de color marrón rojizo."
+  },
+  {
+    "archivo": "Sacarina_sódica_exc.docx",
+    "codigo": "MP066",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Sacarina sódica",
+    "aspecto_texto": "según Eur. Ph. 4°, 2002.: Polvo blanco, cristalino; o cristales incoloros, eflorescentes en el aire seco."
+  },
+  {
+    "archivo": "Sodio_citrato_exc.docx",
+    "codigo": "MP068",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Sodio citrato",
+    "aspecto_texto": "según Eur. Ph. 4°, 2002.: Polvo blanco, cristalino; o cristales granulares, ligeramente delicuescentes en la humedad del aire."
+  },
+  {
+    "archivo": "Spinosad.docx",
+    "codigo": "MP104",
+    "codigo_detectado_en_doc": true,
+    "nombre": "SPINOSAD",
+    "aspecto_texto": "Polvo cristalino blanco, o casi blanco; sin materia extraña visible."
+  },
+  {
+    "archivo": "Sulfametoxazol_2022.docx",
+    "codigo": "MP073",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Sulfametoxazol",
+    "aspecto_texto": "según Eur. Ph. 4° 2002: polvo cristalino; blanco o casi blanco."
+  },
+  {
+    "archivo": "polygala.docx",
+    "codigo": "MP038",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Polygala extracto fluido",
+    "aspecto_texto": "Liquido límpido, translúcido a temperatura ambiente. D e color pardo y olor característico."
+  },
+  {
+    "archivo": "propilparabeno.docx",
+    "codigo": "MP055",
+    "codigo_detectado_en_doc": true,
+    "nombre": "PROPILPARABENO (NIPASOL)",
+    "aspecto_texto": "según Eur. Ph. 4°, 2002. Polvo cristalino blanco o casi blanco, o cristales incoloros."
+  },
+  {
+    "archivo": "Sulfoguayacolato_de_potasio.docx",
+    "codigo": "MP074",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Sulfoguayacolato de potasio (tiocol)",
+    "aspecto_texto": "(según JP XIII): Polvo cristalino, blanco, inodoro, o con ligero olor característico. Sabor ligeramente amargo."
+  },
+  {
+    "archivo": "Talco_CHINO.docx",
+    "codigo": "MP094",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Talco Chino",
+    "aspecto_texto": "(Según USP 30, pág. 957) Polvo cristalino muy fino; blanco o blanco grisáceo. Es untuoso, se adhiere fácilmente a la piel y está libre de arenosidad."
+  },
+  {
+    "archivo": "Toltrazuril.docx",
+    "codigo": "MP106",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Toltrazuril",
+    "aspecto_texto": "según Veterinary Drug Standard, 2006: Polvo blanco, o casi blanco, cristalino. Inodoro."
+  },
+  {
+    "archivo": "Tolú_sol_conc_para_jarabe_de_SOALJO.docx",
+    "codigo": "MP071",
+    "codigo_detectado_en_doc": true,
+    "nombre": "- Tolú sol. concentrada para jarabe",
+    "aspecto_texto": "(Del proveedor) Solución acuosa, translúcida, de color pardusco. De olor balsámico, vainillado, propio. De sabor dulzaino, característico."
+  },
+  {
+    "archivo": "Triamcinolona_mp.docx",
+    "codigo": "MP075",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Triamcinolona acetónido",
+    "aspecto_texto": "según Eur. Ph. 4, 2002: Polvo cristalino; blanco o casi blanco."
+  },
+  {
+    "archivo": "Triiodotironina_sódica.docx",
+    "codigo": "MP076",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Triiodotironina sódica",
+    "aspecto_texto": "según Eur. Ph. 4, 2002: Polvo blanco; ligeramente coloreado."
+  },
+  {
+    "archivo": "Trimetoprima_2022.docx",
+    "codigo": "MP077",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Trimetoprima",
+    "aspecto_texto": "según Eur. Ph. 4° 2002: polvo cristalino; blanco o blanco amarillento."
+  },
+  {
+    "archivo": "Vainilla__esencia_de.docx",
+    "codigo": "MP036",
+    "codigo_detectado_en_doc": true,
+    "nombre": "Vainilla, Esencia de",
+    "aspecto_texto": "Líquido transparente;de color marrón oscuro. De olor y sabor característicos a vainilla."
+  },
+  {
+    "archivo": "Vaselina_líquida.docx",
+    "codigo": "MP078",
+    "codigo_detectado_en_doc": false,
+    "nombre": "Vaselina líquida",
+    "aspecto_texto": "según Eur. Ph. 4° 2002; según FNA VI.: líquido oleoso; transparente; incoloro; libre de fluorescencia a la luz natural; inodoro e insípido."
+  },
+  {
+    "archivo": "Vivapur_Celulosa_microcristalina_PH_200.docx",
+    "codigo": "MP093",
+    "codigo_detectado_en_doc": true,
+    "nombre": "VIVAPUR Celulosa microcristalina PH 200",
+    "aspecto_texto": "(Según USP 30, pág. 923) Polvo fino; de color blanco o casi blanco."
+  },
+  {
+    "archivo": "Vivapur_MCG_811P.docx",
+    "codigo": "MP103",
+    "codigo_detectado_en_doc": true,
+    "nombre": "VIVAPUR MCG 811P (Celulosa",
+    "aspecto_texto": "(Según USP 30, pág. 923) Polvo grueso a fino; de color blanco a casi blanco, inodoro e insípido. Se hincha en agua, produciendo una dispersión o un gel blanco y opaco cuando se dispersa"
+  }
+]
