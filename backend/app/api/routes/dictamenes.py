@@ -46,8 +46,9 @@ router = APIRouter(prefix="/api/dictamen", tags=["Dictamen y Liberación"])
 # muestra aparecería como "pendiente" sin tener ningún análisis real
 # cargado).
 #
-# Especificaciones sin NINGÚN ensayo de etapa 'analisis' (solo checklist de
-# 'muestreo' -- ver app/services/especificaciones.py) son un caso aparte: no
+# Especificaciones sin NINGÚN ensayo de categoría con momento 'analisis'
+# (solo checklist de categorías con momento 'muestreo' -- ver
+# app/services/especificaciones.py) son un caso aparte: no
 # hay envío ni protocolo posible, así que la condición de completitud de
 # arriba (envíos + OT) no aplica -- para esas, alcanza con que el checklist
 # de 'muestreo' (lims_resultados_muestreo) esté completo. La rama "normal"
@@ -69,7 +70,8 @@ WHERE_MUESTRA_PENDIENTE_DICTAMEN = """
           (
               EXISTS (
                   SELECT 1 FROM lims_especificacion_ensayos see_a
-                  WHERE see_a.id_especificacion = m.id_especificacion AND see_a.etapa = 'analisis' AND see_a.activo = 1
+                  INNER JOIN lims_categorias_ensayo cat_a ON cat_a.id_categoria = see_a.id_categoria
+                  WHERE see_a.id_especificacion = m.id_especificacion AND cat_a.momento = 'analisis' AND see_a.activo = 1
               )
               AND NOT EXISTS (
                   SELECT 1 FROM lims_envios e
@@ -118,16 +120,19 @@ WHERE_MUESTRA_PENDIENTE_DICTAMEN = """
               m.id_especificacion IS NOT NULL
               AND NOT EXISTS (
                   SELECT 1 FROM lims_especificacion_ensayos see_b
-                  WHERE see_b.id_especificacion = m.id_especificacion AND see_b.etapa = 'analisis' AND see_b.activo = 1
+                  INNER JOIN lims_categorias_ensayo cat_b ON cat_b.id_categoria = see_b.id_categoria
+                  WHERE see_b.id_especificacion = m.id_especificacion AND cat_b.momento = 'analisis' AND see_b.activo = 1
               )
               AND EXISTS (
                   SELECT 1 FROM lims_especificacion_ensayos see_c
-                  WHERE see_c.id_especificacion = m.id_especificacion AND see_c.etapa = 'muestreo' AND see_c.activo = 1
+                  INNER JOIN lims_categorias_ensayo cat_c ON cat_c.id_categoria = see_c.id_categoria
+                  WHERE see_c.id_especificacion = m.id_especificacion AND cat_c.momento = 'muestreo' AND see_c.activo = 1
               )
               AND NOT EXISTS (
                   SELECT 1 FROM lims_especificacion_ensayos see_d
+                  INNER JOIN lims_categorias_ensayo cat_d ON cat_d.id_categoria = see_d.id_categoria
                   LEFT JOIN lims_resultados_muestreo rm ON rm.id_espec_ensayo = see_d.id_espec_ensayo AND rm.id_muestra = m.id_muestra
-                  WHERE see_d.id_especificacion = m.id_especificacion AND see_d.etapa = 'muestreo' AND see_d.activo = 1
+                  WHERE see_d.id_especificacion = m.id_especificacion AND cat_d.momento = 'muestreo' AND see_d.activo = 1
                     AND rm.id_resultado IS NULL
               )
           )

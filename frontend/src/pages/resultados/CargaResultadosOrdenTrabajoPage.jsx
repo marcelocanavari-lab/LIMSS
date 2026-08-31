@@ -7,13 +7,6 @@ import { maestrosApi } from '../../api/maestros';
 import { muestrasApi } from '../../api/muestras';
 import { ApiError, abrirPdfConAuth } from '../../api/client';
 
-const CAMPO_FISICO_VACIO = {
-  identificacion_contenedor: '', fecha_vencimiento_real: '', sin_vencimiento_confirmado: false,
-  fecha_reanalisis_real: '',
-  aspecto_mp: '', materias_extranas: '', olor: '', color: '',
-  observaciones_muestreo: '', nro_bultos_muestreados: '',
-};
-
 const BADGE_TIPO_MUESTRA = {
   analisis: 'badge-info',
   contramuestra: 'badge-warn',
@@ -37,8 +30,7 @@ export default function CargaResultadosOrdenTrabajoPage() {
   const navigate = useNavigate();
 
   const [datos, setDatos] = useState(null);
-  const [camposFisicos, setCamposFisicos] = useState(CAMPO_FISICO_VACIO);
-  const [checklist, setChecklist] = useState([]); // [{ id_espec_ensayo, orden, nombre_ensayo, especificacion_texto, valor_cualitativo }]
+  const [checklist, setChecklist] = useState([]); // [{ id_espec_ensayo, orden, nombre_ensayo, especificacion_texto, valor_cualitativo, id_categoria, categoria_codigo, categoria_nombre }]
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
@@ -69,27 +61,6 @@ export default function CargaResultadosOrdenTrabajoPage() {
       .obtenerEnsayosParaOrden(idSolicitud)
       .then(async (data) => {
         setDatos(data);
-        const df = data.datos_fisicos || {};
-        // Precarga con el vencimiento que ya trae el ERP (resuelto al crear
-        // la solicitud) como valor sugerido/editable -- pero NUNCA pisa un
-        // valor que la persona ya haya confirmado a mano en una carga
-        // anterior de esta misma pantalla (df.fecha_vencimiento_real). Si
-        // el ERP no tenía nada (sentinel o NULL, ya viene limpio) y tampoco
-        // hay nada confirmado todavía, el campo arranca vacío -- hay que
-        // revisarlo y decidir, no queda con un valor puesto sin que nadie
-        // lo haya mirado.
-        setCamposFisicos({
-          identificacion_contenedor: df.identificacion_contenedor || '',
-          fecha_vencimiento_real: df.fecha_vencimiento_real || data.fecha_vencimiento_sugerida || '',
-          sin_vencimiento_confirmado: !!df.sin_vencimiento_confirmado,
-          fecha_reanalisis_real: df.fecha_reanalisis_real || '',
-          aspecto_mp: df.aspecto_mp || '',
-          materias_extranas: df.materias_extranas || '',
-          olor: df.olor || '',
-          color: df.color || '',
-          observaciones_muestreo: df.observaciones_muestreo || '',
-          nro_bultos_muestreados: df.nro_bultos_muestreados ?? '',
-        });
         setChecklist(data.checklist_muestreo || []);
 
         if (data.id_especificacion) {
@@ -124,10 +95,6 @@ export default function CargaResultadosOrdenTrabajoPage() {
   }, [idSolicitud]);
 
   const soloLectura = (datos && datos.estado !== 'pendiente') || !!resultado;
-
-  function actualizarCampoFisico(campo, valor) {
-    setCamposFisicos((prev) => ({ ...prev, [campo]: valor }));
-  }
 
   function actualizarChecklist(idEspecEnsayo, valor) {
     setChecklist((prev) => prev.map((it) => (
@@ -178,11 +145,6 @@ export default function CargaResultadosOrdenTrabajoPage() {
         return;
       }
     }
-    if (!camposFisicos.fecha_vencimiento_real && !camposFisicos.sin_vencimiento_confirmado) {
-      setError('Confirmá la fecha de vencimiento del material (revisá el envase físico) o marcá que no tiene vencimiento.');
-      return;
-    }
-
     setGuardando(true);
     try {
       const muestrasBody = [
@@ -200,18 +162,6 @@ export default function CargaResultadosOrdenTrabajoPage() {
         })),
       ];
       const resp = await solicitudesMuestreoApi.confirmarOrdenTrabajo(idSolicitud, {
-        datos_fisicos: {
-          identificacion_contenedor: camposFisicos.identificacion_contenedor.trim() || null,
-          fecha_vencimiento_real: camposFisicos.fecha_vencimiento_real || null,
-          sin_vencimiento_confirmado: camposFisicos.sin_vencimiento_confirmado,
-          fecha_reanalisis_real: camposFisicos.fecha_reanalisis_real || null,
-          aspecto_mp: camposFisicos.aspecto_mp.trim() || null,
-          materias_extranas: camposFisicos.materias_extranas.trim() || null,
-          olor: camposFisicos.olor.trim() || null,
-          color: camposFisicos.color.trim() || null,
-          observaciones_muestreo: camposFisicos.observaciones_muestreo.trim() || null,
-          nro_bultos_muestreados: camposFisicos.nro_bultos_muestreados !== '' ? Number(camposFisicos.nro_bultos_muestreados) : null,
-        },
         checklist_muestreo: checklist
           .filter((it) => it.valor_cualitativo)
           .map((it) => ({ id_espec_ensayo: it.id_espec_ensayo, valor_cualitativo: it.valor_cualitativo })),
@@ -319,21 +269,26 @@ export default function CargaResultadosOrdenTrabajoPage() {
                 {impresoras.length === 0 && !mensajeDirecto ? (
                   <div className="state-block"><span className="spinner" /></div>
                 ) : impresoras.length === 0 ? null : (
-                  <div className="field">
-                    <label className="field-label" htmlFor="impresora">Impresora</label>
-                    <select
-                      id="impresora"
-                      className="field-input"
-                      value={idImpresora}
-                      onChange={(e) => setIdImpresora(e.target.value)}
-                      disabled={imprimiendo}
-                    >
-                      <option value="">Seleccioná una impresora...</option>
-                      {impresoras.map((imp) => (
-                        <option key={imp.id_impresora} value={imp.id_impresora}>{imp.nombre} ({imp.modelo})</option>
-                      ))}
-                    </select>
-                  </div>
+                  <>
+                    <div className="alert alert-warn" style={{ marginBottom: 'var(--sp-3)' }}>
+                      Verificá que la impresora tenga cargado el rollo de etiquetas BLANCAS antes de continuar.
+                    </div>
+                    <div className="field">
+                      <label className="field-label" htmlFor="impresora">Impresora</label>
+                      <select
+                        id="impresora"
+                        className="field-input"
+                        value={idImpresora}
+                        onChange={(e) => setIdImpresora(e.target.value)}
+                        disabled={imprimiendo}
+                      >
+                        <option value="">Seleccioná una impresora...</option>
+                        {impresoras.map((imp) => (
+                          <option key={imp.id_impresora} value={imp.id_impresora}>{imp.nombre} ({imp.modelo})</option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
                 )}
 
                 {mensajeDirecto && (
@@ -399,81 +354,6 @@ export default function CargaResultadosOrdenTrabajoPage() {
           <div className="card" style={{ marginBottom: 'var(--sp-4)' }}>
             <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Checklist de muestreo</h2>
             <ChecklistMuestreo checklist={checklist} onChange={actualizarChecklist} disabled={guardando || soloLectura} />
-          </div>
-
-          <div className="card" style={{ marginBottom: 'var(--sp-4)' }}>
-            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Datos físicos del muestreo</h2>
-            <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
-              <div className="field" style={{ flex: '1 1 200px' }}>
-                <label className="field-label">Identificación del contenedor</label>
-                <input className="field-input" value={camposFisicos.identificacion_contenedor} onChange={(e) => actualizarCampoFisico('identificacion_contenedor', e.target.value)} disabled={guardando || soloLectura} />
-              </div>
-              <div className="field" style={{ flex: '1 1 260px' }}>
-                <label className="field-label">Fecha de vencimiento real *</label>
-                <input
-                  className="field-input"
-                  type="date"
-                  value={camposFisicos.fecha_vencimiento_real}
-                  onChange={(e) => {
-                    const valor = e.target.value;
-                    // Cargar una fecha real y tildar "no tiene vencimiento"
-                    // son mutuamente excluyentes -- si se escribe una fecha,
-                    // se destilda el checkbox automáticamente.
-                    setCamposFisicos((prev) => ({ ...prev, fecha_vencimiento_real: valor, sin_vencimiento_confirmado: valor ? false : prev.sin_vencimiento_confirmado }));
-                  }}
-                  disabled={guardando || soloLectura || camposFisicos.sin_vencimiento_confirmado}
-                />
-                {datos?.fecha_vencimiento_sugerida && camposFisicos.fecha_vencimiento_real === datos.fecha_vencimiento_sugerida && (
-                  <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--ink-2)' }}>Sugerido por el ERP -- confirmá o corregí si no coincide con el envase.</span>
-                )}
-                <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', marginTop: 'var(--sp-2)', fontSize: 'var(--fs-sm)', cursor: soloLectura ? 'default' : 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={camposFisicos.sin_vencimiento_confirmado}
-                    onChange={(e) => {
-                      const marcado = e.target.checked;
-                      setCamposFisicos((prev) => ({ ...prev, sin_vencimiento_confirmado: marcado, fecha_vencimiento_real: marcado ? '' : prev.fecha_vencimiento_real }));
-                    }}
-                    disabled={guardando || soloLectura}
-                  />
-                  Este material no tiene fecha de vencimiento
-                </label>
-              </div>
-              <div className="field" style={{ flex: '1 1 200px' }}>
-                <label className="field-label">Fecha de reanálisis real</label>
-                <input className="field-input" type="date" value={camposFisicos.fecha_reanalisis_real} onChange={(e) => actualizarCampoFisico('fecha_reanalisis_real', e.target.value)} disabled={guardando || soloLectura} />
-              </div>
-              <div className="field" style={{ flex: '1 1 200px' }}>
-                <label className="field-label">Aspecto de la MP</label>
-                <input className="field-input" value={camposFisicos.aspecto_mp} onChange={(e) => actualizarCampoFisico('aspecto_mp', e.target.value)} disabled={guardando || soloLectura} />
-              </div>
-              <div className="field" style={{ flex: '1 1 200px' }}>
-                <label className="field-label">Materias extrañas</label>
-                <input className="field-input" value={camposFisicos.materias_extranas} onChange={(e) => actualizarCampoFisico('materias_extranas', e.target.value)} disabled={guardando || soloLectura} />
-              </div>
-              <div className="field" style={{ flex: '1 1 200px' }}>
-                <label className="field-label">Olor</label>
-                <input className="field-input" value={camposFisicos.olor} onChange={(e) => actualizarCampoFisico('olor', e.target.value)} disabled={guardando || soloLectura} />
-              </div>
-              <div className="field" style={{ flex: '1 1 200px' }}>
-                <label className="field-label">Color</label>
-                <input className="field-input" value={camposFisicos.color} onChange={(e) => actualizarCampoFisico('color', e.target.value)} disabled={guardando || soloLectura} />
-              </div>
-              <div className="field" style={{ flex: '1 1 200px' }}>
-                <label className="field-label">N° bultos muestreados</label>
-                <input className="field-input" type="number" step="1" value={camposFisicos.nro_bultos_muestreados} onChange={(e) => actualizarCampoFisico('nro_bultos_muestreados', e.target.value)} disabled={guardando || soloLectura} />
-              </div>
-            </div>
-            <div className="field" style={{ marginTop: 'var(--sp-3)' }}>
-              <label className="field-label">Observaciones</label>
-              <textarea
-                className="field-input"
-                style={{ height: 70, paddingTop: 'var(--sp-2)' }}
-                value={camposFisicos.observaciones_muestreo}
-                onChange={(e) => actualizarCampoFisico('observaciones_muestreo', e.target.value)}
-                disabled={guardando || soloLectura}
-              />
-            </div>
           </div>
 
           <div className="card" style={{ marginBottom: 'var(--sp-4)' }}>

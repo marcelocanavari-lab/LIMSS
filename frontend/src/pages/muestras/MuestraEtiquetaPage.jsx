@@ -97,21 +97,26 @@ export default function MuestraEtiquetaPage() {
                 {impresoras.length === 0 && !mensajeDirecto ? (
                   <div className="state-block"><span className="spinner" /></div>
                 ) : impresoras.length === 0 ? null : (
-                  <div className="field">
-                    <label className="field-label" htmlFor="impresora">Impresora</label>
-                    <select
-                      id="impresora"
-                      className="field-input"
-                      value={idImpresora}
-                      onChange={(e) => setIdImpresora(e.target.value)}
-                      disabled={imprimiendo}
-                    >
-                      <option value="">Seleccioná una impresora...</option>
-                      {impresoras.map((imp) => (
-                        <option key={imp.id_impresora} value={imp.id_impresora}>{imp.nombre} ({imp.modelo})</option>
-                      ))}
-                    </select>
-                  </div>
+                  <>
+                    <div className="alert alert-warn" style={{ marginBottom: 'var(--sp-3)' }}>
+                      Verificá que la impresora tenga cargado el rollo de etiquetas BLANCAS antes de continuar.
+                    </div>
+                    <div className="field">
+                      <label className="field-label" htmlFor="impresora">Impresora</label>
+                      <select
+                        id="impresora"
+                        className="field-input"
+                        value={idImpresora}
+                        onChange={(e) => setIdImpresora(e.target.value)}
+                        disabled={imprimiendo}
+                      >
+                        <option value="">Seleccioná una impresora...</option>
+                        {impresoras.map((imp) => (
+                          <option key={imp.id_impresora} value={imp.id_impresora}>{imp.nombre} ({imp.modelo})</option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
                 )}
 
                 {mensajeDirecto && (

@@ -254,9 +254,10 @@ def construir_recorrido(cursor, id_muestra: int) -> Optional[RecorridoResponse]:
                r.valor_cualitativo, r.dentro_especificacion
         FROM lims_especificacion_ensayos se
         INNER JOIN lims_ensayos_maestro em ON em.id_ensayo_maestro = se.id_ensayo_maestro
+        INNER JOIN lims_categorias_ensayo cat ON cat.id_categoria = se.id_categoria
         LEFT JOIN lims_resultados_muestreo r ON r.id_espec_ensayo = se.id_espec_ensayo AND r.id_muestra = ?
-        WHERE se.id_especificacion = ? AND se.etapa = 'muestreo' AND se.activo = 1
-        ORDER BY se.orden
+        WHERE se.id_especificacion = ? AND cat.momento = 'muestreo' AND se.activo = 1
+        ORDER BY cat.orden, se.orden
         """,
         id_muestra, muestra.id_especificacion,
     )

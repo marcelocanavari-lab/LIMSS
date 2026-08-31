@@ -69,7 +69,13 @@ class SolicitudMuestreoCreate(BaseModel):
     # (buscar_lineas_ir resuelve por texto) -- válido solo cuando no hay
     # colisión, que es el caso normal.
     erp_n01id: Optional[int] = None
-    id_laboratorio: int
+    # Rediseño de esta pantalla: el laboratorio de análisis ya NO se elige
+    # acá -- se resuelve más adelante, por ensayo, al generar el envío (ver
+    # EnvioFormPage.jsx/generar_remito, que ya eligen laboratorio de forma
+    # independiente de la solicitud). Optional en vez de sacado del schema
+    # por compatibilidad hacia atrás con clientes viejos; crear_solicitud ya
+    # no lo exige ni lo valida.
+    id_laboratorio: Optional[int] = None
     id_muestreador: int
     observaciones: Optional[str] = Field(None, max_length=500)
     # Proveedor: lo elige QA con el buscador contra el ERP (GET /api/erp/
@@ -86,6 +92,14 @@ class SolicitudMuestreoCreate(BaseModel):
     # el usuario la puede corregir antes de confirmar -- si no manda nada,
     # se usa el valor del ERP como antes (ver crear_solicitud).
     fecha_vencimiento: Optional[date] = None
+    # Checkbox "Este material no tiene fecha de vencimiento" en el
+    # formulario unificado -- mismo patrón UX que sin_vencimiento_confirmado
+    # (DatosFisicosMuestreo, Ejecutar Muestreo), pero un mecanismo
+    # INDEPENDIENTE, aplicado al vencimiento del ingreso (fecha_vencimiento,
+    # dato del proveedor) en vez de al confirmado después durante el
+    # muestreo físico (fecha_vencimiento_real) -- ver migrations_solicitud_
+    # sin_vencimiento_ingreso.sql.
+    sin_vencimiento_ingreso_confirmado: bool = False
     fecha_reanalisis: Optional[date] = None
     pais_origen: Optional[str] = Field(None, max_length=100)
     nro_bultos: Optional[int] = None
@@ -96,6 +110,16 @@ class SolicitudMuestreoCreate(BaseModel):
     grupos_bultos: list[BultoGrupoInput] = []
     metodologia_analisis: Optional[str] = Field(None, max_length=200)
     fabricante: Optional[str] = Field(None, max_length=200)
+    # Recepción del proveedor (Libro de Ingresos) -- movidos acá desde
+    # Completar Datos: el formulario de esta pantalla se unificó con el de
+    # completar-datos en un solo paso (ver PUT .../completar-datos, que
+    # conserva estos mismos campos para las solicitudes del agente, que no
+    # pasan por acá). Mismo criterio que el resto de "datos manuales del
+    # ingreso" de arriba: opcionales a nivel de schema.
+    fecha_factura_proveedor: Optional[date] = None
+    numero_factura_proveedor: Optional[str] = Field(None, max_length=50)
+    id_usuario_recibio: Optional[int] = None
+    id_usuario_rotulo: Optional[int] = None
     # Si ya existe una solicitud activa (no anulada) para este mismo IR,
     # crear_solicitud devuelve 409 con los datos de esa solicitud en vez de
     # crear -- a menos que venga en True, que es como el frontend confirma
@@ -136,6 +160,7 @@ class SolicitudMuestreoResponse(BaseModel):
     proveedor_nombre: Optional[str] = None
     fecha_ingreso: Optional[date] = None
     fecha_vencimiento: Optional[date] = None
+    sin_vencimiento_ingreso_confirmado: bool = False
     cantidad_ingresada: Optional[float] = None
     unidad_cantidad: Optional[str] = None
     # Cargados a mano por QA al crear la solicitud.
@@ -197,15 +222,23 @@ class SolicitudMuestreoResponse(BaseModel):
 class SolicitudMuestreoCompletar(BaseModel):
     """Completa los datos que una solicitud generada por el agente (ver
     SolicitudMuestreoResponse.origen) no puede resolver solo con el ERP --
-    laboratorio/muestreador (el agente los deja en blanco a propósito, ver
+    muestreador (el agente lo deja en blanco a propósito, ver
     app/services/agente_muestreo.py) y los datos manuales del ingreso que en
     el alta manual carga QA a mano (lote del proveedor, país de origen,
     fecha de reanálisis, bultos, metodología, fabricante). Solo toca los
     campos que vengan con valor -- si un campo no se manda, se conserva el
-    que ya tenía la solicitud."""
-    id_laboratorio: Optional[int] = None
+    que ya tenía la solicitud.
+
+    Sin id_laboratorio: rediseño de esta pantalla, el laboratorio ya no se
+    elige acá para ninguno de los dos orígenes (manual o agente) -- se
+    resuelve más adelante, por ensayo, al generar el envío. Una solicitud
+    del agente sin laboratorio auto-resuelto simplemente queda sin ese dato
+    para siempre (no bloquea nada río abajo, ver _verificar_completa_para_
+    ejecutar/_obtener_ensayos, que ya no lo exigen)."""
     id_muestreador: Optional[int] = None
     lote_proveedor: Optional[str] = Field(None, min_length=1, max_length=20)
+    fecha_vencimiento: Optional[date] = None
+    sin_vencimiento_ingreso_confirmado: Optional[bool] = None
     fecha_reanalisis: Optional[date] = None
     pais_origen: Optional[str] = Field(None, max_length=100)
     nro_bultos: Optional[int] = None
@@ -240,6 +273,12 @@ class EnsayoSolicitudMuestreo(BaseModel):
     valor_requerido: Optional[str] = None
     especificacion_texto: Optional[str] = None
     obligatorio: bool = False
+    # Ya no se elige un único laboratorio al crear la solicitud (ver
+    # SolicitudMuestreoCreate.id_laboratorio) -- _obtener_ensayos ahora trae
+    # los ensayos de análisis de TODOS los laboratorios de la especificación,
+    # así que cada uno necesita su propio nombre acá para poder mostrarlos
+    # agrupados/identificados en la Orden de Trabajo impresa.
+    laboratorio_nombre: Optional[str] = None
     # Resultado ya cargado en la Orden de Trabajo digital, si lo hay (None =
     # todavía no se confirmó el muestreo para esta solicitud).
     valor_numerico: Optional[float] = None
@@ -294,8 +333,9 @@ class DatosFisicosMuestreo(BaseModel):
 
 
 class ChecklistMuestreoItem(BaseModel):
-    """Ítem del checklist físico de muestreo (etapa='muestreo' en
-    lims_especificacion_ensayos), configurable por especificación -- ver
+    """Ítem del checklist físico de muestreo (categorías con momento
+    'muestreo' en lims_categorias_ensayo -- Aspecto del Contenedor y
+    Aspectos de la Materia Prima), configurable por especificación -- ver
     lims_resultados_muestreo. Reemplaza al set fijo de 4 campos
     (aspecto_externo/cierre/aspecto_interno/precintos) para solicitudes
     ejecutadas de acá en adelante."""
@@ -306,6 +346,13 @@ class ChecklistMuestreoItem(BaseModel):
     # Respuesta ya cargada, si la solicitud ya fue ejecutada (None = todavía
     # no se confirmó el muestreo).
     valor_cualitativo: Optional[str] = None
+    # Para que el frontend pueda agrupar la lista plana en secciones por
+    # categoría (Contenedor vs. Materia Prima) -- ver ChecklistMuestreo.jsx.
+    # codigo para lógica ("contenedor"/"materia_prima", estable), nombre
+    # para mostrar (editable desde Datos Maestros sin tocar código).
+    id_categoria: int
+    categoria_codigo: str
+    categoria_nombre: str
 
 
 class ChecklistMuestreoRespuesta(BaseModel):
@@ -337,7 +384,11 @@ class EnsayosParaOrdenResponse(BaseModel):
 
 
 class OrdenTrabajoDigitalBody(BaseModel):
-    datos_fisicos: DatosFisicosMuestreo
+    # "Datos físicos del muestreo" se sacó de Ejecutar Muestreo (ningún
+    # campo tenía reemplazo real, pero se optó por eliminarlo igual --
+    # ver sesión de auditoría de duplicados) -- default_factory así el
+    # frontend ya no necesita mandar esta clave.
+    datos_fisicos: DatosFisicosMuestreo = Field(default_factory=DatosFisicosMuestreo)
     checklist_muestreo: list[ChecklistMuestreoRespuesta] = []
     # Confirmación de "Muestras a tomar" (estándar de la especificación +
     # eventuales filas ad-hoc) -- se guarda en lims_solicitud_muestras al

@@ -1097,6 +1097,141 @@ def generar_sbpl_etiqueta_estado(datos: dict, titulo: str, ancho_mm: int, alto_m
     return STX + b"".join(comandos) + ETX
 
 
+# Alto de gap entre las 4 grillas dobles de la etiqueta complementaria (ver
+# generar_sbpl_etiqueta_complementaria) -- separa visualmente cada par
+# saldo/iniciales del siguiente, para que no se lean como una sola grilla
+# corrida de 8 filas.
+GAP_ENTRE_GRILLAS_COMPLEMENTARIA_MM = 2
+
+
+def generar_sbpl_etiqueta_complementaria(datos: dict, ancho_mm: int, alto_mm: int, dpi: int, cantidad_copias: int = 1) -> bytes:
+    """Etiqueta "APROBADO -- COMPLEMENTARIA": complemento de espacio para
+    especificaciones con muchos usos, cuando la grilla de 6 casilleros de
+    la etiqueta principal (ver generar_sbpl_etiqueta_estado) no alcanza --
+    se ofrece solo para especificaciones con requiere_etiqueta_
+    complementaria=1 (checkbox en la ficha de especificación, Datos
+    Maestros), es la excepción, no la regla.
+
+    Solo lleva identificación básica (código de artículo + IR/LOTE, para
+    poder ubicar a qué bulto/artículo corresponde esta etiqueta si se
+    despega y queda separada de la etiqueta principal) y 4 repeticiones
+    del mismo par grilla de 6 casilleros de saldo + 6 de iniciales que ya
+    usa generar_sbpl_etiqueta_estado -- 24 casilleros de saldo en total,
+    con sus 24 de iniciales correspondientes. Sin QR, sin código de
+    barras, sin el resto de los campos de la etiqueta principal (nombre
+    completo, fechas, cantidad, laboratorio, logo): es un complemento de
+    espacio, no una etiqueta completa aparte -- toda la altura disponible
+    se dedica a las 4 grillas.
+
+    `datos`: erp_codart, nro_ir, etiqueta_referencia ("IR"/"LOTE"/"Ref",
+    ver app/services/formato.py)."""
+    ancho_pt = mm_a_puntos(ancho_mm, dpi)
+    alto_pt = mm_a_puntos(alto_mm, dpi)
+
+    margen = mm_a_puntos(3, dpi)
+    salto = mm_a_puntos(5, dpi)
+    v = margen
+
+    comandos = [_cmd("A")]
+
+    correccion_h_pt = mm_a_puntos(CORRECCION_DERECHA_MM, dpi) - ANCHO_CARACTER_XM_PT
+    signo_correccion_h = "+" if correccion_h_pt >= 0 else "-"
+    comandos.append(_cmd("A3", f"V0000H{signo_correccion_h}{abs(correccion_h_pt):04d}"))
+    comandos.append(_cmd("A1", f"{alto_pt:04d}{ancho_pt:04d}"))
+
+    def campo(texto: str, avance: int = None):
+        """Mismo criterio de centrado que generar_sbpl_etiqueta_estado --
+        acá siempre a 1x (MULTIPLICADOR_BASE): a diferencia de esa etiqueta,
+        esta no tiene margen de sobra para campos grandes, la prioridad es
+        maximizar el lugar de las 4 grillas."""
+        nonlocal v
+        if texto:
+            ancho_texto_pt = len(texto) * ANCHO_CARACTER_XM_PT * MULTIPLICADOR_BASE
+            h_campo = max(margen, (ancho_pt - ancho_texto_pt) // 2)
+            comandos.append(_cmd("V", f"{v:04d}"))
+            comandos.append(_cmd("H", f"{h_campo:04d}"))
+            comandos.append(_cmd("L", f"{MULTIPLICADOR_BASE:02d}{MULTIPLICADOR_BASE:02d}"))
+            comandos.append(_cmd("XM", texto))
+        v += avance if avance is not None else salto
+
+    # Encabezado de identificación (2 renglones, sin título de la etiqueta
+    # principal salvo el nombre de este estado, para dejar clara la
+    # asociación si se despega y queda separada) -- etiqueta_referencia
+    # ("IR"/"LOTE"/"Ref") ya viene resuelta por el llamador, mismo criterio
+    # que generar_sbpl_etiqueta_estado.
+    campo("APROBADO - COMPLEMENTARIA", avance=salto)
+    etiqueta_ref = datos.get("etiqueta_referencia") or "IR"
+    campo(f"Cód: {_texto(datos.get('erp_codart'))}   {etiqueta_ref} N°: {_texto(datos.get('nro_ir'))}", avance=salto)
+
+    diagnostico = []  # mismo criterio de diagnóstico que generar_sbpl_etiqueta_estado
+
+    # 4 repeticiones del par grilla de 6 casilleros de saldo + 6 de
+    # iniciales (mismo mecanismo de <FW> "Rule" que generar_sbpl_etiqueta_
+    # estado: 7 verticales que atraviesan las 2 filas + 3 horizontales por
+    # grilla). ALTO_FILA_SALDO_PT es el mismo alto de casillero que usa esa
+    # etiqueta (ahí se llama AVANCE_2X, por ser también el avance de un
+    # campo a 2x) -- mismo tamaño de casillero en las dos etiquetas, para
+    # que se vean como parte del mismo sistema.
+    CANTIDAD_CASILLEROS = 6
+    ALTO_FILA_SALDO_PT = salto + ANCHO_CARACTER_XM_PT
+    alto_grilla_iniciales_pt = ALTO_FILA_SALDO_PT // 2
+    alto_total_grillas_pt = ALTO_FILA_SALDO_PT + alto_grilla_iniciales_pt
+    ancho_grilla_pt = ancho_pt - 2 * margen
+    h_grilla = margen
+    gap_entre_grillas_pt = mm_a_puntos(GAP_ENTRE_GRILLAS_COMPLEMENTARIA_MM, dpi)
+
+    for indice_grilla in range(4):
+        v_grilla = v
+        for v_linea_h in (v_grilla, v_grilla + ALTO_FILA_SALDO_PT, v_grilla + alto_total_grillas_pt):
+            comandos.append(_cmd("V", f"{v_linea_h:04d}"))
+            comandos.append(_cmd("H", f"{h_grilla:04d}"))
+            comandos.append(_cmd("FW", f"{GROSOR_RECUADRO_PT:02d}H{ancho_grilla_pt:04d}"))
+        for i in range(CANTIDAD_CASILLEROS + 1):
+            h_linea = h_grilla + round(i * ancho_grilla_pt / CANTIDAD_CASILLEROS)
+            comandos.append(_cmd("V", f"{v_grilla:04d}"))
+            comandos.append(_cmd("H", f"{h_linea:04d}"))
+            comandos.append(_cmd("FW", f"{GROSOR_RECUADRO_PT:02d}V{alto_total_grillas_pt:04d}"))
+        diagnostico.append((f"Grilla {indice_grilla + 1}/4 (saldo)", v_grilla, h_grilla, ALTO_FILA_SALDO_PT, ancho_grilla_pt))
+        diagnostico.append((
+            f"Grilla {indice_grilla + 1}/4 (iniciales)", v_grilla + ALTO_FILA_SALDO_PT, h_grilla,
+            alto_grilla_iniciales_pt, ancho_grilla_pt,
+        ))
+        v = v_grilla + alto_total_grillas_pt + gap_entre_grillas_pt
+
+    comandos.append(_cmd("Q", str(cantidad_copias)))
+    comandos.append(_cmd("Z"))
+
+    # Mismo diagnóstico de posiciones/superposición/desborde que
+    # generar_sbpl_etiqueta_estado -- confirma por log, sin depender solo
+    # de mirar la impresión física, que las 4 grillas entran completas
+    # dentro del alto de la etiqueta y no se pisan entre sí.
+    def _se_superponen(a, b):
+        _, av, ah, aalto, aancho = a
+        _, bv, bh, balto, bancho = b
+        return av < bv + balto and bv < av + aalto and ah < bh + bancho and bh < ah + aancho
+
+    logger.info("=== Diagnóstico de posiciones SBPL 'APROBADO - COMPLEMENTARIA' -- %dmm x %dmm = %dpt alto x %dpt ancho (dpi=%d) ===", ancho_mm, alto_mm, alto_pt, ancho_pt, dpi)
+    for idx, item in enumerate(diagnostico):
+        nombre, v_elem, h_elem, alto_elem, ancho_elem = item
+        borde_inferior = v_elem + alto_elem
+        borde_derecho = h_elem + ancho_elem
+        avisos = []
+        if borde_inferior > alto_pt:
+            avisos.append("SE PASA DEL ALTO TOTAL")
+        if borde_derecho > ancho_pt:
+            avisos.append("SE PASA DEL ANCHO TOTAL")
+        choques = [otro[0] for j, otro in enumerate(diagnostico) if j != idx and _se_superponen(item, otro)]
+        if choques:
+            avisos.append(f"CHOCA CON {choques}")
+        logger.info(
+            "  %-24s V=%4d H=%4d alto=%4d ancho=%4d V+alto=%4d H+ancho=%4d%s",
+            nombre, v_elem, h_elem, alto_elem, ancho_elem, borde_inferior, borde_derecho,
+            f"  <-- {', '.join(avisos)}" if avisos else "",
+        )
+
+    return STX + b"".join(comandos) + ETX
+
+
 _TIMEOUT_RED_DIRECTA_SEGUNDOS = 10
 
 

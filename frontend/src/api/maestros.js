@@ -17,6 +17,8 @@ export const maestrosApi = {
   revisarEspecificacion: (id) => api.post(`/api/maestros/especificaciones/${id}/revisar`),
   copiarEspecificacion: (id, data) => api.post(`/api/maestros/especificaciones/${id}/copiar`, data),
   editarCantidadesEspecificacion: (id, data) => api.put(`/api/maestros/especificaciones/${id}/cantidades`, data),
+  editarEtiquetaComplementariaEspecificacion: (id, cantidadEtiquetasComplementarias) =>
+    api.put(`/api/maestros/especificaciones/${id}/etiqueta-complementaria`, { cantidad_etiquetas_complementarias: cantidadEtiquetasComplementarias }),
 
   // Muestras definidas por especificación
   listarMuestrasEspecificacion: (id) => api.get(`/api/maestros/especificaciones/${id}/muestras`),
@@ -25,6 +27,11 @@ export const maestrosApi = {
     api.put(`/api/maestros/especificaciones/${id}/muestras/${idMuestra}`, data),
   eliminarMuestraEspecificacion: (id, idMuestra) =>
     api.del(`/api/maestros/especificaciones/${id}/muestras/${idMuestra}`),
+
+  // Categorías de ensayo (Análisis de laboratorio / Aspecto del Contenedor /
+  // Aspectos de la Materia Prima) -- selector real, no hardcodeado, ver
+  // migración de categorización de ensayos.
+  listarCategoriasEnsayo: (activo = true) => api.get(`/api/maestros/categorias-ensayo?activo=${activo}`),
 
   // Catálogo de ensayos
   listarEnsayosMaestro: (buscar = '') => api.get(`/api/maestros/ensayos?buscar=${encodeURIComponent(buscar)}`),

@@ -17,6 +17,7 @@ from app.core.security import get_current_user, require_rol
 from app.db.connections import erp_db, limss_db
 from app.schemas.maestros import (
     ArticuloERP,
+    CategoriaEnsayoResponse,
     EnsayoMaestroCreate,
     EnsayoMaestroResponse,
     EspecificacionCantidades,
@@ -25,6 +26,7 @@ from app.schemas.maestros import (
     EspecificacionDetalle,
     EspecificacionEnsayoCreate,
     EspecificacionEnsayoResponse,
+    EspecificacionEtiquetaComplementariaUpdate,
     EspecificacionMuestraCreate,
     EspecificacionMuestraResponse,
     EspecificacionResponse,
@@ -81,6 +83,22 @@ def _insertar_especificacion(
     return int(cursor.fetchone().id)
 
 
+def _momento_de_categoria(cursor, id_categoria: int) -> str:
+    """Valida que la categoría exista y esté activa, devuelve su momento
+    ('analisis'/'muestreo') -- se usa para seguir escribiendo etapa
+    derivada (columna de respaldo, ver migración de categorización de
+    ensayos) en cada alta/edición, así el respaldo no queda desactualizado
+    con ensayos nuevos mientras esa columna no se borre."""
+    cursor.execute(
+        "SELECT momento FROM lims_categorias_ensayo WHERE id_categoria = ? AND activo = 1",
+        id_categoria,
+    )
+    fila = cursor.fetchone()
+    if not fila:
+        raise HTTPException(status_code=404, detail="La categoría indicada no existe o está inactiva")
+    return fila.momento
+
+
 def _tiene_columna_analito(cursor) -> bool:
     """analito en lims_especificacion_ensayos puede no existir todavía (ver
     migrations_especificacion_ensayos_analito.sql, pendiente de ejecutar en
@@ -107,12 +125,12 @@ def _copiar_ensayos_especificacion(cursor, *, id_especificacion_origen: int, id_
             cursor.execute(
                 """
                 INSERT INTO lims_especificacion_ensayos
-                    (id_especificacion, id_ensayo_maestro, orden, etapa, metodologia, tipo_dato,
+                    (id_especificacion, id_ensayo_maestro, orden, etapa, id_categoria, metodologia, tipo_dato,
                      limite_inferior, limite_superior, unidad_medida, valor_requerido,
                      especificacion_texto, obligatorio, requerido_por_defecto, id_laboratorio, analito)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                id_especificacion_destino, e.id_ensayo_maestro, e.orden, e.etapa, e.metodologia, e.tipo_dato,
+                id_especificacion_destino, e.id_ensayo_maestro, e.orden, e.etapa, e.id_categoria, e.metodologia, e.tipo_dato,
                 e.limite_inferior, e.limite_superior, e.unidad_medida, e.valor_requerido,
                 e.especificacion_texto, e.obligatorio, e.requerido_por_defecto, e.id_laboratorio,
                 getattr(e, "analito", None),
@@ -121,12 +139,12 @@ def _copiar_ensayos_especificacion(cursor, *, id_especificacion_origen: int, id_
             cursor.execute(
                 """
                 INSERT INTO lims_especificacion_ensayos
-                    (id_especificacion, id_ensayo_maestro, orden, etapa, metodologia, tipo_dato,
+                    (id_especificacion, id_ensayo_maestro, orden, etapa, id_categoria, metodologia, tipo_dato,
                      limite_inferior, limite_superior, unidad_medida, valor_requerido,
                      especificacion_texto, obligatorio, requerido_por_defecto, id_laboratorio)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                id_especificacion_destino, e.id_ensayo_maestro, e.orden, e.etapa, e.metodologia, e.tipo_dato,
+                id_especificacion_destino, e.id_ensayo_maestro, e.orden, e.etapa, e.id_categoria, e.metodologia, e.tipo_dato,
                 e.limite_inferior, e.limite_superior, e.unidad_medida, e.valor_requerido,
                 e.especificacion_texto, e.obligatorio, e.requerido_por_defecto, e.id_laboratorio,
             )
@@ -184,13 +202,16 @@ def _fila_a_especificacion(row, tiene_muestras: bool = False, tiene_testigos: bo
         fecha_carga=row.fecha_carga,
         tiene_muestras=tiene_muestras,
         tiene_testigos=tiene_testigos,
+        cantidad_etiquetas_complementarias=getattr(row, "cantidad_etiquetas_complementarias", 0) or 0,
     )
 
 
 _SELECT_ESPECIFICACION_ENSAYOS = """
-    SELECT se.*, m.nombre_ensayo, lab.nombre AS laboratorio_nombre
+    SELECT se.*, m.nombre_ensayo, lab.nombre AS laboratorio_nombre,
+           cat.codigo AS categoria_codigo, cat.nombre AS categoria_nombre, cat.momento AS categoria_momento
     FROM lims_especificacion_ensayos se
     INNER JOIN lims_ensayos_maestro m ON m.id_ensayo_maestro = se.id_ensayo_maestro
+    INNER JOIN lims_categorias_ensayo cat ON cat.id_categoria = se.id_categoria
     LEFT JOIN lims_laboratorios lab ON lab.id_laboratorio = se.id_laboratorio
 """
 
@@ -203,6 +224,10 @@ def _fila_a_especificacion_ensayo(e) -> EspecificacionEnsayoResponse:
         nombre_ensayo=e.nombre_ensayo,
         orden=e.orden,
         etapa=e.etapa,
+        id_categoria=e.id_categoria,
+        categoria_codigo=e.categoria_codigo,
+        categoria_nombre=e.categoria_nombre,
+        categoria_momento=e.categoria_momento,
         metodologia=e.metodologia,
         tipo_dato=e.tipo_dato,
         limite_inferior=float(e.limite_inferior) if e.limite_inferior is not None else None,
@@ -680,6 +705,39 @@ def editar_cantidades_especificacion(
     return _fila_a_especificacion(cursor.fetchone())
 
 
+@router.put("/especificaciones/{id_especificacion}/etiqueta-complementaria", response_model=EspecificacionResponse)
+def editar_etiqueta_complementaria_especificacion(
+    id_especificacion: int,
+    body: EspecificacionEtiquetaComplementariaUpdate,
+    user: dict = Depends(require_rol("analista_qc", "admin", "qa")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Cantidad de etiquetas "APROBADO -- COMPLEMENTARIA" de Datos Maestros
+    -- igual que cantidades de muestreo, se edita aparte del resto
+    (revisar/nueva versión) porque no es contenido analítico versionado, es
+    una preferencia de impresión que puede cambiar en cualquier momento."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM lims_especificaciones WHERE id_especificacion = ?", id_especificacion)
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Especificación no encontrada")
+
+    cursor.execute(
+        "UPDATE lims_especificaciones SET cantidad_etiquetas_complementarias = ? WHERE id_especificacion = ?",
+        body.cantidad_etiquetas_complementarias, id_especificacion,
+    )
+
+    audit.registrar(
+        conn, entidad="especificacion", accion="modificar_etiqueta_complementaria",
+        id_usuario=user["id_usuario"], id_entidad=id_especificacion,
+        valor_anterior={"cantidad_etiquetas_complementarias": getattr(row, "cantidad_etiquetas_complementarias", 0) or 0},
+        valor_nuevo=body.model_dump(),
+    )
+
+    cursor.execute("SELECT * FROM lims_especificaciones WHERE id_especificacion = ?", id_especificacion)
+    return _fila_a_especificacion(cursor.fetchone())
+
+
 # ── Ensayos: catálogo maestro ──────────────────────────────────────
 
 @router.get("/ensayos", response_model=list[EnsayoMaestroResponse])
@@ -704,6 +762,39 @@ def listar_ensayos_maestro(
             id_ensayo_maestro=r.id_ensayo_maestro, nombre_ensayo=r.nombre_ensayo,
             bibliografia=r.bibliografia, observaciones=r.observaciones,
             cantidad_especificaciones=r.cantidad_especificaciones,
+        )
+        for r in cursor.fetchall()
+    ]
+
+
+@router.get("/categorias-ensayo", response_model=list[CategoriaEnsayoResponse])
+def listar_categorias_ensayo(
+    activo: Optional[bool] = Query(True, description="None = todas, True = solo activas (default), False = solo inactivas"),
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Categorías de ensayo (lims_categorias_ensayo) -- selector del
+    formulario de alta/edición de ensayos de una especificación (ver
+    EspecificacionDetallePage.jsx), en vez de un <select> con "Análisis de
+    laboratorio"/"Muestreo físico" hardcodeados en el frontend. Default
+    activo=True: el selector de alta no debe ofrecer categorías dadas de
+    baja. Ruta literal -- debe declararse antes de cualquier "/{id}" de este
+    router que pueda confundirse con "categorias-ensayo" (no hay ninguna
+    hoy, pero mismo criterio que /muestreadores en solicitudes_muestreo.py)."""
+    cursor = conn.cursor()
+    condicion = ""
+    params: list = []
+    if activo is not None:
+        condicion = "WHERE activo = ?"
+        params.append(1 if activo else 0)
+    cursor.execute(
+        f"SELECT id_categoria, codigo, nombre, momento, orden, activo FROM lims_categorias_ensayo {condicion} ORDER BY orden",
+        *params,
+    )
+    return [
+        CategoriaEnsayoResponse(
+            id_categoria=r.id_categoria, codigo=r.codigo, nombre=r.nombre,
+            momento=r.momento, orden=r.orden, activo=bool(r.activo),
         )
         for r in cursor.fetchall()
     ]
@@ -858,16 +949,18 @@ def agregar_ensayo_especificacion(
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="El laboratorio indicado no existe o está inactivo")
 
+    etapa = _momento_de_categoria(cursor, body.id_categoria)
+
     if _tiene_columna_analito(cursor):
         cursor.execute(
             """
             INSERT INTO lims_especificacion_ensayos
-                (id_especificacion, id_ensayo_maestro, orden, etapa, metodologia, tipo_dato,
+                (id_especificacion, id_ensayo_maestro, orden, etapa, id_categoria, metodologia, tipo_dato,
                  limite_inferior, limite_superior, unidad_medida, valor_requerido,
                  especificacion_texto, obligatorio, requerido_por_defecto, id_laboratorio, analito)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            id_especificacion, body.id_ensayo_maestro, body.orden, body.etapa, body.metodologia, body.tipo_dato,
+            id_especificacion, body.id_ensayo_maestro, body.orden, etapa, body.id_categoria, body.metodologia, body.tipo_dato,
             body.limite_inferior, body.limite_superior, normalizar_unidad(body.unidad_medida), body.valor_requerido,
             body.especificacion_texto, 1 if body.obligatorio else 0, 1 if body.requerido_por_defecto else 0,
             body.id_laboratorio, body.analito,
@@ -876,12 +969,12 @@ def agregar_ensayo_especificacion(
         cursor.execute(
             """
             INSERT INTO lims_especificacion_ensayos
-                (id_especificacion, id_ensayo_maestro, orden, etapa, metodologia, tipo_dato,
+                (id_especificacion, id_ensayo_maestro, orden, etapa, id_categoria, metodologia, tipo_dato,
                  limite_inferior, limite_superior, unidad_medida, valor_requerido,
                  especificacion_texto, obligatorio, requerido_por_defecto, id_laboratorio)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            id_especificacion, body.id_ensayo_maestro, body.orden, body.etapa, body.metodologia, body.tipo_dato,
+            id_especificacion, body.id_ensayo_maestro, body.orden, etapa, body.id_categoria, body.metodologia, body.tipo_dato,
             body.limite_inferior, body.limite_superior, normalizar_unidad(body.unidad_medida), body.valor_requerido,
             body.especificacion_texto, 1 if body.obligatorio else 0, 1 if body.requerido_por_defecto else 0,
             body.id_laboratorio,
@@ -926,17 +1019,19 @@ def editar_ensayo_especificacion(
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="El laboratorio indicado no existe o está inactivo")
 
+    etapa = _momento_de_categoria(cursor, body.id_categoria)
+
     if _tiene_columna_analito(cursor):
         cursor.execute(
             """
             UPDATE lims_especificacion_ensayos
-            SET id_ensayo_maestro = ?, orden = ?, etapa = ?, metodologia = ?, tipo_dato = ?,
+            SET id_ensayo_maestro = ?, orden = ?, etapa = ?, id_categoria = ?, metodologia = ?, tipo_dato = ?,
                 limite_inferior = ?, limite_superior = ?, unidad_medida = ?, valor_requerido = ?,
                 especificacion_texto = ?, obligatorio = ?, requerido_por_defecto = ?, id_laboratorio = ?,
                 analito = ?
             WHERE id_espec_ensayo = ?
             """,
-            body.id_ensayo_maestro, body.orden, body.etapa, body.metodologia, body.tipo_dato,
+            body.id_ensayo_maestro, body.orden, etapa, body.id_categoria, body.metodologia, body.tipo_dato,
             body.limite_inferior, body.limite_superior, normalizar_unidad(body.unidad_medida), body.valor_requerido,
             body.especificacion_texto, 1 if body.obligatorio else 0, 1 if body.requerido_por_defecto else 0,
             body.id_laboratorio, body.analito, id_espec_ensayo,
@@ -945,12 +1040,12 @@ def editar_ensayo_especificacion(
         cursor.execute(
             """
             UPDATE lims_especificacion_ensayos
-            SET id_ensayo_maestro = ?, orden = ?, etapa = ?, metodologia = ?, tipo_dato = ?,
+            SET id_ensayo_maestro = ?, orden = ?, etapa = ?, id_categoria = ?, metodologia = ?, tipo_dato = ?,
                 limite_inferior = ?, limite_superior = ?, unidad_medida = ?, valor_requerido = ?,
                 especificacion_texto = ?, obligatorio = ?, requerido_por_defecto = ?, id_laboratorio = ?
             WHERE id_espec_ensayo = ?
             """,
-            body.id_ensayo_maestro, body.orden, body.etapa, body.metodologia, body.tipo_dato,
+            body.id_ensayo_maestro, body.orden, etapa, body.id_categoria, body.metodologia, body.tipo_dato,
             body.limite_inferior, body.limite_superior, normalizar_unidad(body.unidad_medida), body.valor_requerido,
             body.especificacion_texto, 1 if body.obligatorio else 0, 1 if body.requerido_por_defecto else 0,
             body.id_laboratorio, id_espec_ensayo,

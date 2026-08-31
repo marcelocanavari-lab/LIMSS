@@ -70,7 +70,7 @@ const MUESTRA_FORM_VACIO = {
 
 const ENSAYO_FORM_VACIO = {
   orden: 1,
-  etapa: 'analisis',
+  id_categoria: '',
   metodologia: '',
   tipo_dato: 'numerico',
   limite_inferior: '',
@@ -82,11 +82,6 @@ const ENSAYO_FORM_VACIO = {
   requerido_por_defecto: true,
   id_laboratorio: '',
   analito: '',
-};
-
-const LABEL_ETAPA = {
-  analisis: 'Análisis de laboratorio',
-  muestreo: 'Muestreo físico',
 };
 
 // "Valoración — Trimetoprima" cuando el mismo ensayo del catálogo se repite
@@ -104,7 +99,11 @@ export default function EspecificacionDetallePage() {
 
   const [especificacion, setEspecificacion] = useState(null);
   const [ensayos, setEnsayos] = useState([]);
-  const [etapaActiva, setEtapaActiva] = useState('analisis');
+  // Categorías reales (lims_categorias_ensayo -- Análisis de laboratorio /
+  // Aspecto del Contenedor / Aspectos de la Materia Prima), ya no un par
+  // fijo de "etapas" hardcodeadas -- ver GET /api/maestros/categorias-ensayo.
+  const [categorias, setCategorias] = useState([]);
+  const [categoriaActiva, setCategoriaActiva] = useState(null); // id_categoria de la pestaña seleccionada
   const [muestrasDefinidas, setMuestrasDefinidas] = useState([]);
   const [laboratorios, setLaboratorios] = useState([]);
   const [testigosAsociados, setTestigosAsociados] = useState([]);
@@ -113,6 +112,9 @@ export default function EspecificacionDetallePage() {
   const [errorTestigos, setErrorTestigos] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [cantidadEtiquetasComplementariasInput, setCantidadEtiquetasComplementariasInput] = useState('0');
+  const [guardandoEtiquetaComplementaria, setGuardandoEtiquetaComplementaria] = useState(false);
+  const [errorEtiquetaComplementaria, setErrorEtiquetaComplementaria] = useState('');
 
   // ── Modal de agregar/editar ensayo ──────────────────────────────
   const [modalAbierto, setModalAbierto] = useState(false);
@@ -159,8 +161,15 @@ export default function EspecificacionDetallePage() {
     return maestrosApi.listarEnsayosEspecificacion(id).then(setEnsayos);
   }
 
-  function ensayosDeEtapa(etapa) {
-    return ensayos.filter((en) => (en.etapa || 'analisis') === etapa);
+  function ensayosDeCategoria(idCategoria) {
+    return ensayos.filter((en) => en.id_categoria === idCategoria);
+  }
+
+  // momento ('analisis'/'muestreo') de una categoría puntual, para toda la
+  // lógica que decide tipo_dato/id_laboratorio por defecto según el tipo de
+  // categoría -- nunca comparar por nombre, que puede cambiar.
+  function momentoDeCategoria(idCategoria) {
+    return categorias.find((c) => c.id_categoria === idCategoria)?.momento;
   }
 
   function cargarMuestrasDefinidas() {
@@ -170,12 +179,16 @@ export default function EspecificacionDetallePage() {
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      maestrosApi.obtenerEspecificacion(id).then(setEspecificacion),
+      maestrosApi.obtenerEspecificacion(id).then((data) => {
+        setEspecificacion(data);
+        setCantidadEtiquetasComplementariasInput(String(data.cantidad_etiquetas_complementarias ?? 0));
+      }),
       cargarEnsayos(),
       cargarMuestrasDefinidas(),
       cargarTestigosAsociados(),
       maestrosApi.listarTestigos({ activo: true }).then(setTestigosDisponibles),
       muestrasApi.listarLaboratorios(true).then(setLaboratorios),
+      maestrosApi.listarCategoriasEnsayo(true).then(setCategorias),
     ])
       .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo cargar la especificación'))
       .finally(() => setLoading(false));
@@ -219,6 +232,21 @@ export default function EspecificacionDetallePage() {
       setErrorReferencia(err instanceof ApiError ? err.message : 'No se pudo subir la imagen de referencia');
     } finally {
       setSubiendoReferencia(false);
+    }
+  }
+
+  async function handleGuardarEtiquetaComplementaria() {
+    const valor = Math.min(99, Math.max(0, Number(cantidadEtiquetasComplementariasInput) || 0));
+    setGuardandoEtiquetaComplementaria(true);
+    setErrorEtiquetaComplementaria('');
+    try {
+      const actualizada = await maestrosApi.editarEtiquetaComplementariaEspecificacion(id, valor);
+      setEspecificacion((prev) => ({ ...prev, cantidad_etiquetas_complementarias: actualizada.cantidad_etiquetas_complementarias }));
+      setCantidadEtiquetasComplementariasInput(String(actualizada.cantidad_etiquetas_complementarias));
+    } catch (err) {
+      setErrorEtiquetaComplementaria(err instanceof ApiError ? err.message : 'No se pudo guardar');
+    } finally {
+      setGuardandoEtiquetaComplementaria(false);
     }
   }
 
@@ -274,9 +302,9 @@ export default function EspecificacionDetallePage() {
     setNombreNuevoEnsayo('');
     setFormEnsayo({
       ...ENSAYO_FORM_VACIO,
-      etapa: etapaActiva,
-      tipo_dato: etapaActiva === 'muestreo' ? 'cualitativo' : 'numerico',
-      orden: ensayosDeEtapa(etapaActiva).length + 1,
+      id_categoria: categoriaActiva,
+      tipo_dato: momentoDeCategoria(categoriaActiva) === 'muestreo' ? 'cualitativo' : 'numerico',
+      orden: ensayosDeCategoria(categoriaActiva).length + 1,
     });
     setErrorEnsayo('');
     setModalAbierto(true);
@@ -290,7 +318,7 @@ export default function EspecificacionDetallePage() {
     setNombreNuevoEnsayo('');
     setFormEnsayo({
       orden: en.orden,
-      etapa: en.etapa || 'analisis',
+      id_categoria: en.id_categoria,
       metodologia: en.metodologia || '',
       tipo_dato: en.tipo_dato,
       limite_inferior: en.limite_inferior ?? '',
@@ -341,7 +369,7 @@ export default function EspecificacionDetallePage() {
     const body = {
       id_ensayo_maestro: ensayoMaestroElegido.id_ensayo_maestro,
       orden: Number(formEnsayo.orden),
-      etapa: formEnsayo.etapa,
+      id_categoria: Number(formEnsayo.id_categoria),
       metodologia: formEnsayo.metodologia.trim() || null,
       tipo_dato: formEnsayo.tipo_dato,
       limite_inferior: formEnsayo.tipo_dato === 'numerico' && formEnsayo.limite_inferior !== '' ? Number(formEnsayo.limite_inferior) : null,
@@ -351,7 +379,7 @@ export default function EspecificacionDetallePage() {
       especificacion_texto: formEnsayo.especificacion_texto.trim() || null,
       obligatorio: formEnsayo.obligatorio,
       requerido_por_defecto: formEnsayo.requerido_por_defecto,
-      id_laboratorio: formEnsayo.etapa === 'muestreo' || formEnsayo.id_laboratorio === '' ? null : Number(formEnsayo.id_laboratorio),
+      id_laboratorio: momentoDeCategoria(formEnsayo.id_categoria) === 'muestreo' || formEnsayo.id_laboratorio === '' ? null : Number(formEnsayo.id_laboratorio),
       analito: formEnsayo.analito.trim() || null,
     };
 
@@ -511,26 +539,32 @@ export default function EspecificacionDetallePage() {
     );
   }
 
-  // Qué pestañas de etapa mostrar según la config del subarticulo (ver
+  // Qué pestañas de categoría mostrar según la config del subarticulo (ver
   // incluye_bloque_analisis_laboratorio/incluye_bloque_muestreo_fisico) --
-  // si la etapa activa quedó oculta (ej. cambió la config), se cae a la
+  // si la categoría activa quedó oculta (ej. cambió la config), se cae a la
   // primera visible en vez de mostrar una pestaña sin botón para volver.
+  // Nota: la config del subarticulo sigue siendo un flag por MOMENTO, no
+  // por categoría puntual -- incluye_bloque_muestreo_fisico gobierna tanto
+  // "Aspecto del Contenedor" como "Aspectos de la Materia Prima" juntas
+  // (no hay todavía una forma de configurarlas por separado).
   //
-  // Resguardo: la config de categoría solo decide el default para etapas
-  // SIN ítems todavía (para no mostrar una pestaña vacía en categorías que
-  // nunca las usan) -- si esta especificación puntual ya tiene ítems
-  // cargados para una etapa, la pestaña se muestra igual sin importar la
-  // config, para que un checkbox destildado por error (a mano o por una
-  // categoría con una excepción real) nunca oculte datos ya cargados. Ver
-  // el mismo criterio en incluye_bloque_muestras/incluye_bloque_testigos
-  // más abajo.
-  const etapasVisibles = especificacion
-    ? ['analisis', 'muestreo'].filter((etapa) => (
-        (etapa === 'analisis' ? especificacion.incluye_bloque_analisis_laboratorio : especificacion.incluye_bloque_muestreo_fisico)
-        || ensayosDeEtapa(etapa).length > 0
+  // Resguardo: la config de categoría solo decide el default para
+  // categorías SIN ítems todavía (para no mostrar una pestaña vacía en
+  // categorías que nunca se usan) -- si esta especificación puntual ya
+  // tiene ítems cargados para una categoría, la pestaña se muestra igual
+  // sin importar la config, para que un checkbox destildado por error (a
+  // mano o por una categoría con una excepción real) nunca oculte datos ya
+  // cargados. Ver el mismo criterio en incluye_bloque_muestras/incluye_
+  // bloque_testigos más abajo.
+  const categoriasVisibles = especificacion
+    ? categorias.filter((cat) => (
+        (cat.momento === 'analisis' ? especificacion.incluye_bloque_analisis_laboratorio : especificacion.incluye_bloque_muestreo_fisico)
+        || ensayosDeCategoria(cat.id_categoria).length > 0
       ))
     : [];
-  const etapaMostrada = etapasVisibles.includes(etapaActiva) ? etapaActiva : etapasVisibles[0];
+  const categoriaMostrada = categoriasVisibles.some((c) => c.id_categoria === categoriaActiva)
+    ? categoriaActiva
+    : categoriasVisibles[0]?.id_categoria;
 
   if (error || !especificacion) {
     return (
@@ -566,6 +600,44 @@ export default function EspecificacionDetallePage() {
             <span>Tipo: <strong style={{ color: 'var(--ink-1)' }}>{especificacion.tipo_material.replace('_', ' ')}</strong></span>
             <span>Versión: <strong style={{ color: 'var(--ink-1)' }}>{especificacion.version}</strong></span>
           </div>
+
+          {puedeGestionar && (
+            <div className="field" style={{ maxWidth: 420, marginTop: 'var(--sp-3)' }}>
+              <label className="field-label" htmlFor="cantidadEtiquetasComplementarias">
+                Cantidad de etiquetas complementarias de Aprobado a imprimir
+              </label>
+              <div style={{ display: 'flex', gap: 'var(--sp-2)', alignItems: 'center' }}>
+                <input
+                  id="cantidadEtiquetasComplementarias"
+                  className="field-input"
+                  type="number"
+                  min="0"
+                  max="99"
+                  style={{ maxWidth: 100 }}
+                  value={cantidadEtiquetasComplementariasInput}
+                  onChange={(e) => setCantidadEtiquetasComplementariasInput(e.target.value)}
+                  disabled={guardandoEtiquetaComplementaria}
+                />
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleGuardarEtiquetaComplementaria}
+                  disabled={
+                    guardandoEtiquetaComplementaria
+                    || Number(cantidadEtiquetasComplementariasInput) === (especificacion.cantidad_etiquetas_complementarias ?? 0)
+                  }
+                >
+                  {guardandoEtiquetaComplementaria ? <span className="spinner" /> : 'Guardar'}
+                </button>
+              </div>
+              <p style={{ fontSize: 'var(--fs-xs)', color: 'var(--ink-2)', marginTop: 'var(--sp-1)' }}>
+                0 = no imprime ninguna. Si es mayor a 0, se adjuntan automáticamente al imprimir la etiqueta Aprobado.
+              </p>
+              {errorEtiquetaComplementaria && (
+                <div className="alert alert-danger" style={{ marginTop: 'var(--sp-2)' }}>{errorEtiquetaComplementaria}</div>
+              )}
+            </div>
+          )}
 
           {puedeGestionar && (
             <div style={{ display: 'flex', gap: 'var(--sp-3)', marginTop: 'var(--sp-4)', flexWrap: 'wrap' }}>
@@ -688,18 +760,18 @@ export default function EspecificacionDetallePage() {
           </>
         )}
 
-        {etapasVisibles.length > 0 && (
+        {categoriasVisibles.length > 0 && (
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--sp-3)' }}>
               <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
-                {etapasVisibles.map((etapa) => (
+                {categoriasVisibles.map((cat) => (
                   <button
-                    key={etapa}
+                    key={cat.id_categoria}
                     type="button"
-                    className={etapaMostrada === etapa ? 'btn btn-primary' : 'btn btn-secondary'}
-                    onClick={() => setEtapaActiva(etapa)}
+                    className={categoriaMostrada === cat.id_categoria ? 'btn btn-primary' : 'btn btn-secondary'}
+                    onClick={() => setCategoriaActiva(cat.id_categoria)}
                   >
-                    {LABEL_ETAPA[etapa]} ({ensayosDeEtapa(etapa).length})
+                    {cat.nombre} ({ensayosDeCategoria(cat.id_categoria).length})
                   </button>
                 ))}
               </div>
@@ -709,7 +781,7 @@ export default function EspecificacionDetallePage() {
                 </button>
               )}
             </div>
-            {etapaMostrada === 'muestreo' && (
+            {momentoDeCategoria(categoriaMostrada) === 'muestreo' && (
               <p style={{ color: 'var(--ink-2)', fontSize: 'var(--fs-sm)', marginBottom: 'var(--sp-3)' }}>
                 Checklist físico que se revisa al ejecutar el muestreo (Cumple/No cumple) -- ver Orden de Trabajo digital.
               </p>
@@ -728,7 +800,7 @@ export default function EspecificacionDetallePage() {
                 </tr>
               </thead>
               <tbody>
-                {ensayosDeEtapa(etapaMostrada).map((en) => (
+                {ensayosDeCategoria(categoriaMostrada).map((en) => (
                   <tr key={en.id_espec_ensayo}>
                     <td style={{ textAlign: 'center' }}>{en.orden}</td>
                     <td>{nombreConAnalito(en)}</td>
@@ -742,7 +814,7 @@ export default function EspecificacionDetallePage() {
                     </td>
                     <td>{formatearEspecificacion(en)}</td>
                     <td>{en.tipo_dato === 'numerico' ? (en.unidad_medida || '—') : '—'}</td>
-                    <td>{en.etapa === 'muestreo' ? 'N/A' : (en.laboratorio_nombre || '—')}</td>
+                    <td>{en.categoria_momento === 'muestreo' ? 'N/A' : (en.laboratorio_nombre || '—')}</td>
                     {puedeEditarEnsayos && (
                       <td style={{ whiteSpace: 'nowrap' }}>
                         <button className="btn btn-ghost" onClick={() => abrirEditarEnsayo(en)}>Editar</button>
@@ -753,10 +825,10 @@ export default function EspecificacionDetallePage() {
                     )}
                   </tr>
                 ))}
-                {ensayosDeEtapa(etapaMostrada).length === 0 && (
+                {ensayosDeCategoria(categoriaMostrada).length === 0 && (
                   <tr>
                     <td colSpan={puedeEditarEnsayos ? 8 : 7} style={{ textAlign: 'center', color: 'var(--ink-2)' }}>
-                      Sin ítems configurados para {LABEL_ETAPA[etapaMostrada].toLowerCase()}.
+                      Sin ítems configurados para {categorias.find((c) => c.id_categoria === categoriaMostrada)?.nombre?.toLowerCase()}.
                     </td>
                   </tr>
                 )}
@@ -909,22 +981,24 @@ export default function EspecificacionDetallePage() {
 
                 <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
                   <div className="field" style={{ flex: '1 1 160px' }}>
-                    <label className="field-label">Etapa</label>
+                    <label className="field-label">Categoría</label>
                     <select
                       className="field-input"
-                      value={formEnsayo.etapa}
+                      value={formEnsayo.id_categoria}
                       onChange={(e) => {
-                        const etapa = e.target.value;
+                        const idCategoria = Number(e.target.value);
+                        const momento = momentoDeCategoria(idCategoria);
                         setFormEnsayo((prev) => ({
                           ...prev,
-                          etapa,
-                          tipo_dato: etapa === 'muestreo' ? 'cualitativo' : prev.tipo_dato,
-                          id_laboratorio: etapa === 'muestreo' ? '' : prev.id_laboratorio,
+                          id_categoria: idCategoria,
+                          tipo_dato: momento === 'muestreo' ? 'cualitativo' : prev.tipo_dato,
+                          id_laboratorio: momento === 'muestreo' ? '' : prev.id_laboratorio,
                         }));
                       }}
                     >
-                      <option value="analisis">Análisis de laboratorio</option>
-                      <option value="muestreo">Muestreo físico</option>
+                      {categorias.map((cat) => (
+                        <option key={cat.id_categoria} value={cat.id_categoria}>{cat.nombre}</option>
+                      ))}
                     </select>
                   </div>
                   <div className="field" style={{ flex: '2 1 220px' }}>
@@ -1022,7 +1096,7 @@ export default function EspecificacionDetallePage() {
                   />
                 </div>
 
-                {formEnsayo.etapa !== 'muestreo' && (
+                {momentoDeCategoria(formEnsayo.id_categoria) !== 'muestreo' && (
                   <div className="field">
                     <label className="field-label">Laboratorio</label>
                     <select

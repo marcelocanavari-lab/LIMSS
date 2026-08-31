@@ -143,7 +143,6 @@ def _dibujar_formulario(c: canvas.Canvas, solicitud, cantidades: dict, ensayos: 
     campo("N° IR", _texto(solicitud.erp_nro_ir))
     campo("Código", _texto(solicitud.erp_CODART))
     campo("Nombre", _texto(solicitud.erp_DESART))
-    campo("Laboratorio de análisis", _texto(solicitud.laboratorio_nombre))
 
     subtitulo("Cantidades")
     campo("Para análisis", _cantidad_texto(cantidades.get("cantidad_muestra"), cantidades.get("unidad_muestra")))
@@ -648,7 +647,7 @@ def generar_pdf_orden_trabajo(solicitud, cantidades: dict, ensayos: list) -> byt
     return buffer.getvalue()
 
 
-def _dibujar_planilla_muestreo(c: canvas.Canvas, solicitud):
+def _dibujar_planilla_muestreo(c: canvas.Canvas, solicitud, checklist_materia_prima: list):
     _, height = A4
     x = 1.5 * cm
     ancho_total = 18 * cm
@@ -710,15 +709,30 @@ def _dibujar_planilla_muestreo(c: canvas.Canvas, solicitud):
 
     salto_pagina_si_hace_falta(3.8 * cm)
     titulo_seccion("3. ASPECTO DE LA MATERIA PRIMA")
-    _campo_con_valor_o_linea(c, x, y, "3.0 Aspecto general", getattr(solicitud, "aspecto_mp", None), 10 * cm)
-    y -= 0.55 * cm
-    _campo_con_valor_o_linea(c, x, y, "3.1 Materias extrañas", solicitud.materias_extranas, 10 * cm)
-    y -= 0.55 * cm
-    _campo_con_valor_o_linea(c, x, y, "3.2 Olor", solicitud.olor, 10 * cm)
-    y -= 0.55 * cm
-    _campo_con_valor_o_linea(c, x, y, "3.3 Color", solicitud.color, 10 * cm)
-    y -= 0.55 * cm
-    _campo_con_valor_o_linea(c, x, y, "3.4 Observaciones", solicitud.observaciones_muestreo, 10 * cm)
+    # Ítems respondidos del checklist (categoría 'materia_prima' -- ver
+    # lims_categorias_ensayo/migración de categorización de ensayos), no los
+    # 4 campos de texto libre viejos que reemplaza. Si esta solicitud puntual
+    # no tiene ítems respondidos ahí (solicitudes ejecutadas antes de que
+    # existiera esa categoría, o especificación que todavía no tiene sus
+    # ensayos de "muestreo" reasignados a materia_prima -- ver esa migración)
+    # se cae a los campos legacy en vez de dejar la sección en blanco.
+    items_respondidos = [it for it in checklist_materia_prima if it.valor_cualitativo]
+    if items_respondidos:
+        for item in items_respondidos:
+            salto_pagina_si_hace_falta(0.7 * cm)
+            _campo_con_valor_o_linea(c, x, y, item.nombre_ensayo, item.valor_cualitativo, 10 * cm)
+            y -= 0.55 * cm
+    else:
+        _campo_con_valor_o_linea(c, x, y, "3.0 Aspecto general", getattr(solicitud, "aspecto_mp", None), 10 * cm)
+        y -= 0.55 * cm
+        _campo_con_valor_o_linea(c, x, y, "3.1 Materias extrañas", solicitud.materias_extranas, 10 * cm)
+        y -= 0.55 * cm
+        _campo_con_valor_o_linea(c, x, y, "3.2 Olor", solicitud.olor, 10 * cm)
+        y -= 0.55 * cm
+        _campo_con_valor_o_linea(c, x, y, "3.3 Color", solicitud.color, 10 * cm)
+        y -= 0.55 * cm
+    salto_pagina_si_hace_falta(0.7 * cm)
+    _campo_con_valor_o_linea(c, x, y, "Observaciones", solicitud.observaciones_muestreo, 10 * cm)
     y -= 1.0 * cm
 
     salto_pagina_si_hace_falta(2 * cm)
@@ -736,9 +750,9 @@ def _dibujar_planilla_muestreo(c: canvas.Canvas, solicitud):
     c.showPage()
 
 
-def generar_pdf_planilla_muestreo(solicitud) -> bytes:
+def generar_pdf_planilla_muestreo(solicitud, checklist_materia_prima: list) -> bytes:
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
-    _dibujar_planilla_muestreo(c, solicitud)
+    _dibujar_planilla_muestreo(c, solicitud, checklist_materia_prima)
     c.save()
     return buffer.getvalue()

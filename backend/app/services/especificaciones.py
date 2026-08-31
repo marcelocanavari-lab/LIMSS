@@ -4,42 +4,61 @@ from app.schemas.solicitudes_muestreo import ChecklistMuestreoItem, ChecklistMue
 
 
 def tiene_ensayos_analisis(cursor, id_especificacion: Optional[int]) -> bool:
-    """Si la especificación no tiene NINGÚN ensayo de etapa 'analisis' (solo
-    checklist de etapa 'muestreo'), la muestra que genera no tiene nada que
-    mandar a un laboratorio -- no debe pasar por envío, protocolo ni carga
-    de resultados de laboratorio, queda lista para Dictamen apenas se
-    completa el checklist de muestreo. Sin especificación resuelta todavía
+    """Si la especificación no tiene NINGÚN ensayo de categoría con momento
+    'analisis' (solo checklist de categorías con momento 'muestreo' --
+    Aspecto del Contenedor y/o Aspectos de la Materia Prima), la muestra que
+    genera no tiene nada que mandar a un laboratorio -- no debe pasar por
+    envío, protocolo ni carga de resultados de laboratorio, queda lista para
+    Dictamen apenas se completa el checklist de muestreo. Se compara contra
+    lims_categorias_ensayo.momento, no contra el nombre de una categoría
+    puntual -- así sigue funcionando sin importar cuántas categorías de
+    "muestreo" existan (ver migración de etapa/grupo_muestreo a
+    lims_categorias_ensayo). Sin especificación resuelta todavía
     (id_especificacion None), se asume que sí requiere envío -- comportamiento
     conservador de siempre, no se puede afirmar lo contrario sin la
     especificación."""
     if id_especificacion is None:
         return True
     cursor.execute(
-        "SELECT 1 FROM lims_especificacion_ensayos WHERE id_especificacion = ? AND etapa = 'analisis' AND activo = 1",
+        """
+        SELECT 1 FROM lims_especificacion_ensayos se
+        INNER JOIN lims_categorias_ensayo cat ON cat.id_categoria = se.id_categoria
+        WHERE se.id_especificacion = ? AND cat.momento = 'analisis' AND se.activo = 1
+        """,
         id_especificacion,
     )
     return cursor.fetchone() is not None
 
 
 def obtener_checklist_muestreo(cursor, id_muestra: Optional[int], id_especificacion: Optional[int]) -> list[ChecklistMuestreoItem]:
-    """Ítems de etapa 'muestreo' de una especificación, con la respuesta ya
-    cargada en lims_resultados_muestreo para esta muestra (si la hay).
-    Compartido por Ejecutar Muestreo (Solicitud de Muestreo) y por el
-    checklist de Nueva Muestra (creación directa, sin solicitud) -- ambos
-    flujos terminan en la misma tabla, keyed por id_muestra, así que no hace
-    falta duplicar esta consulta. id_muestra puede ser None (todavía no
-    existe la muestra -- formulario en blanco)."""
+    """Ítems de categorías con momento 'muestreo' (Aspecto del Contenedor,
+    Aspectos de la Materia Prima -- ver lims_categorias_ensayo) de una
+    especificación, con la respuesta ya cargada en lims_resultados_muestreo
+    para esta muestra (si la hay). Compartido por Ejecutar Muestreo
+    (Solicitud de Muestreo) y por el checklist de Nueva Muestra (creación
+    directa, sin solicitud) -- ambos flujos terminan en la misma tabla,
+    keyed por id_muestra, así que no hace falta duplicar esta consulta.
+    id_muestra puede ser None (todavía no existe la muestra -- formulario en
+    blanco).
+
+    Trae id_categoria/codigo/nombre de cada ítem (no solo el momento) para
+    que el frontend pueda agrupar la lista en secciones separadas por
+    categoría (Contenedor vs. Materia Prima) -- ver ChecklistMuestreo.jsx.
+    Ordena por el orden de la categoría primero y el del ensayo después, así
+    la lista ya sale agrupable sin tener que reordenar del lado del cliente."""
     if id_especificacion is None:
         return []
     cursor.execute(
         """
         SELECT se.id_espec_ensayo, se.orden, m.nombre_ensayo, se.especificacion_texto,
-               r.valor_cualitativo
+               r.valor_cualitativo,
+               cat.id_categoria, cat.codigo AS categoria_codigo, cat.nombre AS categoria_nombre
         FROM lims_especificacion_ensayos se
         INNER JOIN lims_ensayos_maestro m ON m.id_ensayo_maestro = se.id_ensayo_maestro
+        INNER JOIN lims_categorias_ensayo cat ON cat.id_categoria = se.id_categoria
         LEFT JOIN lims_resultados_muestreo r ON r.id_espec_ensayo = se.id_espec_ensayo AND r.id_muestra = ?
-        WHERE se.id_especificacion = ? AND se.etapa = 'muestreo' AND se.activo = 1
-        ORDER BY se.orden
+        WHERE se.id_especificacion = ? AND cat.momento = 'muestreo' AND se.activo = 1
+        ORDER BY cat.orden, se.orden
         """,
         id_muestra, id_especificacion,
     )
@@ -47,6 +66,7 @@ def obtener_checklist_muestreo(cursor, id_muestra: Optional[int], id_especificac
         ChecklistMuestreoItem(
             id_espec_ensayo=e.id_espec_ensayo, orden=e.orden, nombre_ensayo=e.nombre_ensayo,
             especificacion_texto=e.especificacion_texto, valor_cualitativo=e.valor_cualitativo,
+            id_categoria=e.id_categoria, categoria_codigo=e.categoria_codigo, categoria_nombre=e.categoria_nombre,
         )
         for e in cursor.fetchall()
     ]
@@ -74,8 +94,11 @@ def guardar_checklist_muestreo(
     if id_especificacion is None:
         return
     cursor.execute(
-        "SELECT id_espec_ensayo FROM lims_especificacion_ensayos "
-        "WHERE id_especificacion = ? AND etapa = 'muestreo' AND activo = 1",
+        """
+        SELECT se.id_espec_ensayo FROM lims_especificacion_ensayos se
+        INNER JOIN lims_categorias_ensayo cat ON cat.id_categoria = se.id_categoria
+        WHERE se.id_especificacion = ? AND cat.momento = 'muestreo' AND se.activo = 1
+        """,
         id_especificacion,
     )
     validos = {r.id_espec_ensayo for r in cursor.fetchall()}

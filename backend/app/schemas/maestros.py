@@ -39,7 +39,14 @@ class EnsayoMaestroResponse(BaseModel):
 class EspecificacionEnsayoCreate(BaseModel):
     id_ensayo_maestro: int
     orden: int
-    etapa: str = Field("analisis", pattern=r"^(muestreo|analisis)$")
+    # Categoría real (lims_categorias_ensayo -- Análisis de laboratorio /
+    # Aspecto del Contenedor / Aspectos de la Materia Prima), no el viejo
+    # campo de texto etapa ('muestreo'/'analisis'). El endpoint resuelve el
+    # momento de la categoría elegida y sigue escribiendo etapa derivada de
+    # ese momento (columna de respaldo, todavía no se borró -- ver
+    # migración de categorización de ensayos) para que no quede
+    # desactualizada con ensayos nuevos.
+    id_categoria: int
     metodologia: Optional[str] = Field(None, max_length=100)
     tipo_dato: str = Field(..., pattern=r"^(numerico|cualitativo)$")
     limite_inferior: Optional[float] = None
@@ -62,7 +69,14 @@ class EspecificacionEnsayoResponse(BaseModel):
     id_ensayo_maestro: int
     nombre_ensayo: str
     orden: int
+    # etapa: columna de respaldo (ver migración de categorización de
+    # ensayos), todavía se expone por compatibilidad pero el frontend ya no
+    # debe usarla -- usar id_categoria/categoria_codigo/categoria_momento.
     etapa: str = "analisis"
+    id_categoria: int
+    categoria_codigo: str
+    categoria_nombre: str
+    categoria_momento: str
     metodologia: Optional[str] = None
     tipo_dato: str
     limite_inferior: Optional[float] = None
@@ -75,6 +89,23 @@ class EspecificacionEnsayoResponse(BaseModel):
     id_laboratorio: Optional[int] = None
     laboratorio_nombre: Optional[str] = None
     analito: Optional[str] = None
+
+
+class CategoriaEnsayoResponse(BaseModel):
+    """lims_categorias_ensayo -- de dónde sale el selector de categoría al
+    agregar/editar un ensayo de especificación (ver GET .../categorias-
+    ensayo), en vez de un <select> con opciones hardcodeadas en el
+    frontend. momento distingue análisis de laboratorio vs. muestreo físico
+    (para toda la lógica que solo necesita saber cuál de los dos es, sin
+    importar cuántas categorías de cada momento existan); codigo identifica
+    una categoría puntual de forma estable (nombre puede cambiar sin romper
+    nada que compare por codigo)."""
+    id_categoria: int
+    codigo: str
+    nombre: str
+    momento: str
+    orden: int
+    activo: bool
 
 
 # ── Especificaciones ───────────────────────────────────────────
@@ -136,6 +167,18 @@ class EspecificacionResponse(BaseModel):
     # reusan _fila_a_especificacion los dejan en False por defecto.
     tiene_muestras: bool = False
     tiene_testigos: bool = False
+    # Campo de Datos Maestros -- cuántas etiquetas "APROBADO --
+    # COMPLEMENTARIA" adjuntar automáticamente al imprimir la etiqueta
+    # principal de Aprobado de una muestra de esta especificación (ver
+    # _imprimir_etiqueta_estado_muestra en muestras.py). 0 (default) = no
+    # necesita ninguna. Son pocos los insumos que la necesitan (muchos usos,
+    # la grilla de 6 casilleros de la etiqueta principal no alcanza) -- por
+    # eso se configura por especificación en vez de ofrecerse para todas.
+    cantidad_etiquetas_complementarias: int = 0
+
+
+class EspecificacionEtiquetaComplementariaUpdate(BaseModel):
+    cantidad_etiquetas_complementarias: int = Field(..., ge=0, le=99)
 
 
 class EspecificacionDetalle(EspecificacionResponse):

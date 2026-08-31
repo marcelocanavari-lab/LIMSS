@@ -71,6 +71,10 @@ export const muestrasApi = {
   contarEtiquetas: (id) => api.get(`/api/muestras/${id}/etiquetas-cantidad`),
   // Etiquetas APROBADO/RECHAZADO -- el backend bloquea si el dictamen no
   // coincide con el estado de la etiqueta que se quiere imprimir.
+  // Si la especificación del artículo tiene cantidad_etiquetas_
+  // complementarias > 0, imprimir-aprobado adjunta automáticamente esa
+  // cantidad de etiquetas "APROBADO -- COMPLEMENTARIA" al mismo trabajo de
+  // impresión -- no hay endpoint aparte para eso.
   imprimirAprobado: (id, idImpresora, cantidad = 1) => api.post(`/api/muestras/${id}/imprimir-aprobado`, { id_impresora: idImpresora, cantidad }),
   imprimirRechazado: (id, idImpresora, cantidad = 1) => api.post(`/api/muestras/${id}/imprimir-rechazado`, { id_impresora: idImpresora, cantidad }),
 

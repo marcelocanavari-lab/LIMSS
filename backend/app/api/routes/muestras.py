@@ -61,6 +61,7 @@ from app.api.routes.solicitudes_muestreo import (
 from app.services.impresion_sato import (
     armar_pares_etiquetas_muestra,
     generar_sbpl_etiqueta,
+    generar_sbpl_etiqueta_complementaria,
     generar_sbpl_etiqueta_estado,
     generar_sbpl_etiqueta_par,
     imprimir_sbpl,
@@ -692,6 +693,11 @@ def buscar_para_etiquetas(
     for m in cursor.fetchall()[:20]:
         etiquetas = ["muestra"]
         if m.estado in ("aprobado", "aprobado_sin_dictamen"):
+            # Las etiquetas complementarias de Aprobado (si la especificación
+            # tiene cantidad_etiquetas_complementarias > 0) se adjuntan
+            # automáticamente al mismo trabajo de impresión de "aprobado" --
+            # no son una opción aparte en este listado (ver
+            # _imprimir_etiqueta_estado_muestra en este mismo archivo).
             etiquetas.append("aprobado")
         elif m.estado == "rechazado":
             etiquetas.append("rechazado")
@@ -1090,13 +1096,13 @@ def listar_pendientes_envio(
     """Bandeja de Envío de Muestras (Etapas 2/3): muestras que todavía
     admiten crear un nuevo envío o cargar resultados de los que ya tiene.
 
-    Excluye especificaciones sin ningún ensayo de etapa 'analisis' (solo
-    checklist de muestreo) -- no hay nada que enviar a ningún laboratorio
-    para esas, quedan directo esperando Dictamen (ver
-    especificaciones.tiene_ensayos_analisis y el estado inicial que ya les
-    asigna la creación de la muestra). Sin especificación resuelta
-    (id_especificacion NULL) se mantiene en la bandeja -- mismo criterio
-    conservador de siempre."""
+    Excluye especificaciones sin ningún ensayo de categoría con momento
+    'analisis' (solo checklist de categorías con momento 'muestreo') -- no
+    hay nada que enviar a ningún laboratorio para esas, quedan directo
+    esperando Dictamen (ver especificaciones.tiene_ensayos_analisis y el
+    estado inicial que ya les asigna la creación de la muestra). Sin
+    especificación resuelta (id_especificacion NULL) se mantiene en la
+    bandeja -- mismo criterio conservador de siempre."""
     cursor = conn.cursor()
     like = f"%{buscar}%"
     cursor.execute(
@@ -1106,7 +1112,8 @@ def listar_pendientes_envio(
               m.id_especificacion IS NULL
               OR EXISTS (
                   SELECT 1 FROM lims_especificacion_ensayos see
-                  WHERE see.id_especificacion = m.id_especificacion AND see.etapa = 'analisis' AND see.activo = 1
+                  INNER JOIN lims_categorias_ensayo cat ON cat.id_categoria = see.id_categoria
+                  WHERE see.id_especificacion = m.id_especificacion AND cat.momento = 'analisis' AND see.activo = 1
               )
           )
           AND (m.codigo_muestra LIKE ? OR m.nro_referencia LIKE ? OR m.erp_CODART LIKE ? OR m.erp_DESART LIKE ?)
@@ -2190,7 +2197,15 @@ def _imprimir_etiqueta_estado_muestra(
     estado "sin dictamen" equivalente para el caso de rechazo, esa decisión
     sí necesita la revisión y justificación de QA antes de imprimir nada.
     En cualquier caso, mientras la muestra esté 'en_análisis' (resultados
-    todavía incompletos), ninguna de las dos etiquetas está disponible."""
+    todavía incompletos), ninguna de las dos etiquetas está disponible.
+
+    Si titulo == "APROBADO" y la especificación de la muestra tiene
+    cantidad_etiquetas_complementarias > 0 (ficha de especificación, Datos
+    Maestros), se adjuntan esa cantidad de etiquetas "APROBADO --
+    COMPLEMENTARIA" (generar_sbpl_etiqueta_complementaria) al final del
+    mismo trabajo de impresión -- no es una opción aparte que haya que
+    buscar o elegir, se imprime automáticamente junto con la principal.
+    RECHAZADO nunca lleva complementaria."""
     cursor = conn.cursor()
     cursor.execute(_SELECT_MUESTRA + " WHERE m.id_muestra = ?", id_muestra)
     muestra = cursor.fetchone()
@@ -2231,6 +2246,23 @@ def _imprimir_etiqueta_estado_muestra(
     bultos_fallback = solicitud.nro_bultos if solicitud and solicitud.nro_bultos else 1
     bultos = expandir_bultos(grupos, bultos_fallback, cantidad_texto, cantidad_valor_fallback=muestra.cantidad_enviada)
 
+    # Cantidad de etiquetas complementarias a adjuntar (solo APROBADO) --
+    # tolerante a que la migración de cantidad_etiquetas_complementarias
+    # todavía no haya corrido en este entorno (mismo criterio que el resto
+    # de columnas nuevas de este codebase): si falla, se asume 0 en vez de
+    # romper toda la impresión de Aprobado por una función accesoria.
+    cantidad_etiquetas_complementarias = 0
+    if titulo == "APROBADO" and muestra.id_especificacion is not None:
+        try:
+            cursor.execute(
+                "SELECT cantidad_etiquetas_complementarias FROM lims_especificaciones WHERE id_especificacion = ?",
+                muestra.id_especificacion,
+            )
+            fila_espec = cursor.fetchone()
+            cantidad_etiquetas_complementarias = int(fila_espec.cantidad_etiquetas_complementarias) if fila_espec and fila_espec.cantidad_etiquetas_complementarias else 0
+        except pyodbc.Error:
+            pass
+
     enviadas = 0
     for b in bultos:
         datos = dict(
@@ -2250,14 +2282,45 @@ def _imprimir_etiqueta_estado_muestra(
             raise HTTPException(status_code=502, detail=detalle)
         enviadas += 1
 
+    # Etiquetas complementarias, adjuntas al mismo trabajo de impresión (ver
+    # cantidad_etiquetas_complementarias más arriba) -- un solo job con N
+    # copias, no una por bulto: la complementaria no lleva bulto_actual/
+    # bulto_total (no hay dato que la distinga entre bultos).
+    complementarias_enviadas = 0
+    if cantidad_etiquetas_complementarias > 0:
+        datos_complementaria = {
+            "erp_codart": muestra.erp_CODART,
+            "nro_ir": muestra.nro_referencia,
+            "etiqueta_referencia": datos_base["etiqueta_referencia"],
+        }
+        sbpl_complementaria = generar_sbpl_etiqueta_complementaria(
+            datos_complementaria, impresora.ancho_mm, impresora.alto_mm, impresora.resolucion_dpi,
+            cantidad_copias=cantidad_etiquetas_complementarias,
+        )
+        try:
+            imprimir_sbpl(impresora, sbpl_complementaria, nombre_trabajo=f"Aprobado complementaria {muestra.codigo_muestra}")
+        except RuntimeError as e:
+            raise HTTPException(
+                status_code=502,
+                detail=f"{str(e)} (se enviaron {enviadas} etiqueta{'s' if enviadas != 1 else ''} {titulo} antes de este error, faltaron las complementarias)",
+            )
+        complementarias_enviadas = cantidad_etiquetas_complementarias
+
     audit.registrar(
         conn, entidad=entidad_auditoria, accion="imprimir",
         id_usuario=user["id_usuario"], id_entidad=id_muestra,
-        valor_nuevo={"id_impresora": body.id_impresora, "ruta_red": impresora.ruta_red, "cantidad": body.cantidad, "cantidad_etiquetas": enviadas},
+        valor_nuevo={
+            "id_impresora": body.id_impresora, "ruta_red": impresora.ruta_red, "cantidad": body.cantidad,
+            "cantidad_etiquetas": enviadas, "cantidad_etiquetas_complementarias": complementarias_enviadas,
+        },
     )
 
     plural = "s" if enviadas != 1 else ""
-    return ImprimirDirectoResponse(ok=True, mensaje=f"{enviadas} etiqueta{plural} {titulo} enviada{plural} a {impresora.nombre}")
+    mensaje = f"{enviadas} etiqueta{plural} {titulo} enviada{plural} a {impresora.nombre}"
+    if complementarias_enviadas:
+        plural_compl = "s" if complementarias_enviadas != 1 else ""
+        mensaje += f" + {complementarias_enviadas} complementaria{plural_compl}"
+    return ImprimirDirectoResponse(ok=True, mensaje=mensaje)
 
 
 @router.post("/{id_muestra}/imprimir-aprobado", response_model=ImprimirDirectoResponse)

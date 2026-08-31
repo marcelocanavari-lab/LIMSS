@@ -13,10 +13,9 @@ const LABEL_ETIQUETA = {
 };
 
 // Color de rollo físico que el operador debe tener cargado en la SATO --
-// el sistema no imprime en color, lo determina el papel. La etiqueta de
-// Muestra no tiene un color propio asignado (no es un dictamen), así que no
-// entra acá -- no se muestra ningún aviso de color para ese caso.
+// el sistema no imprime en color, lo determina el papel.
 const COLOR_PAPEL_POR_ETIQUETA = {
+  muestra: 'BLANCAS',
   cuarentena: 'AMARILLAS',
   aprobado: 'VERDES',
   rechazado: 'ROJAS',

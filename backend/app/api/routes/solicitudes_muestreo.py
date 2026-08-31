@@ -170,6 +170,7 @@ def _fila_a_solicitud(row, cursor=None) -> SolicitudMuestreoResponse:
         proveedor_nombre=row.proveedor_nombre,
         fecha_ingreso=row.fecha_ingreso,
         fecha_vencimiento=row.fecha_vencimiento,
+        sin_vencimiento_ingreso_confirmado=bool(_g(row, "sin_vencimiento_ingreso_confirmado")),
         cantidad_ingresada=float(row.cantidad_ingresada) if row.cantidad_ingresada is not None else None,
         unidad_cantidad=row.unidad_cantidad,
         lote_proveedor=row.lote_proveedor,
@@ -212,29 +213,18 @@ def _obtener_solicitud_o_404(cursor, id_solicitud: int):
 
 def _verificar_completa_para_ejecutar(cursor, row) -> None:
     """Antes de generar el envío o confirmar el muestreo, la solicitud tiene
-    que tener laboratorio y muestreador asignados -- son los únicos datos
-    que hacen falta para poder ejecutar (determinan quién muestrea y contra
-    qué ensayos). El lote y el protocolo del proveedor son papeleo que QA
-    puede completar en un momento distinto, incluso después de ejecutado el
-    muestreo (ver PUT .../completar-datos y POST .../protocolo-proveedor) --
-    no tiene sentido hacer esperar al muestreador por eso. El agente puede
-    dejar laboratorio/muestreador en blanco cuando no los puede resolver
-    solo con el ERP (ver app/services/agente_muestreo.py).
-
-    Laboratorio NO se exige si la especificación no tiene ningún ensayo de
-    etapa 'analisis' (mismo chequeo que ya usa _crear_muestra_desde_
-    solicitud para decidir el estado inicial de la muestra, tiene_ensayos_
-    analisis) -- bug real detectado con la especificación 410 (Material de
-    Empaque sin ensayos de análisis ni checklist, 0 filas en lims_
-    especificacion_ensayos): no hay ningún laboratorio que asignar (no hay
-    ensayo al que asignárselo), así que exigirlo bloqueaba ejecutar el
-    muestreo sin ninguna forma real de completarlo -- completar-datos nunca
-    autocompletó el campo para este caso (no existe esa lógica en ese
-    endpoint, no es una regresión), simplemente la validación de acá nunca
-    contempló la excepción que sí existe más adelante en el flujo."""
+    que tener muestreador asignado -- determina quién muestrea. El
+    laboratorio ya NO se exige acá (rediseño de la pantalla de Solicitud de
+    Muestreo: dejó de elegirse al crear/completar la solicitud, se resuelve
+    más adelante, por ensayo, al generar el envío -- ver EnvioFormPage.jsx,
+    que ya elige laboratorio de forma independiente). El lote y el
+    protocolo del proveedor son papeleo que QA puede completar en un
+    momento distinto, incluso después de ejecutado el muestreo (ver PUT
+    .../completar-datos y POST .../protocolo-proveedor) -- no tiene sentido
+    hacer esperar al muestreador por eso. El agente puede dejar muestreador
+    en blanco cuando no lo puede resolver solo con el ERP (ver
+    app/services/agente_muestreo.py)."""
     faltantes = []
-    if row.id_laboratorio is None and tiene_ensayos_analisis(cursor, row.id_especificacion):
-        faltantes.append("laboratorio")
     if row.id_muestreador is None:
         faltantes.append("muestreador")
     if faltantes:
@@ -323,29 +313,36 @@ def _obtener_cantidades(cursor, id_especificacion: Optional[int]) -> dict:
     return resultado
 
 
-def _obtener_ensayos(cursor, id_solicitud: int, id_especificacion: Optional[int], id_laboratorio: Optional[int]) -> list[EnsayoSolicitudMuestreo]:
-    """Ensayos del laboratorio elegido al crear la solicitud, con su
-    resultado ya cargado en la Orden de Trabajo digital si lo hay -- LEFT
-    JOIN por id_solicitud, así que antes de confirmar el muestreo todos los
-    valores vienen en None (mismo shape para el formulario en blanco, la
-    Orden de Trabajo impresa ya completada, y GET .../ensayos-para-orden).
+def _obtener_ensayos(cursor, id_solicitud: int, id_especificacion: Optional[int]) -> list[EnsayoSolicitudMuestreo]:
+    """Ensayos de análisis de la especificación, con su resultado ya cargado
+    en la Orden de Trabajo digital si lo hay -- LEFT JOIN por id_solicitud,
+    así que antes de confirmar el muestreo todos los valores vienen en None
+    (mismo shape para el formulario en blanco, la Orden de Trabajo impresa
+    ya completada, y GET .../ensayos-para-orden).
 
-    id_laboratorio puede ser None en una solicitud generada por el agente
-    que todavía no tiene laboratorio asignado (ver origen/completar-laboratorio)."""
-    if id_especificacion is None or id_laboratorio is None:
+    Ya NO se filtra por id_laboratorio (rediseño de esta pantalla: el
+    laboratorio no se elige más al crear/completar la solicitud, se resuelve
+    después por ensayo al generar el envío) -- trae los ensayos de TODOS los
+    laboratorios de la especificación, cada uno con su propio
+    laboratorio_nombre (ver EnsayoSolicitudMuestreo) para poder
+    identificarlos en la Orden de Trabajo impresa."""
+    if id_especificacion is None:
         return []
     cursor.execute(
         """
         SELECT ee.id_espec_ensayo, ee.orden, m.nombre_ensayo, ee.metodologia, ee.tipo_dato, ee.limite_inferior,
                ee.limite_superior, ee.unidad_medida, ee.valor_requerido, ee.especificacion_texto, ee.obligatorio,
+               lab.nombre AS laboratorio_nombre,
                r.valor_numerico, r.valor_cualitativo, r.dentro_especificacion
         FROM lims_especificacion_ensayos ee
         INNER JOIN lims_ensayos_maestro m ON m.id_ensayo_maestro = ee.id_ensayo_maestro
+        INNER JOIN lims_categorias_ensayo cat ON cat.id_categoria = ee.id_categoria
+        LEFT JOIN lims_laboratorios lab ON lab.id_laboratorio = ee.id_laboratorio
         LEFT JOIN lims_orden_trabajo_resultados r ON r.id_espec_ensayo = ee.id_espec_ensayo AND r.id_solicitud = ?
-        WHERE ee.id_especificacion = ? AND ee.id_laboratorio = ? AND ee.etapa = 'analisis' AND ee.activo = 1
+        WHERE ee.id_especificacion = ? AND cat.momento = 'analisis' AND ee.activo = 1
         ORDER BY ee.orden
         """,
-        id_solicitud, id_especificacion, id_laboratorio,
+        id_solicitud, id_especificacion,
     )
     return [
         EnsayoSolicitudMuestreo(
@@ -355,6 +352,7 @@ def _obtener_ensayos(cursor, id_solicitud: int, id_especificacion: Optional[int]
             limite_superior=float(e.limite_superior) if e.limite_superior is not None else None,
             unidad_medida=e.unidad_medida, valor_requerido=e.valor_requerido,
             especificacion_texto=e.especificacion_texto, obligatorio=bool(e.obligatorio),
+            laboratorio_nombre=e.laboratorio_nombre,
             valor_numerico=float(e.valor_numerico) if e.valor_numerico is not None else None,
             valor_cualitativo=e.valor_cualitativo,
             dentro_especificacion=bool(e.dentro_especificacion) if e.dentro_especificacion is not None else None,
@@ -620,9 +618,15 @@ def crear_solicitud(
             },
         )
 
-    cursor.execute("SELECT 1 FROM lims_laboratorios WHERE id_laboratorio = ? AND activo = 1", body.id_laboratorio)
-    if not cursor.fetchone():
-        raise HTTPException(status_code=404, detail="El laboratorio indicado no existe o está inactivo")
+    # id_laboratorio: rediseño de esta pantalla, ya no se pide ni se valida
+    # -- se resuelve más adelante, por ensayo, al generar el envío. Se deja
+    # el chequeo condicional (no se borra) solo por compatibilidad con algún
+    # cliente API viejo que todavía lo mande; el formulario actual nunca lo
+    # manda.
+    if body.id_laboratorio is not None:
+        cursor.execute("SELECT 1 FROM lims_laboratorios WHERE id_laboratorio = ? AND activo = 1", body.id_laboratorio)
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="El laboratorio indicado no existe o está inactivo")
 
     cursor.execute("SELECT rol, activo FROM lims_usuarios WHERE id_usuario = ?", body.id_muestreador)
     muestreador = cursor.fetchone()
@@ -630,6 +634,15 @@ def crear_solicitud(
         raise HTTPException(status_code=404, detail="El muestreador indicado no existe o está inactivo")
     if muestreador.rol not in _ROLES_MUESTREADOR_O_SUPERIOR:
         raise HTTPException(status_code=400, detail="El usuario asignado no tiene un rol habilitado para muestrear")
+
+    # Recepción del proveedor: si vienen usuarios, tienen que existir y
+    # estar activos (mismo criterio que completar_datos, unificado en esta
+    # misma pantalla).
+    for id_usuario, campo in ((body.id_usuario_recibio, "id_usuario_recibio"), (body.id_usuario_rotulo, "id_usuario_rotulo")):
+        if id_usuario is not None:
+            cursor.execute("SELECT 1 FROM lims_usuarios WHERE id_usuario = ? AND activo = 1", id_usuario)
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail=f"El usuario indicado en {campo} no existe o está inactivo")
 
     cursor.execute(
         "SELECT id_especificacion, cantidad_muestra, cantidad_contramuestra "
@@ -648,15 +661,16 @@ def crear_solicitud(
     # no tiene muestras definidas, el frontend solo muestra una advertencia,
     # no bloquea la creación de la solicitud.
 
-    cursor.execute(
-        "SELECT 1 FROM lims_especificacion_ensayos WHERE id_especificacion = ? AND id_laboratorio = ?",
-        espec.id_especificacion, body.id_laboratorio,
-    )
-    if not cursor.fetchone():
-        raise HTTPException(
-            status_code=400,
-            detail="El laboratorio seleccionado no tiene ensayos asignados para la especificación de este artículo",
+    if body.id_laboratorio is not None:
+        cursor.execute(
+            "SELECT 1 FROM lims_especificacion_ensayos WHERE id_especificacion = ? AND id_laboratorio = ?",
+            espec.id_especificacion, body.id_laboratorio,
         )
+        if not cursor.fetchone():
+            raise HTTPException(
+                status_code=400,
+                detail="El laboratorio seleccionado no tiene ensayos asignados para la especificación de este artículo",
+            )
 
     nro_solicitud = _generar_nro_solicitud(cursor)
 
@@ -689,9 +703,10 @@ def crear_solicitud(
              proveedor_codigo, proveedor_nombre, lote_proveedor, fecha_ingreso, fecha_vencimiento,
              fecha_reanalisis, pais_origen, cantidad_ingresada, unidad_cantidad, nro_bultos,
              metodologia_analisis, fabricante, protocolo_proveedor_path, protocolo_proveedor_nombre_original,
-             documentacion_proveedor_path, documentacion_proveedor_nombre_original)
+             documentacion_proveedor_path, documentacion_proveedor_nombre_original,
+             fecha_factura_proveedor, numero_factura_proveedor, id_usuario_recibio, id_usuario_rotulo)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendiente', ?,
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         nro_solicitud, nro_ir_normalizado, linea.N01Id, linea.IdM21, linea.CODART, linea.DESART, espec.id_especificacion,
         body.id_laboratorio, body.id_muestreador, body.observaciones, user["id_usuario"],
@@ -700,9 +715,22 @@ def crear_solicitud(
         _a_datetime(body.fecha_reanalisis), body.pais_origen, cantidad_ingresada, normalizar_unidad(linea.unidad), body.nro_bultos,
         body.metodologia_analisis, body.fabricante, ruta_protocolo_proveedor, protocolo_proveedor.filename,
         ruta_documentacion_proveedor, nombre_documentacion_proveedor,
+        _a_datetime(body.fecha_factura_proveedor), body.numero_factura_proveedor,
+        body.id_usuario_recibio, body.id_usuario_rotulo,
     )
     cursor.execute("SELECT @@IDENTITY AS id")
     id_solicitud = int(cursor.fetchone().id)
+    try:
+        # Columna agregada en migrations_solicitud_sin_vencimiento_ingreso.sql
+        # -- si el entorno todavía no la corrió, se omite sin bloquear el
+        # resto del alta (mismo criterio de tolerancia usado en todo el
+        # módulo, ver _g).
+        cursor.execute(
+            "UPDATE lims_solicitudes_muestreo SET sin_vencimiento_ingreso_confirmado = ? WHERE id_solicitud = ?",
+            1 if body.sin_vencimiento_ingreso_confirmado else 0, id_solicitud,
+        )
+    except pyodbc.Error:
+        pass
 
     # Grupos de bultos (cantidad de bultos x cantidad de unidades cada uno) --
     # con al menos un grupo, nro_bultos pasa a ser la suma calculada en vez
@@ -750,22 +778,35 @@ def completar_datos(
 ):
     """Completa en una solicitud pendiente los datos que el alta manual pide
     en el momento (obligatorios u opcionales) pero que el agente no puede
-    resolver solo con el ERP -- laboratorio, muestreador, lote del
-    proveedor, país de origen, fecha de reanálisis, bultos, metodología,
-    fabricante (ver app/services/agente_muestreo.py; el protocolo y la
-    documentación del proveedor se completan aparte, por archivo, ver
-    POST .../protocolo-proveedor y POST .../documentacion-proveedor). Solo
-    toca los campos que vengan con valor -- si un campo no se manda, se
-    conserva el que ya tenía la solicitud."""
+    resolver solo con el ERP -- muestreador, lote del proveedor, país de
+    origen, fecha de reanálisis, bultos, metodología, fabricante (ver
+    app/services/agente_muestreo.py; el protocolo y la documentación del
+    proveedor se completan aparte, por archivo, ver POST .../protocolo-
+    proveedor y POST .../documentacion-proveedor). Solo toca los campos que
+    vengan con valor -- si un campo no se manda, se conserva el que ya
+    tenía la solicitud.
+
+    Sin laboratorio (rediseño de esta pantalla): ya no se completa acá para
+    ningún origen, ver el docstring de SolicitudMuestreoCompletar."""
     cursor = conn.cursor()
     row = _obtener_solicitud_o_404(cursor, id_solicitud)
     if row.estado != "pendiente":
         raise HTTPException(status_code=400, detail=f"La solicitud está '{row.estado}', no se puede modificar")
 
-    id_laboratorio = body.id_laboratorio if body.id_laboratorio is not None else row.id_laboratorio
     id_muestreador = body.id_muestreador if body.id_muestreador is not None else row.id_muestreador
     lote_proveedor = body.lote_proveedor if body.lote_proveedor is not None else row.lote_proveedor
-    fecha_reanalisis = body.fecha_reanalisis if body.fecha_reanalisis is not None else row.fecha_reanalisis
+    # _a_fecha normaliza el fallback -- el driver ODBC no devuelve un tipo
+    # consistente para columnas DATE (a veces date/datetime, a veces str,
+    # ver _a_fecha más arriba); sin esto, _a_datetime (más abajo, antes del
+    # UPDATE) rompe con TypeError si row.fecha_vencimiento/fecha_reanalisis
+    # vino como str -- bug real detectado al probar este endpoint, no
+    # introducido acá pero corregido de paso porque es la misma función.
+    fecha_vencimiento = body.fecha_vencimiento if body.fecha_vencimiento is not None else _a_fecha(row.fecha_vencimiento)
+    sin_vencimiento_ingreso_confirmado = (
+        body.sin_vencimiento_ingreso_confirmado if body.sin_vencimiento_ingreso_confirmado is not None
+        else bool(_g(row, "sin_vencimiento_ingreso_confirmado"))
+    )
+    fecha_reanalisis = body.fecha_reanalisis if body.fecha_reanalisis is not None else _a_fecha(row.fecha_reanalisis)
     pais_origen = body.pais_origen if body.pais_origen is not None else row.pais_origen
     nro_bultos = body.nro_bultos if body.nro_bultos is not None else row.nro_bultos
     metodologia_analisis = body.metodologia_analisis if body.metodologia_analisis is not None else row.metodologia_analisis
@@ -776,25 +817,10 @@ def completar_datos(
     # muestreador. _g porque las columnas son de una migración que puede no
     # estar corrida todavía en este entorno (ver el UPDATE tolerante más
     # abajo).
-    fecha_factura_proveedor = body.fecha_factura_proveedor if body.fecha_factura_proveedor is not None else _g(row, "fecha_factura_proveedor")
+    fecha_factura_proveedor = body.fecha_factura_proveedor if body.fecha_factura_proveedor is not None else _a_fecha(_g(row, "fecha_factura_proveedor"))
     numero_factura_proveedor = body.numero_factura_proveedor if body.numero_factura_proveedor is not None else _g(row, "numero_factura_proveedor")
     id_usuario_recibio = body.id_usuario_recibio if body.id_usuario_recibio is not None else _g(row, "id_usuario_recibio")
     id_usuario_rotulo = body.id_usuario_rotulo if body.id_usuario_rotulo is not None else _g(row, "id_usuario_rotulo")
-
-    if body.id_laboratorio is not None:
-        cursor.execute("SELECT 1 FROM lims_laboratorios WHERE id_laboratorio = ? AND activo = 1", id_laboratorio)
-        if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="El laboratorio indicado no existe o está inactivo")
-        if row.id_especificacion is not None:
-            cursor.execute(
-                "SELECT 1 FROM lims_especificacion_ensayos WHERE id_especificacion = ? AND id_laboratorio = ?",
-                row.id_especificacion, id_laboratorio,
-            )
-            if not cursor.fetchone():
-                raise HTTPException(
-                    status_code=400,
-                    detail="El laboratorio seleccionado no tiene ensayos asignados para la especificación de este artículo",
-                )
 
     if body.id_muestreador is not None:
         cursor.execute("SELECT rol, activo FROM lims_usuarios WHERE id_usuario = ?", id_muestreador)
@@ -827,11 +853,11 @@ def completar_datos(
     cursor.execute(
         """
         UPDATE lims_solicitudes_muestreo
-        SET id_laboratorio = ?, id_muestreador = ?, lote_proveedor = ?, fecha_reanalisis = ?,
+        SET id_muestreador = ?, lote_proveedor = ?, fecha_vencimiento = ?, fecha_reanalisis = ?,
             pais_origen = ?, nro_bultos = ?, metodologia_analisis = ?, fabricante = ?
         WHERE id_solicitud = ?
         """,
-        id_laboratorio, id_muestreador, lote_proveedor, _a_datetime(fecha_reanalisis),
+        id_muestreador, lote_proveedor, _a_datetime(fecha_vencimiento), _a_datetime(fecha_reanalisis),
         pais_origen, nro_bultos, metodologia_analisis, fabricante, id_solicitud,
     )
     try:
@@ -851,17 +877,23 @@ def completar_datos(
         )
     except pyodbc.Error:
         pass
+    try:
+        # Columna agregada en migrations_solicitud_sin_vencimiento_ingreso.sql
+        cursor.execute(
+            "UPDATE lims_solicitudes_muestreo SET sin_vencimiento_ingreso_confirmado = ? WHERE id_solicitud = ?",
+            1 if sin_vencimiento_ingreso_confirmado else 0, id_solicitud,
+        )
+    except pyodbc.Error:
+        pass
 
     audit.registrar(
         conn, entidad="solicitud_muestreo", accion="completar_datos",
         id_usuario=user["id_usuario"], id_entidad=id_solicitud,
         valor_anterior={
-            "id_laboratorio": row.id_laboratorio, "id_muestreador": row.id_muestreador,
-            "lote_proveedor": row.lote_proveedor,
+            "id_muestreador": row.id_muestreador, "lote_proveedor": row.lote_proveedor,
         },
         valor_nuevo={
-            "id_laboratorio": id_laboratorio, "id_muestreador": id_muestreador,
-            "lote_proveedor": lote_proveedor,
+            "id_muestreador": id_muestreador, "lote_proveedor": lote_proveedor,
         },
     )
 
@@ -877,7 +909,7 @@ def detalle_solicitud(
     cursor = conn.cursor()
     row = _obtener_solicitud_o_404(cursor, id_solicitud)
     cantidades = _obtener_cantidades(cursor, row.id_especificacion)
-    ensayos = _obtener_ensayos(cursor, id_solicitud, row.id_especificacion, row.id_laboratorio)
+    ensayos = _obtener_ensayos(cursor, id_solicitud, row.id_especificacion)
 
     base = _fila_a_solicitud(row, cursor)
     return SolicitudMuestreoDetalle(
@@ -901,7 +933,7 @@ def descargar_formulario(
     cursor = conn.cursor()
     row = _obtener_solicitud_o_404(cursor, id_solicitud)
     cantidades = _obtener_cantidades(cursor, row.id_especificacion)
-    ensayos = _obtener_ensayos(cursor, id_solicitud, row.id_especificacion, row.id_laboratorio)
+    ensayos = _obtener_ensayos(cursor, id_solicitud, row.id_especificacion)
 
     pdf_bytes = generar_pdf_formulario(row, cantidades, ensayos)
     return Response(
@@ -921,7 +953,7 @@ def descargar_orden_trabajo(
     cursor = conn.cursor()
     row = _obtener_solicitud_o_404(cursor, id_solicitud)
     cantidades = _obtener_cantidades(cursor, row.id_especificacion)
-    ensayos = _obtener_ensayos(cursor, id_solicitud, row.id_especificacion, row.id_laboratorio)
+    ensayos = _obtener_ensayos(cursor, id_solicitud, row.id_especificacion)
 
     pdf_bytes = generar_pdf_orden_trabajo(row, cantidades, ensayos)
     return Response(
@@ -939,8 +971,12 @@ def descargar_planilla_muestreo(
     """Réplica de P_CC002-2 (Planilla de Muestreo de Materias Primas)."""
     cursor = conn.cursor()
     row = _obtener_solicitud_o_404(cursor, id_solicitud)
+    checklist_materia_prima = [
+        it for it in obtener_checklist_muestreo(cursor, row.id_muestra, row.id_especificacion)
+        if it.categoria_codigo == "materia_prima"
+    ]
 
-    pdf_bytes = generar_pdf_planilla_muestreo(row)
+    pdf_bytes = generar_pdf_planilla_muestreo(row, checklist_materia_prima)
     return Response(
         content=pdf_bytes, media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="{row.nro_solicitud}_planilla_muestreo.pdf"'},
@@ -1507,19 +1543,13 @@ def confirmar_orden_trabajo(
     _verificar_completa_para_ejecutar(cursor, row)
 
     df = body.datos_fisicos
+    # "Datos físicos del muestreo" se sacó de Ejecutar Muestreo -- ningún
+    # campo del bloque (incluida esta confirmación de vencimiento) tiene
+    # reemplazo real en otro lado, pero se eliminó igual. df llega siempre
+    # con sus valores por default (ver OrdenTrabajoDigitalBody), así que ya
+    # no tiene sentido exigir fecha_vencimiento_real/sin_vencimiento_
+    # confirmado -- el frontend nunca los va a mandar.
     tiene_columna_sin_vencimiento = _tiene_columna_sin_vencimiento_confirmado(cursor)
-    if tiene_columna_sin_vencimiento and df.fecha_vencimiento_real is None and not df.sin_vencimiento_confirmado:
-        # Confirmación explícita obligatoria (ver migrations_solicitud_
-        # vencimiento_confirmado.sql): no alcanza con dejar el campo vacío
-        # sin marcar nada -- tiene que quedar claro si nadie lo revisó
-        # todavía o si se revisó el envase y el material genuinamente no
-        # tiene vencimiento. Se tolera si el entorno todavía no corrió esa
-        # migración (columna ausente), igual que el resto de estos campos.
-        raise HTTPException(
-            status_code=400,
-            detail="Confirmá la fecha de vencimiento del material (revisá el envase físico) o marcá "
-                   "que no tiene vencimiento antes de ejecutar el muestreo.",
-        )
 
     cursor.execute(
         """

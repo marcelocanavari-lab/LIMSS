@@ -238,6 +238,10 @@ class ItemImpresionEtiquetas(BaseModel):
     estado: str
     # Subconjunto de ['muestra', 'cuarentena', 'aprobado', 'rechazado'] --
     # lo que corresponde imprimir para este ítem según su estado actual.
+    # Las etiquetas complementarias de Aprobado (si la especificación tiene
+    # cantidad_etiquetas_complementarias > 0) NO son una opción aparte acá
+    # -- se adjuntan automáticamente al trabajo de impresión de "aprobado"
+    # (ver _imprimir_etiqueta_estado_muestra en routes/muestras.py).
     etiquetas_disponibles: list[str]
 
 

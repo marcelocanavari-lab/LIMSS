@@ -220,6 +220,18 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Variante compacta de .field/.card -- densidad de escritorio para
+   formularios largos de una sola pantalla (ver el modal unificado de
+   Solicitud de Muestreo, SolicitudesMuestreoPage.jsx) donde .field-input a
+   --tap-min (56px, pensado para uso táctil) no entra sin scroll. No
+   reemplaza a .field-input en el resto de la app -- solo se agrega como
+   clase extra en los campos de ese formulario puntual. */
+.field-compact { gap: 2px; margin-bottom: 5px; }
+.field-compact .field-label { font-size: var(--fs-xs); }
+.field-compact .field-input { height: 32px; padding: 0 var(--sp-3); font-size: var(--fs-sm); }
+.field-compact select.field-input { padding: 0 var(--sp-2); }
+.card-compact { padding: 8px var(--sp-4); }
+
 .field-error {
   font-size: var(--fs-xs);
   color: var(--danger);
