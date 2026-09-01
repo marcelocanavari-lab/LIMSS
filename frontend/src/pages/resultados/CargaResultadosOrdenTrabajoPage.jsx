@@ -25,6 +25,20 @@ function nuevaMuestraAdHoc() {
   return { key: `adhoc-${contadorAdHoc}`, tipo_muestra: '', cantidad_real: '', unidad: '' };
 }
 
+// Confirmación por defecto de cada muestra de la especificación (checkbox +
+// cantidad real precargada con la cantidad planeada) -- preserva lo que el
+// usuario ya haya tocado (confirmacionesPrevias) para las que ya conocía, y
+// completa con el default de la especificación para las que recién
+// aparecen (ver handleSubmit: se vuelve a llamar con la lista fresca justo
+// antes de confirmar, no solo al montar la pantalla).
+function defaultsConfirmacion(muestrasDeEspec, confirmacionesPrevias) {
+  const siguiente = {};
+  muestrasDeEspec.forEach((m) => {
+    siguiente[m.id] = confirmacionesPrevias[m.id] || { confirmada: m.genera_etiqueta, cantidad_real: String(m.cantidad) };
+  });
+  return siguiente;
+}
+
 export default function CargaResultadosOrdenTrabajoPage() {
   const { idSolicitud } = useParams();
   const navigate = useNavigate();
@@ -67,11 +81,7 @@ export default function CargaResultadosOrdenTrabajoPage() {
           try {
             const muestrasDeEspec = await maestrosApi.listarMuestrasEspecificacion(data.id_especificacion);
             setMuestrasEspec(muestrasDeEspec);
-            const confirmadasIniciales = {};
-            muestrasDeEspec.forEach((m) => {
-              confirmadasIniciales[m.id] = { confirmada: m.genera_etiqueta, cantidad_real: String(m.cantidad) };
-            });
-            setMuestrasConfirmadas(confirmadasIniciales);
+            setMuestrasConfirmadas(defaultsConfirmacion(muestrasDeEspec, {}));
           } catch {
             setMuestrasEspec([]);
           }
@@ -132,8 +142,35 @@ export default function CargaResultadosOrdenTrabajoPage() {
     e.preventDefault();
     setError('');
 
-    for (const m of muestrasEspec) {
-      const conf = muestrasConfirmadas[m.id];
+    // Vuelve a leer lims_especificacion_muestras EN VIVO justo antes de
+    // confirmar -- la carga de muestrasEspec de arriba es una sola vez al
+    // montar la pantalla, así que si alguien agrega (o quita) una muestra
+    // de la especificación mientras el muestreador tiene esta pantalla
+    // abierta, esa carga inicial queda vieja. La confirmación (tabla,
+    // lims_solicitud_muestras, y de ahí las etiquetas) tiene que reflejar
+    // lo vigente en este momento, no lo que había al abrir la pantalla --
+    // bug real: una 3ª muestra agregada a la especificación después de
+    // crear la solicitud nunca llegaba a imprimirse. Se usan variables
+    // locales (no el estado recién seteado, que no está disponible hasta
+    // el próximo render) para la validación y el body de este submit;
+    // igual se actualiza el estado para que la tabla en pantalla quede
+    // consistente si la validación de abajo corta acá.
+    let muestrasVigentes = muestrasEspec;
+    let confirmacionesVigentes = muestrasConfirmadas;
+    if (datos?.id_especificacion) {
+      try {
+        muestrasVigentes = await maestrosApi.listarMuestrasEspecificacion(datos.id_especificacion);
+        confirmacionesVigentes = defaultsConfirmacion(muestrasVigentes, muestrasConfirmadas);
+        setMuestrasEspec(muestrasVigentes);
+        setMuestrasConfirmadas(confirmacionesVigentes);
+      } catch {
+        // si falla el refresco, se sigue con lo que ya había en pantalla --
+        // mismo criterio tolerante que la carga inicial de arriba.
+      }
+    }
+
+    for (const m of muestrasVigentes) {
+      const conf = confirmacionesVigentes[m.id];
       if (conf?.confirmada && !(Number(conf.cantidad_real) > 0)) {
         setError('La cantidad real de las muestras confirmadas tiene que ser mayor a 0');
         return;
@@ -148,10 +185,10 @@ export default function CargaResultadosOrdenTrabajoPage() {
     setGuardando(true);
     try {
       const muestrasBody = [
-        ...muestrasEspec.map((m) => ({
+        ...muestrasVigentes.map((m) => ({
           id_espec_muestra: m.id,
-          cantidad_real: Number(muestrasConfirmadas[m.id]?.cantidad_real || m.cantidad),
-          confirmada: !!muestrasConfirmadas[m.id]?.confirmada,
+          cantidad_real: Number(confirmacionesVigentes[m.id]?.cantidad_real || m.cantidad),
+          confirmada: !!confirmacionesVigentes[m.id]?.confirmada,
         })),
         ...muestrasAdhoc.map((m) => ({
           id_espec_muestra: null,

@@ -1223,6 +1223,21 @@ def _generar_pdf_etiquetas_de_solicitud(cursor, row) -> bytes:
         muestras_confirmadas = _obtener_muestras_confirmadas(cursor, row.id_solicitud)
         if muestras_confirmadas:
             return generar_pdf_etiquetas_v2(row, muestras_confirmadas, iniciales)
+        # Sin confirmación todavía (solicitud pendiente, o ejecutada antes de
+        # que existiera "Muestras a tomar") -- se lee la especificación EN
+        # VIVO con _obtener_tipos_de_especificacion (bug real corregido: antes
+        # caía acá en _obtener_cantidades, truncado a como máximo 2 tipos
+        # fijos -- análisis + contramuestra -- ignorando testigo y cualquier
+        # tipo adicional que la especificación definiera). Mismo generador
+        # (generar_pdf_etiquetas_v2) que ya usa la rama de arriba: acepta
+        # cualquier N de filas con esta misma forma de columnas.
+        tipos = _obtener_tipos_de_especificacion(cursor, row.id_especificacion) if row.id_especificacion else []
+        if tipos:
+            return generar_pdf_etiquetas_v2(row, tipos, iniciales)
+        # Última instancia -- especificación sin ninguna fila en
+        # lims_especificacion_muestras (dato viejo, de antes de que existiera
+        # esa tabla): cae al valor legacy de lims_especificaciones.cantidad_
+        # muestra/cantidad_contramuestra (ver _obtener_cantidades).
         cantidades = _obtener_cantidades(cursor, row.id_especificacion)
         return generar_pdf_etiquetas(row, cantidades, iniciales)
     except Exception:
@@ -1277,13 +1292,12 @@ def _armar_etiquetas_logicas_de_solicitud(cursor, row) -> list[dict]:
     # Igual que el PDF: si ya hay tipos confirmados (lims_solicitud_muestras
     # -- puede pasar incluso antes de ejecutar el muestreo, ver el
     # comentario de "Muestras a tomar" en CargaResultadosOrdenTrabajoPage.jsx),
-    # una etiqueta lógica por tipo. Si no, cae al modelo legacy de 2
-    # etiquetas fijas (análisis + contramuestra) leídas directo de la
-    # especificación -- mismo fallback que generar_pdf_etiquetas.
+    # una etiqueta lógica por tipo.
     tipos_confirmados = _obtener_muestras_confirmadas(cursor, row.id_solicitud)
-    if tipos_confirmados:
+
+    def _etiquetas_desde_tipos(tipos):
         etiquetas = []
-        for t in tipos_confirmados:
+        for t in tipos:
             d = dict(datos_base)
             d["titulo"] = titulo_etiqueta_por_tipo(t.tipo_muestra)
             d["cantidad_muestra_texto"] = (
@@ -1293,6 +1307,23 @@ def _armar_etiquetas_logicas_de_solicitud(cursor, row) -> list[dict]:
             etiquetas.append(d)
         return etiquetas
 
+    if tipos_confirmados:
+        return _etiquetas_desde_tipos(tipos_confirmados)
+
+    # Sin confirmación todavía -- se lee la especificación EN VIVO (bug real
+    # corregido: antes caía acá en el modelo legacy de 2 etiquetas fijas --
+    # análisis + contramuestra -- leídas de _obtener_cantidades, ignorando
+    # testigo y cualquier tipo adicional que la especificación definiera).
+    # Mismo generador (_etiquetas_desde_tipos) que la rama de arriba, mismas
+    # columnas que devuelve _obtener_tipos_de_especificacion.
+    tipos_espec = _obtener_tipos_de_especificacion(cursor, row.id_especificacion) if row.id_especificacion else []
+    if tipos_espec:
+        return _etiquetas_desde_tipos(tipos_espec)
+
+    # Última instancia -- especificación sin ninguna fila en
+    # lims_especificacion_muestras (dato viejo): cae al valor legacy de
+    # lims_especificaciones.cantidad_muestra/cantidad_contramuestra (ver
+    # _obtener_cantidades), como máximo 2 etiquetas fijas.
     cantidades = _obtener_cantidades(cursor, row.id_especificacion)
 
     def _cantidad_o_none(cantidad, unidad):
