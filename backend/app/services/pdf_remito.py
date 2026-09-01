@@ -75,6 +75,12 @@ def _texto(valor) -> str:
     return str(valor)
 
 
+def _fmt_lote_proveedor(valor) -> str:
+    """"S/L" (sin lote) en vez del "—" genérico de _texto -- mismo criterio
+    ya usado para este campo en el Libro de Ingresos (ver reportes.py)."""
+    return valor.strip() if valor and str(valor).strip() else "S/L"
+
+
 _LABEL_X_OFFSET = 5 * cm  # separación mínima etiqueta -> valor
 
 
@@ -141,6 +147,7 @@ def _dibujar_copia(
     campo("ID de Muestra", _texto(datos.codigo_muestra))
     campo("Material", f"{datos.erp_CODART} - {datos.erp_DESART}")
     campo(etiqueta_referencia(datos.tipo_referencia), _texto(datos.nro_referencia))
+    campo("Lote del proveedor", _fmt_lote_proveedor(datos.lote_proveedor))
     campo("Fecha de muestreo", _fmt_fecha(datos.fecha_muestreo))
     campo("Vencimiento", _fmt_vencimiento_lote(vencimiento_lote, datos.tipo_referencia))
     campo("Muestreador", _texto(datos.usuario_muestreo_nombre))

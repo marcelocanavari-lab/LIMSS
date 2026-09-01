@@ -63,6 +63,13 @@ _SELECT_DATOS_REMITO = """
            -- (LEFT JOIN, ver el bug real de más abajo: una muestra creada
            -- por "Nueva Muestra" no tiene solicitud asociada).
            s.fecha_vencimiento_real,
+           -- N° de lote del proveedor, cargado en la Solicitud de Muestreo
+           -- (completar-datos) -- mismo LEFT JOIN de arriba, puede no haber
+           -- ninguna solicitud asociada (muestra creada por "Nueva
+           -- Muestra"), en cuyo caso queda NULL y el PDF lo muestra como
+           -- "S/L" (mismo criterio ya usado para este campo en
+           -- reportes.py/Libro de Ingresos).
+           s.lote_proveedor,
            -- Protocolo (COAS) del proveedor, cargado en la Solicitud de
            -- Muestreo antes de que exista ningún envío (ver
            -- subir_protocolo_proveedor en solicitudes_muestreo.py) -- se
