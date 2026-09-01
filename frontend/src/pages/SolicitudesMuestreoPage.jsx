@@ -145,8 +145,28 @@ export default function SolicitudesMuestreoPage() {
   const [cuarentenaSolicitud, setCuarentenaSolicitud] = useState(null);
   const [impresorasCuarentena, setImpresorasCuarentena] = useState([]);
   const [idImpresoraCuarentena, setIdImpresoraCuarentena] = useState('');
+  const [desdeBultoCuarentena, setDesdeBultoCuarentena] = useState('');
+  const [hastaBultoCuarentena, setHastaBultoCuarentena] = useState('');
   const [imprimiendoCuarentena, setImprimiendoCuarentena] = useState(false);
   const [mensajeCuarentena, setMensajeCuarentena] = useState(null); // { tipo: 'ok'|'error', texto }
+
+  // ── Modal: corregir datos de recepción (post-ejecución) -- excepción
+  // controlada y puntual a la regla de "ejecutada = bloqueada para
+  // edición" (ver corregir_recepcion en el backend), solo QA/Admin
+  // (puedeCrear). Modal propio, separado del formulario unificado de
+  // arriba a propósito: no reabre la edición general de la solicitud,
+  // solo estos campos concretos.
+  const [corrigiendoSolicitud, setCorrigiendoSolicitud] = useState(null);
+  const [corrigiendoGruposBultos, setCorrigiendoGruposBultos] = useState([]);
+  const [corrigiendoFechaFactura, setCorrigiendoFechaFactura] = useState('');
+  const [corrigiendoNumeroFactura, setCorrigiendoNumeroFactura] = useState('');
+  const [corrigiendoDocumentoProveedorActual, setCorrigiendoDocumentoProveedorActual] = useState('');
+  const [corrigiendoDocumentoProveedor, setCorrigiendoDocumentoProveedor] = useState(null);
+  const [corrigiendoProtocoloProveedorActual, setCorrigiendoProtocoloProveedorActual] = useState('');
+  const [corrigiendoProtocoloProveedor, setCorrigiendoProtocoloProveedor] = useState(null);
+  const [motivoCorreccion, setMotivoCorreccion] = useState('');
+  const [errorCorreccion, setErrorCorreccion] = useState('');
+  const [guardandoCorreccion, setGuardandoCorreccion] = useState(false);
 
   // ── Modal: imprimir etiquetas de MUESTRA directo por SATO ──────────
   // Mismo patrón que el modal de Cuarentena de arriba y que ya usan
@@ -578,8 +598,74 @@ export default function SolicitudesMuestreoPage() {
     }
   }
 
+  async function abrirCorregirRecepcion(s) {
+    setCorrigiendoSolicitud(s);
+    setCorrigiendoFechaFactura(s.fecha_factura_proveedor || '');
+    setCorrigiendoNumeroFactura(s.numero_factura_proveedor || '');
+    setCorrigiendoDocumentoProveedorActual(s.documentacion_proveedor_nombre_original || '');
+    setCorrigiendoDocumentoProveedor(null);
+    setCorrigiendoProtocoloProveedorActual(s.protocolo_proveedor_nombre_original || '');
+    setCorrigiendoProtocoloProveedor(null);
+    setCorrigiendoGruposBultos([]);
+    setMotivoCorreccion('');
+    setErrorCorreccion('');
+    try {
+      const detalle = await solicitudesMuestreoApi.obtener(s.id_solicitud);
+      if (detalle.grupos_bultos?.length) {
+        setCorrigiendoGruposBultos(detalle.grupos_bultos.map((g) => ({
+          cantidad_bultos: String(g.cantidad_bultos),
+          cantidad_unidades: String(g.cantidad_unidades),
+          unidad_medida: g.unidad_medida || '',
+        })));
+      }
+    } catch (err) {
+      setErrorCorreccion(err instanceof ApiError ? err.message : 'No se pudieron cargar los datos de la solicitud');
+    }
+  }
+
+  function cerrarCorregirRecepcion() {
+    setCorrigiendoSolicitud(null);
+  }
+
+  async function handleCorregirRecepcion(e) {
+    e.preventDefault();
+    if (!motivoCorreccion.trim()) {
+      setErrorCorreccion('El motivo es obligatorio');
+      return;
+    }
+    setErrorCorreccion('');
+    setGuardandoCorreccion(true);
+    try {
+      const id = corrigiendoSolicitud.id_solicitud;
+      const motivo = motivoCorreccion.trim();
+      await solicitudesMuestreoApi.corregirRecepcion(id, {
+        grupos_bultos: gruposBultosParaApi(corrigiendoGruposBultos),
+        fecha_factura_proveedor: corrigiendoFechaFactura || null,
+        numero_factura_proveedor: corrigiendoNumeroFactura.trim() || null,
+        motivo,
+      });
+      // Protocolo/documentación van por sus endpoints de archivo de siempre
+      // (ya no chequean estado) -- se les pasa el mismo motivo para que
+      // queden en el mismo audit trail que el resto de esta corrección.
+      if (corrigiendoProtocoloProveedor) {
+        await solicitudesMuestreoApi.subirProtocoloProveedor(id, corrigiendoProtocoloProveedor, motivo);
+      }
+      if (corrigiendoDocumentoProveedor) {
+        await solicitudesMuestreoApi.subirDocumentacionProveedor(id, corrigiendoDocumentoProveedor, motivo);
+      }
+      cerrarCorregirRecepcion();
+      cargar();
+    } catch (err) {
+      setErrorCorreccion(err instanceof ApiError ? err.message : 'No se pudo guardar la corrección');
+    } finally {
+      setGuardandoCorreccion(false);
+    }
+  }
+
   function abrirImprimirCuarentena(s) {
     setCuarentenaSolicitud(s);
+    setDesdeBultoCuarentena('');
+    setHastaBultoCuarentena('');
     setMensajeCuarentena(null);
     if (impresorasCuarentena.length === 0) {
       muestrasApi
@@ -601,7 +687,11 @@ export default function SolicitudesMuestreoPage() {
     setImprimiendoCuarentena(true);
     setMensajeCuarentena(null);
     try {
-      const resp = await solicitudesMuestreoApi.imprimirCuarentena(cuarentenaSolicitud.id_solicitud, Number(idImpresoraCuarentena));
+      const resp = await solicitudesMuestreoApi.imprimirCuarentena(
+        cuarentenaSolicitud.id_solicitud, Number(idImpresoraCuarentena),
+        desdeBultoCuarentena ? Number(desdeBultoCuarentena) : undefined,
+        hastaBultoCuarentena ? Number(hastaBultoCuarentena) : undefined,
+      );
       setMensajeCuarentena({ tipo: 'ok', texto: resp.mensaje });
     } catch (err) {
       setMensajeCuarentena({ tipo: 'error', texto: err instanceof ApiError ? err.message : 'No se pudo imprimir las etiquetas' });
@@ -733,6 +823,11 @@ export default function SolicitudesMuestreoPage() {
                           onClick={() => navigate(`/solicitudes-muestreo/${s.id_solicitud}/orden-trabajo-digital`)}
                         >
                           Ver Orden de Trabajo
+                        </button>
+                      )}
+                      {s.estado === 'ejecutada' && puedeCrear && (
+                        <button className="btn btn-ghost" onClick={() => abrirCorregirRecepcion(s)}>
+                          Corregir datos de recepción
                         </button>
                       )}
                       {s.estado === 'pendiente' && puedeAnular && (
@@ -1144,6 +1239,22 @@ export default function SolicitudesMuestreoPage() {
                     ))}
                   </select>
                 </div>
+                <div className="field">
+                  <label className="field-label">Rango de bultos (opcional -- reimpresión parcial)</label>
+                  <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+                    <input
+                      className="field-input" type="number" min="1" placeholder="Desde" style={{ maxWidth: 120 }}
+                      value={desdeBultoCuarentena} onChange={(e) => setDesdeBultoCuarentena(e.target.value)} disabled={imprimiendoCuarentena}
+                    />
+                    <input
+                      className="field-input" type="number" min="1" placeholder="Hasta" style={{ maxWidth: 120 }}
+                      value={hastaBultoCuarentena} onChange={(e) => setHastaBultoCuarentena(e.target.value)} disabled={imprimiendoCuarentena}
+                    />
+                  </div>
+                  <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--ink-2)' }}>
+                    Vacío = todos los bultos. Cada etiqueta sigue mostrando su número real (ej. "3/10").
+                  </span>
+                </div>
               </>
             )}
 
@@ -1166,6 +1277,117 @@ export default function SolicitudesMuestreoPage() {
                 {imprimiendoCuarentena ? <span className="spinner" /> : 'Imprimir'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {corrigiendoSolicitud && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 'var(--sp-4)',
+          }}
+          onClick={cerrarCorregirRecepcion}
+        >
+          <div className="card" style={{ width: '90%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-2)' }}>
+              Corregir datos de recepción -- {corrigiendoSolicitud.nro_solicitud}
+            </h2>
+            <div className="alert alert-warn" style={{ marginBottom: 'var(--sp-3)' }}>
+              Esta solicitud ya fue ejecutada. Esta acción es una excepción puntual para corregir bultos y datos
+              de recepción del proveedor que quedaron mal cargados o incompletos -- no reabre el resto de la solicitud.
+            </div>
+
+            <form onSubmit={handleCorregirRecepcion}>
+              <GruposBultos grupos={corrigiendoGruposBultos} onChange={setCorrigiendoGruposBultos} disabled={guardandoCorreccion} />
+
+              <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+                <div className="field" style={{ flex: 1 }}>
+                  <label className="field-label" htmlFor="corrFechaFactura">Fecha de factura del proveedor</label>
+                  <input
+                    id="corrFechaFactura" className="field-input" type="date"
+                    value={corrigiendoFechaFactura} onChange={(e) => setCorrigiendoFechaFactura(e.target.value)}
+                    disabled={guardandoCorreccion}
+                  />
+                </div>
+                <div className="field" style={{ flex: 1 }}>
+                  <label className="field-label" htmlFor="corrNroFactura">N° de factura del proveedor</label>
+                  <input
+                    id="corrNroFactura" className="field-input"
+                    value={corrigiendoNumeroFactura} onChange={(e) => setCorrigiendoNumeroFactura(e.target.value)}
+                    disabled={guardandoCorreccion}
+                  />
+                </div>
+              </div>
+
+              <div className="field">
+                <label className="field-label">Documento del proveedor -- remito y/o factura</label>
+                <input
+                  className="field-input" type="file" accept="image/*,application/pdf"
+                  onChange={(e) => setCorrigiendoDocumentoProveedor(e.target.files?.[0] || null)}
+                  disabled={guardandoCorreccion}
+                />
+                <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--ink-3)' }}>
+                  {corrigiendoDocumentoProveedor ? corrigiendoDocumentoProveedor.name
+                    : corrigiendoDocumentoProveedorActual ? (
+                      <>{corrigiendoDocumentoProveedorActual}{' '}
+                        <button
+                          type="button" className="btn btn-ghost" style={{ padding: 0, minHeight: 'auto' }}
+                          onClick={() => verDocumentacionProveedor(corrigiendoSolicitud.id_solicitud)}
+                        >
+                          Ver
+                        </button>
+                      </>
+                    ) : 'No hay ninguno cargado.'}
+                </span>
+              </div>
+
+              <div className="field">
+                <label className="field-label">Protocolo del proveedor -- foto o PDF (COAS)</label>
+                <input
+                  className="field-input" type="file" accept="image/*,application/pdf"
+                  onChange={(e) => setCorrigiendoProtocoloProveedor(e.target.files?.[0] || null)}
+                  disabled={guardandoCorreccion}
+                />
+                <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--ink-3)' }}>
+                  {corrigiendoProtocoloProveedor ? corrigiendoProtocoloProveedor.name
+                    : corrigiendoProtocoloProveedorActual ? (
+                      <>{corrigiendoProtocoloProveedorActual}{' '}
+                        <button
+                          type="button" className="btn btn-ghost" style={{ padding: 0, minHeight: 'auto' }}
+                          onClick={() => verProtocoloProveedor(corrigiendoSolicitud.id_solicitud)}
+                        >
+                          Ver
+                        </button>
+                      </>
+                    ) : 'No hay ninguno cargado.'}
+                </span>
+              </div>
+
+              <div className="field">
+                <label className="field-label" htmlFor="corrMotivo">Motivo de la corrección *</label>
+                <textarea
+                  id="corrMotivo"
+                  className="field-input"
+                  style={{ height: 60, paddingTop: '6px' }}
+                  value={motivoCorreccion}
+                  onChange={(e) => setMotivoCorreccion(e.target.value)}
+                  disabled={guardandoCorreccion}
+                  placeholder="Ej: error de carga de bultos, faltaban 3 -- se corrige de 5 a 8"
+                />
+              </div>
+
+              {errorCorreccion && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-3)' }}>{errorCorreccion}</div>}
+
+              <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+                <button type="button" className="btn btn-ghost" onClick={cerrarCorregirRecepcion} disabled={guardandoCorreccion}>
+                  Cerrar
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={guardandoCorreccion || !motivoCorreccion.trim()}>
+                  {guardandoCorreccion ? <span className="spinner" /> : 'Guardar corrección'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

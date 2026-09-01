@@ -6,6 +6,7 @@ const ITEMS = [
   { label: 'Historial de Lecturas', ruta: '/equipos/historial' },
   { label: 'Gráfico de Tendencia', ruta: '/equipos/grafico' },
   { label: 'Reporte de Desviaciones', ruta: '/equipos/reporte-desviaciones' },
+  { label: 'Días sin Registrar', ruta: '/equipos/dias-sin-registrar' },
 ];
 
 export default function EquiposMenuPage() {

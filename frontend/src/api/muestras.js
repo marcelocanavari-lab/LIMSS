@@ -75,8 +75,15 @@ export const muestrasApi = {
   // complementarias > 0, imprimir-aprobado adjunta automáticamente esa
   // cantidad de etiquetas "APROBADO -- COMPLEMENTARIA" al mismo trabajo de
   // impresión -- no hay endpoint aparte para eso.
-  imprimirAprobado: (id, idImpresora, cantidad = 1) => api.post(`/api/muestras/${id}/imprimir-aprobado`, { id_impresora: idImpresora, cantidad }),
-  imprimirRechazado: (id, idImpresora, cantidad = 1) => api.post(`/api/muestras/${id}/imprimir-rechazado`, { id_impresora: idImpresora, cantidad }),
+  // desdeBulto/hastaBulto opcionales -- reimpresión parcial por pérdida o
+  // rotura de uno o pocos bultos (sin ambos, se imprime el rango completo,
+  // igual que siempre).
+  imprimirAprobado: (id, idImpresora, cantidad = 1, desdeBulto, hastaBulto) => api.post(`/api/muestras/${id}/imprimir-aprobado`, {
+    id_impresora: idImpresora, cantidad, desde_bulto: desdeBulto || undefined, hasta_bulto: hastaBulto || undefined,
+  }),
+  imprimirRechazado: (id, idImpresora, cantidad = 1, desdeBulto, hastaBulto) => api.post(`/api/muestras/${id}/imprimir-rechazado`, {
+    id_impresora: idImpresora, cantidad, desde_bulto: desdeBulto || undefined, hasta_bulto: hastaBulto || undefined,
+  }),
 
   // Impresión de Etiquetas (acceso general desde el Dashboard): busca
   // solicitudes/muestras y qué etiquetas corresponden imprimir para cada una.

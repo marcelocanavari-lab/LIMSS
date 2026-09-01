@@ -300,6 +300,25 @@ class SolicitudMuestreoAnular(BaseModel):
     motivo: str = Field(..., min_length=1, max_length=300)
 
 
+class SolicitudMuestreoCorregirRecepcion(BaseModel):
+    """Excepción CONTROLADA a la regla de "solicitud ejecutada = bloqueada
+    para edición" (ver completar_datos/PUT .../corregir-recepcion) -- solo
+    para corregir bultos y datos de recepción del proveedor que quedaron
+    mal cargados o incompletos en su momento (ej. un error de carga de
+    bultos hizo que nunca se generaran las etiquetas de los bultos
+    faltantes). Cada campo es independiente/opcional (solo se toca lo que
+    venga con valor, mismo criterio que SolicitudMuestreoCompletar), pero
+    `motivo` es obligatorio para todo el conjunto de cambios de esta
+    corrección puntual. El protocolo/documentación del proveedor se suben
+    aparte por archivo (ver POST .../protocolo-proveedor y
+    .../documentacion-proveedor, que ya no bloquean por estado y ahora
+    también aceptan un `motivo` opcional para esta misma corrección)."""
+    grupos_bultos: Optional[list[BultoGrupoInput]] = None
+    fecha_factura_proveedor: Optional[date] = None
+    numero_factura_proveedor: Optional[str] = Field(None, max_length=50)
+    motivo: str = Field(..., min_length=1, max_length=500)
+
+
 # ── Orden de Trabajo digital (Etapa 2: el muestreador ejecuta) ────
 #
 # Solo datos físicos observables del muestreo -- el muestreador nunca carga

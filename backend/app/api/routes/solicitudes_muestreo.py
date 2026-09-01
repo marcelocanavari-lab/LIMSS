@@ -51,6 +51,7 @@ from app.schemas.solicitudes_muestreo import (
     OrdenTrabajoDigitalResponse,
     SolicitudMuestreoAnular,
     SolicitudMuestreoCompletar,
+    SolicitudMuestreoCorregirRecepcion,
     SolicitudMuestreoCreate,
     SolicitudMuestreoDetalle,
     SolicitudMuestreoResponse,
@@ -58,7 +59,7 @@ from app.schemas.solicitudes_muestreo import (
 )
 from app.schemas.muestras import CantidadEtiquetasResponse, ImprimirDirectoBody, ImprimirDirectoResponse
 from app.services import audit, storage
-from app.services.bultos import expandir_bultos, guardar_grupos_bultos, obtener_grupos_bultos
+from app.services.bultos import expandir_bultos, filtrar_rango_bultos, guardar_grupos_bultos, obtener_grupos_bultos
 from app.services.especificaciones import guardar_checklist_muestreo, obtener_checklist_muestreo, tiene_ensayos_analisis
 from app.services.erp_ir import (
     buscar_lineas_ir,
@@ -900,6 +901,93 @@ def completar_datos(
     return _fila_a_solicitud(_obtener_solicitud_o_404(cursor, id_solicitud), cursor)
 
 
+@router.put("/{id_solicitud}/corregir-recepcion", response_model=SolicitudMuestreoResponse)
+def corregir_recepcion(
+    id_solicitud: int,
+    body: SolicitudMuestreoCorregirRecepcion,
+    user: dict = Depends(require_rol("qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Excepción CONTROLADA a la regla de "solicitud ejecutada = bloqueada
+    para edición" (ver el `if row.estado != "pendiente"` de completar_datos)
+    -- únicamente para corregir bultos y datos de recepción del proveedor
+    que quedaron mal cargados o incompletos en su momento (caso real: un
+    error de carga de bultos hizo que nunca se generaran las etiquetas de
+    Cuarentena/Aprobado de los bultos faltantes). No reabre la edición
+    general de la solicitud/muestra -- nada más que estos campos puntuales
+    se puede tocar por acá, y solo QA/Admin (nunca Muestreador ni Analista
+    QC). Motivo obligatorio, se audita junto con el valor anterior/nuevo de
+    cada campo efectivamente cambiado (mismo criterio que editar_muestra +
+    motivo obligatorio de anular_solicitud).
+
+    Solo aplica a solicitudes YA EJECUTADAS -- una 'pendiente' se sigue
+    corrigiendo por completar_datos (edición normal, sin necesitar motivo,
+    no es una excepción a ninguna regla) y una 'anulada' no tiene sentido
+    corregirla.
+
+    Corregidos los grupos de bultos, la impresión de etiquetas CUARENTENA/
+    APROBADO/RECHAZADO ya calcula el total en vivo a partir de
+    lims_solicitud_bultos (ver expandir_bultos) -- no hace falta ningún
+    otro paso para que el nuevo total se refleje ahí."""
+    cursor = conn.cursor()
+    row = _obtener_solicitud_o_404(cursor, id_solicitud)
+    if row.estado != "ejecutada":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Esta corrección aplica solo a solicitudes ya ejecutadas (estado actual: '{row.estado}')",
+        )
+
+    valor_anterior: dict = {}
+    valor_nuevo: dict = {}
+
+    if body.grupos_bultos:
+        grupos_antes = [
+            {"cantidad_bultos": g.cantidad_bultos, "cantidad_unidades": float(g.cantidad_unidades), "unidad_medida": g.unidad_medida}
+            for g in obtener_grupos_bultos(cursor, id_solicitud)
+        ]
+        total_bultos_grupos = guardar_grupos_bultos(cursor, id_solicitud, body.grupos_bultos)
+        cursor.execute("UPDATE lims_solicitudes_muestreo SET nro_bultos = ? WHERE id_solicitud = ?", total_bultos_grupos, id_solicitud)
+        valor_anterior["grupos_bultos"] = grupos_antes
+        valor_anterior["nro_bultos"] = row.nro_bultos
+        valor_nuevo["grupos_bultos"] = [g.model_dump() for g in body.grupos_bultos]
+        valor_nuevo["nro_bultos"] = total_bultos_grupos
+
+    fecha_factura_actual = _a_fecha(_g(row, "fecha_factura_proveedor"))
+    if body.fecha_factura_proveedor is not None and body.fecha_factura_proveedor != fecha_factura_actual:
+        try:
+            cursor.execute(
+                "UPDATE lims_solicitudes_muestreo SET fecha_factura_proveedor = ? WHERE id_solicitud = ?",
+                _a_datetime(body.fecha_factura_proveedor), id_solicitud,
+            )
+            valor_anterior["fecha_factura_proveedor"] = fecha_factura_actual
+            valor_nuevo["fecha_factura_proveedor"] = body.fecha_factura_proveedor
+        except pyodbc.Error:
+            pass
+
+    numero_factura_actual = _g(row, "numero_factura_proveedor")
+    if body.numero_factura_proveedor is not None and body.numero_factura_proveedor != numero_factura_actual:
+        try:
+            cursor.execute(
+                "UPDATE lims_solicitudes_muestreo SET numero_factura_proveedor = ? WHERE id_solicitud = ?",
+                body.numero_factura_proveedor, id_solicitud,
+            )
+            valor_anterior["numero_factura_proveedor"] = numero_factura_actual
+            valor_nuevo["numero_factura_proveedor"] = body.numero_factura_proveedor
+        except pyodbc.Error:
+            pass
+
+    if not valor_nuevo:
+        raise HTTPException(status_code=400, detail="No se indicó ningún cambio para corregir")
+
+    audit.registrar(
+        conn, entidad="solicitud_muestreo", accion="corregir_recepcion",
+        id_usuario=user["id_usuario"], id_entidad=id_solicitud,
+        valor_anterior=valor_anterior, valor_nuevo=valor_nuevo, motivo=body.motivo,
+    )
+
+    return _fila_a_solicitud(_obtener_solicitud_o_404(cursor, id_solicitud), cursor)
+
+
 @router.get("/{id_solicitud}", response_model=SolicitudMuestreoDetalle)
 def detalle_solicitud(
     id_solicitud: int,
@@ -1340,6 +1428,7 @@ def subir_protocolo_proveedor(
     protocolo_proveedor: UploadFile = File(
         ..., description="Protocolo que entrega el proveedor junto con el lote (foto o PDF)",
     ),
+    motivo: Optional[str] = Form(None, description="Motivo, si este reemplazo es parte de una corrección post-ejecución (ver PUT .../corregir-recepcion)"),
     user: dict = Depends(require_rol("qa", "admin")),
     conn: pyodbc.Connection = Depends(limss_db),
 ):
@@ -1350,12 +1439,19 @@ def subir_protocolo_proveedor(
     app/services/agente_muestreo.py), así que hace falta este endpoint
     aparte para que QA lo cargue después. Sigue siendo obligatorio antes de
     poder ejecutar el muestreo -- ver los checks en
-    confirmar_orden_trabajo/generar_envio_anticipado."""
+    confirmar_orden_trabajo/generar_envio_anticipado.
+
+    No chequea el estado de la solicitud -- también se usa para reemplazar
+    el protocolo de una solicitud YA EJECUTADA como parte de "Corregir
+    datos de recepción" (ver corregir_recepcion), de ahí el `motivo`
+    opcional: si viene, queda en el mismo audit trail que el resto de esa
+    corrección puntual."""
     if not protocolo_proveedor.filename:
         raise HTTPException(status_code=422, detail="No se recibió ningún archivo")
 
     cursor = conn.cursor()
     row = _obtener_solicitud_o_404(cursor, id_solicitud)
+    nombre_anterior = _g(row, "protocolo_proveedor_nombre_original")
 
     ruta = storage.guardar_protocolo_proveedor(protocolo_proveedor, row.nro_solicitud)
     cursor.execute(
@@ -1367,7 +1463,9 @@ def subir_protocolo_proveedor(
     audit.registrar(
         conn, entidad="solicitud_muestreo", accion="adjuntar_protocolo_proveedor",
         id_usuario=user["id_usuario"], id_entidad=id_solicitud,
+        valor_anterior={"protocolo_proveedor_nombre_original": nombre_anterior} if nombre_anterior else None,
         valor_nuevo={"protocolo_proveedor_nombre_original": protocolo_proveedor.filename},
+        motivo=motivo,
     )
 
     return _fila_a_solicitud(_obtener_solicitud_o_404(cursor, id_solicitud), cursor)
@@ -1379,18 +1477,26 @@ def subir_documentacion_proveedor(
     documentacion_proveedor: UploadFile = File(
         ..., description="Documentación del proveedor (remito y/o factura en un solo archivo, foto o PDF)",
     ),
+    motivo: Optional[str] = Form(None, description="Motivo, si este reemplazo es parte de una corrección post-ejecución (ver PUT .../corregir-recepcion)"),
     user: dict = Depends(require_rol("qa", "admin")),
     conn: pyodbc.Connection = Depends(limss_db),
 ):
     """Adjunta (o reemplaza, si ya había una) la documentación del proveedor
     de una solicitud ya creada -- a diferencia del protocolo, este adjunto
     no se exige en el momento de crear la solicitud, así que hace falta este
-    endpoint aparte para poder cargarlo después."""
+    endpoint aparte para poder cargarlo después.
+
+    No chequea el estado de la solicitud -- también se usa para reemplazar
+    la documentación de una solicitud YA EJECUTADA como parte de "Corregir
+    datos de recepción" (ver corregir_recepcion), de ahí el `motivo`
+    opcional: si viene, queda en el mismo audit trail que el resto de esa
+    corrección puntual."""
     if not documentacion_proveedor.filename:
         raise HTTPException(status_code=422, detail="No se recibió ningún archivo")
 
     cursor = conn.cursor()
     row = _obtener_solicitud_o_404(cursor, id_solicitud)
+    nombre_anterior = _g(row, "documentacion_proveedor_nombre_original")
 
     ruta = storage.guardar_documentacion_proveedor(documentacion_proveedor, row.nro_solicitud)
     cursor.execute(
@@ -1402,7 +1508,9 @@ def subir_documentacion_proveedor(
     audit.registrar(
         conn, entidad="solicitud_muestreo", accion="adjuntar_documentacion_proveedor",
         id_usuario=user["id_usuario"], id_entidad=id_solicitud,
+        valor_anterior={"documentacion_proveedor_nombre_original": nombre_anterior} if nombre_anterior else None,
         valor_nuevo={"documentacion_proveedor_nombre_original": documentacion_proveedor.filename},
+        motivo=motivo,
     )
 
     return _fila_a_solicitud(_obtener_solicitud_o_404(cursor, id_solicitud), cursor)
@@ -1706,8 +1814,13 @@ def imprimir_etiquetas_cuarentena(
     bultos = expandir_bultos(grupos, row.nro_bultos, cantidad_texto, cantidad_valor_fallback=row.cantidad_ingresada)
     total_bultos = bultos[0].bulto_total
 
+    try:
+        bultos_a_imprimir = filtrar_rango_bultos(bultos, body.desde_bulto, body.hasta_bulto)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     enviadas = 0
-    for b in bultos:
+    for b in bultos_a_imprimir:
         datos = dict(
             datos_base, bulto_actual=b.bulto_actual, bulto_total=b.bulto_total,
             cantidad_texto=b.cantidad_texto, cantidad_valor=b.cantidad_valor,
@@ -1721,18 +1834,24 @@ def imprimir_etiquetas_cuarentena(
         except RuntimeError as e:
             detalle = str(e)
             if enviadas:
-                detalle += f" (se enviaron {enviadas} de {total_bultos} etiquetas antes de este error)"
+                detalle += f" (se enviaron {enviadas} de {len(bultos_a_imprimir)} etiquetas antes de este error)"
             raise HTTPException(status_code=502, detail=detalle)
         enviadas += 1
 
     audit.registrar(
         conn, entidad="etiqueta_cuarentena", accion="imprimir",
         id_usuario=user["id_usuario"], id_entidad=id_solicitud,
-        valor_nuevo={"id_impresora": body.id_impresora, "ruta_red": impresora.ruta_red, "cantidad_etiquetas": enviadas},
+        valor_nuevo={
+            "id_impresora": body.id_impresora, "ruta_red": impresora.ruta_red, "cantidad_etiquetas": enviadas,
+            "desde_bulto": body.desde_bulto, "hasta_bulto": body.hasta_bulto,
+        },
     )
 
     plural = "s" if enviadas != 1 else ""
-    return ImprimirDirectoResponse(ok=True, mensaje=f"{enviadas} etiqueta{plural} CUARENTENA enviada{plural} a {impresora.nombre}")
+    mensaje = f"{enviadas} etiqueta{plural} CUARENTENA enviada{plural} a {impresora.nombre}"
+    if len(bultos_a_imprimir) != total_bultos:
+        mensaje += f" (bultos {bultos_a_imprimir[0].bulto_actual} a {bultos_a_imprimir[-1].bulto_actual} de {total_bultos})"
+    return ImprimirDirectoResponse(ok=True, mensaje=mensaje)
 
 
 # Reexport para app/api/routes/integraciones.py: la creación de muestra desde

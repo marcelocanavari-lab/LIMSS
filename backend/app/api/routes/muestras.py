@@ -71,7 +71,7 @@ from app.schemas.facturas import EnvioSinFacturar
 from app.schemas.recorrido import RecorridoResponse
 from app.schemas.solicitudes_muestreo import ChecklistMuestreoItem, ChecklistMuestreoRespuesta
 from app.services import audit, storage
-from app.services.bultos import expandir_bultos, obtener_grupos_bultos
+from app.services.bultos import expandir_bultos, filtrar_rango_bultos, obtener_grupos_bultos
 from app.services.formato import etiqueta_referencia, formatear_cantidad, normalizar_unidad, titulo_etiqueta_por_tipo
 from app.services.especificaciones import guardar_checklist_muestreo, obtener_checklist_muestreo, tiene_ensayos_analisis
 from app.services.erp_ir import buscar_todos_candidatos_ir, formatear_nro_ir, normalizar_fecha_sentinel
@@ -2245,6 +2245,12 @@ def _imprimir_etiqueta_estado_muestra(
     grupos = obtener_grupos_bultos(cursor, solicitud.id_solicitud) if solicitud else []
     bultos_fallback = solicitud.nro_bultos if solicitud and solicitud.nro_bultos else 1
     bultos = expandir_bultos(grupos, bultos_fallback, cantidad_texto, cantidad_valor_fallback=muestra.cantidad_enviada)
+    total_bultos = bultos[0].bulto_total
+
+    try:
+        bultos_a_imprimir = filtrar_rango_bultos(bultos, body.desde_bulto, body.hasta_bulto)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     # Cantidad de etiquetas complementarias a adjuntar (solo APROBADO) --
     # tolerante a que la migración de cantidad_etiquetas_complementarias
@@ -2264,7 +2270,7 @@ def _imprimir_etiqueta_estado_muestra(
             pass
 
     enviadas = 0
-    for b in bultos:
+    for b in bultos_a_imprimir:
         datos = dict(
             datos_base, bulto_actual=b.bulto_actual, bulto_total=b.bulto_total,
             cantidad_texto=b.cantidad_texto, cantidad_valor=b.cantidad_valor,
@@ -2278,7 +2284,7 @@ def _imprimir_etiqueta_estado_muestra(
         except RuntimeError as e:
             detalle = str(e)
             if enviadas:
-                detalle += f" (se enviaron {enviadas} de {len(bultos)} etiquetas antes de este error)"
+                detalle += f" (se enviaron {enviadas} de {len(bultos_a_imprimir)} etiquetas antes de este error)"
             raise HTTPException(status_code=502, detail=detalle)
         enviadas += 1
 
@@ -2312,11 +2318,14 @@ def _imprimir_etiqueta_estado_muestra(
         valor_nuevo={
             "id_impresora": body.id_impresora, "ruta_red": impresora.ruta_red, "cantidad": body.cantidad,
             "cantidad_etiquetas": enviadas, "cantidad_etiquetas_complementarias": complementarias_enviadas,
+            "desde_bulto": body.desde_bulto, "hasta_bulto": body.hasta_bulto,
         },
     )
 
     plural = "s" if enviadas != 1 else ""
     mensaje = f"{enviadas} etiqueta{plural} {titulo} enviada{plural} a {impresora.nombre}"
+    if len(bultos_a_imprimir) != total_bultos:
+        mensaje += f" (bultos {bultos_a_imprimir[0].bulto_actual} a {bultos_a_imprimir[-1].bulto_actual} de {total_bultos})"
     if complementarias_enviadas:
         plural_compl = "s" if complementarias_enviadas != 1 else ""
         mensaje += f" + {complementarias_enviadas} complementaria{plural_compl}"

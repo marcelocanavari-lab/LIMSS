@@ -32,20 +32,31 @@ export const solicitudesMuestreoApi = {
 
   // Protocolo del proveedor (foto o PDF) -- obligatorio en el alta manual
   // desde el momento de crear la solicitud (ver crear), pero las que genera
-  // el agente no lo tienen disponible en ese flujo automático.
-  subirProtocoloProveedor: (id, archivo) => {
+  // el agente no lo tienen disponible en ese flujo automático. `motivo`
+  // opcional -- cuando este reemplazo es parte de "Corregir datos de
+  // recepción" (ver corregirRecepcion), va con el mismo motivo al audit
+  // trail que el resto de esa corrección.
+  subirProtocoloProveedor: (id, archivo, motivo) => {
     const formData = new FormData();
     formData.append('protocolo_proveedor', archivo);
+    if (motivo) formData.append('motivo', motivo);
     return api.postForm(`/api/solicitudes-muestreo/${id}/protocolo-proveedor`, formData);
   },
 
   // Documentación del proveedor (remito y/o factura, un solo archivo) --
   // opcional, se puede adjuntar en la creación (ver crear) o después.
-  subirDocumentacionProveedor: (id, archivo) => {
+  subirDocumentacionProveedor: (id, archivo, motivo) => {
     const formData = new FormData();
     formData.append('documentacion_proveedor', archivo);
+    if (motivo) formData.append('motivo', motivo);
     return api.postForm(`/api/solicitudes-muestreo/${id}/documentacion-proveedor`, formData);
   },
+
+  // Corrección puntual, post-ejecución, de bultos + datos de recepción del
+  // proveedor -- excepción controlada a la regla de "ejecutada = bloqueada
+  // para edición", solo QA/Admin (ver corregir_recepcion en el backend).
+  // Motivo obligatorio.
+  corregirRecepcion: (id, data) => api.put(`/api/solicitudes-muestreo/${id}/corregir-recepcion`, data),
 
   // Genera el envío antes de ejecutar el muestreo físico: crea la muestra
   // por adelantado (datos_muestreo_pendientes=true) para poder seguir con
@@ -59,8 +70,13 @@ export const solicitudesMuestreoApi = {
   confirmarOrdenTrabajo: (id, body) => api.post(`/api/solicitudes-muestreo/${id}/orden-trabajo-digital`, body),
 
   // Etiquetas CUARENTENA -- una por bulto (nro_bultos), impresión directa SATO.
-  imprimirCuarentena: (id, idImpresora) =>
-    api.post(`/api/solicitudes-muestreo/${id}/imprimir-cuarentena`, { id_impresora: idImpresora }),
+  // desdeBulto/hastaBulto opcionales -- reimpresión parcial por pérdida o
+  // rotura de uno o pocos bultos (sin ambos, se imprime el rango completo,
+  // igual que siempre).
+  imprimirCuarentena: (id, idImpresora, desdeBulto, hastaBulto) =>
+    api.post(`/api/solicitudes-muestreo/${id}/imprimir-cuarentena`, {
+      id_impresora: idImpresora, desde_bulto: desdeBulto || undefined, hasta_bulto: hastaBulto || undefined,
+    }),
 
   // Etiquetas de MUESTRA por SATO para una solicitud TODAVÍA PENDIENTE (sin
   // id_muestra real) -- misma fuente de datos que "Etiquetas (PDF)" para

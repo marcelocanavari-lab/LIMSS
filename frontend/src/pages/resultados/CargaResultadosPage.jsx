@@ -39,6 +39,8 @@ function TarjetaImprimirEstado({ estado, titulo, estadoMuestra, idMuestra, impri
   const [impresoras, setImpresoras] = useState([]);
   const [idImpresora, setIdImpresora] = useState('');
   const [cantidad, setCantidad] = useState(1);
+  const [desdeBulto, setDesdeBulto] = useState('');
+  const [hastaBulto, setHastaBulto] = useState('');
   const [imprimiendo, setImprimiendo] = useState(false);
   const [mensaje, setMensaje] = useState(null);
 
@@ -60,7 +62,10 @@ function TarjetaImprimirEstado({ estado, titulo, estadoMuestra, idMuestra, impri
     setImprimiendo(true);
     setMensaje(null);
     try {
-      const resp = await imprimirFn(idMuestra, Number(idImpresora), cantidad);
+      const resp = await imprimirFn(
+        idMuestra, Number(idImpresora), cantidad,
+        desdeBulto ? Number(desdeBulto) : undefined, hastaBulto ? Number(hastaBulto) : undefined,
+      );
       setMensaje({ tipo: 'ok', texto: resp.mensaje });
     } catch (err) {
       setMensaje({ tipo: 'error', texto: err instanceof ApiError ? err.message : 'No se pudo imprimir la etiqueta' });
@@ -121,6 +126,22 @@ function TarjetaImprimirEstado({ estado, titulo, estadoMuestra, idMuestra, impri
               onChange={(e) => setCantidad(Math.min(99, Math.max(1, Number(e.target.value) || 1)))}
               disabled={imprimiendo}
             />
+          </div>
+          <div className="field">
+            <label className="field-label">Rango de bultos (opcional -- reimpresión parcial)</label>
+            <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+              <input
+                className="field-input" type="number" min="1" placeholder="Desde" style={{ maxWidth: 120 }}
+                value={desdeBulto} onChange={(e) => setDesdeBulto(e.target.value)} disabled={imprimiendo}
+              />
+              <input
+                className="field-input" type="number" min="1" placeholder="Hasta" style={{ maxWidth: 120 }}
+                value={hastaBulto} onChange={(e) => setHastaBulto(e.target.value)} disabled={imprimiendo}
+              />
+            </div>
+            <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--ink-2)' }}>
+              Vacío = todos los bultos. Cada etiqueta sigue mostrando su número real (ej. "3/10").
+            </span>
           </div>
         </>
       )}

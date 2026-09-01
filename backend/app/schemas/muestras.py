@@ -207,6 +207,16 @@ class ImprimirDirectoBody(BaseModel):
     # antes de mandar el trabajo (ver <Q> en impresion_sato.py). Default 1
     # para no romper llamadas viejas que todavía no manden este campo.
     cantidad: int = Field(1, ge=1, le=99)
+    # Reimpresión parcial por rango de bultos (ej. se rompió/perdió solo el
+    # bulto 3 de 10) -- None en ambos (default) = comportamiento de
+    # siempre, todo el rango completo. Solo tiene efecto en CUARENTENA/
+    # APROBADO/RECHAZADO (una etiqueta por bulto, ver expandir_bultos en
+    # app/services/bultos.py); la etiqueta de MUESTRA no usa este campo.
+    # El contador impreso en cada etiqueta sigue siendo la posición real
+    # dentro del total original (ej. "3/10"), nunca se recalcula contra la
+    # cantidad de esta reimpresión puntual.
+    desde_bulto: Optional[int] = Field(None, ge=1)
+    hasta_bulto: Optional[int] = Field(None, ge=1)
 
 
 class ImprimirDirectoResponse(BaseModel):

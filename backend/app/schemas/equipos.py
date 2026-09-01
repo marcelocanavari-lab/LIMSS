@@ -103,3 +103,12 @@ class LecturaResponse(BaseModel):
     # Para el Historial: permite marcar la fila/tarjeta como con alguna
     # desviación sin que el frontend tenga que recorrer `valores` de nuevo.
     tiene_fuera_de_rango: bool = False
+
+
+class DiaSinRegistroResponse(BaseModel):
+    fecha: date
+    # Nombre en español, ya resuelto server-side (ver _NOMBRES_DIA en
+    # routes/equipos.py) -- evita que el frontend tenga que mapear
+    # getDay()/weekday() a texto en dos lugares distintos (acá y en
+    # cualquier otra pantalla que llegue a listar días).
+    dia_semana: str

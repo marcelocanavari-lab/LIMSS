@@ -45,4 +45,13 @@ export const equiposApi = {
     if (idVariable) params.set('id_variable', idVariable);
     return `/api/equipos/lecturas/exportar-desviaciones?${params.toString()}`;
   },
+  // Reporte de Días sin registrar -- días hábiles del rango sin ninguna
+  // lectura cargada para el equipo.
+  diasSinRegistrar: ({ idEquipo, fechaDesde, fechaHasta }) => {
+    const params = new URLSearchParams();
+    params.set('id_equipo', idEquipo);
+    params.set('fecha_desde', fechaDesde);
+    params.set('fecha_hasta', fechaHasta);
+    return api.get(`/api/equipos/lecturas/dias-sin-registrar?${params.toString()}`);
+  },
 };

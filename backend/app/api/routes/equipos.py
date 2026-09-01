@@ -15,7 +15,7 @@ _fuera_de_rango), tanto al cargar como al mostrar el historial.
 """
 import csv
 import io
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 import pyodbc
@@ -25,6 +25,7 @@ from fastapi.responses import Response
 from app.core.security import get_current_user, require_rol
 from app.db.connections import limss_db
 from app.schemas.equipos import (
+    DiaSinRegistroResponse,
     EquipoCreate,
     EquipoResponse,
     EquipoUpdate,
@@ -40,6 +41,10 @@ from app.services import audit
 router = APIRouter(prefix="/api/equipos", tags=["Control de Variables de Equipos"])
 
 _ROLES = ("analista_qc", "qa", "admin")
+
+# date.weekday(): 0=lunes ... 6=domingo -- índices 0-4 son los días hábiles
+# que este reporte evalúa (ver dias_sin_registrar).
+_NOMBRES_DIA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 
 
 def _a_fecha(valor) -> Optional[date]:
@@ -534,3 +539,44 @@ def exportar_desviaciones_csv(
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": 'attachment; filename="desviaciones_equipo.csv"'},
     )
+
+
+@router.get("/lecturas/dias-sin-registrar", response_model=list[DiaSinRegistroResponse])
+def dias_sin_registrar(
+    id_equipo: int = Query(...),
+    fecha_desde: date = Query(...),
+    fecha_hasta: date = Query(...),
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Reporte de "Días sin registrar" -- días hábiles (lunes a viernes)
+    dentro del rango elegido en los que NO se cargó ninguna lectura para el
+    equipo, para detectar huecos en el control diario. Los fines de semana
+    quedan siempre excluidos (el laboratorio no abre esos días, no
+    corresponde exigir registro)."""
+    if fecha_hasta < fecha_desde:
+        raise HTTPException(status_code=400, detail="fecha_hasta no puede ser anterior a fecha_desde")
+
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM lims_equipos WHERE id_equipo = ?", id_equipo)
+    if not cursor.fetchone():
+        raise HTTPException(status_code=404, detail="Equipo no encontrado")
+
+    cursor.execute(
+        """
+        SELECT DISTINCT CAST(fecha AS DATE) AS fecha
+        FROM lims_equipo_lecturas
+        WHERE id_equipo = ? AND fecha >= ? AND fecha <= ?
+        """,
+        id_equipo, _a_datetime(fecha_desde), _a_datetime(fecha_hasta),
+    )
+    fechas_con_registro = {_a_fecha(r.fecha) for r in cursor.fetchall()}
+
+    dias_faltantes = []
+    dia = fecha_desde
+    while dia <= fecha_hasta:
+        if dia.weekday() < 5 and dia not in fechas_con_registro:
+            dias_faltantes.append(DiaSinRegistroResponse(fecha=dia, dia_semana=_NOMBRES_DIA[dia.weekday()]))
+        dia += timedelta(days=1)
+
+    return dias_faltantes

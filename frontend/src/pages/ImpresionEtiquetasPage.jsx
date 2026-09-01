@@ -31,13 +31,19 @@ const BADGE_ESTADO = {
   cuarentena: 'badge-warn',
 };
 
+// Tipos de etiqueta que se imprimen una por bulto -- los únicos donde tiene
+// sentido el rango "desde/hasta bulto" (reimpresión parcial por pérdida o
+// rotura de uno o pocos bultos). La etiqueta de MUESTRA no está atada a
+// bultos individuales, no aplica.
+const ETIQUETAS_CON_RANGO_BULTOS = ['cuarentena', 'aprobado', 'rechazado'];
+
 // Cada acción de impresión llama a un endpoint distinto según el tipo de
 // etiqueta y de dónde sale el id (solicitud para cuarentena, muestra para
 // el resto) -- un solo lugar para no repetir esta correspondencia en el JSX.
-function llamarImprimir(item, tipoEtiqueta, idImpresora, cantidad) {
-  if (tipoEtiqueta === 'cuarentena') return solicitudesMuestreoApi.imprimirCuarentena(item.id, idImpresora);
-  if (tipoEtiqueta === 'aprobado') return muestrasApi.imprimirAprobado(item.id, idImpresora, cantidad);
-  if (tipoEtiqueta === 'rechazado') return muestrasApi.imprimirRechazado(item.id, idImpresora, cantidad);
+function llamarImprimir(item, tipoEtiqueta, idImpresora, cantidad, desdeBulto, hastaBulto) {
+  if (tipoEtiqueta === 'cuarentena') return solicitudesMuestreoApi.imprimirCuarentena(item.id, idImpresora, desdeBulto, hastaBulto);
+  if (tipoEtiqueta === 'aprobado') return muestrasApi.imprimirAprobado(item.id, idImpresora, cantidad, desdeBulto, hastaBulto);
+  if (tipoEtiqueta === 'rechazado') return muestrasApi.imprimirRechazado(item.id, idImpresora, cantidad, desdeBulto, hastaBulto);
   return muestrasApi.imprimirDirecto(item.id, idImpresora);
 }
 
@@ -54,6 +60,8 @@ export default function ImpresionEtiquetasPage() {
   const [impresoras, setImpresoras] = useState([]);
   const [idImpresora, setIdImpresora] = useState('');
   const [cantidad, setCantidad] = useState(1);
+  const [desdeBulto, setDesdeBulto] = useState('');
+  const [hastaBulto, setHastaBulto] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [mensaje, setMensaje] = useState(null); // { tipo: 'ok'|'error', texto }
 
@@ -75,6 +83,8 @@ export default function ImpresionEtiquetasPage() {
   function abrirImprimir(item, tipoEtiqueta) {
     setImprimiendoItem({ item, tipoEtiqueta });
     setCantidad(1);
+    setDesdeBulto('');
+    setHastaBulto('');
     setMensaje(null);
     if (impresoras.length === 0) {
       muestrasApi
@@ -96,7 +106,10 @@ export default function ImpresionEtiquetasPage() {
     setEnviando(true);
     setMensaje(null);
     try {
-      const resp = await llamarImprimir(imprimiendoItem.item, imprimiendoItem.tipoEtiqueta, Number(idImpresora), cantidad);
+      const resp = await llamarImprimir(
+        imprimiendoItem.item, imprimiendoItem.tipoEtiqueta, Number(idImpresora), cantidad,
+        desdeBulto ? Number(desdeBulto) : undefined, hastaBulto ? Number(hastaBulto) : undefined,
+      );
       setMensaje({ tipo: 'ok', texto: resp.mensaje });
     } catch (err) {
       setMensaje({ tipo: 'error', texto: err instanceof ApiError ? err.message : 'No se pudo imprimir la etiqueta' });
@@ -222,6 +235,24 @@ export default function ImpresionEtiquetasPage() {
                       onChange={(e) => setCantidad(Math.min(99, Math.max(1, Number(e.target.value) || 1)))}
                       disabled={enviando}
                     />
+                  </div>
+                )}
+                {ETIQUETAS_CON_RANGO_BULTOS.includes(imprimiendoItem.tipoEtiqueta) && (
+                  <div className="field">
+                    <label className="field-label">Rango de bultos (opcional -- reimpresión parcial)</label>
+                    <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+                      <input
+                        className="field-input" type="number" min="1" placeholder="Desde" style={{ maxWidth: 120 }}
+                        value={desdeBulto} onChange={(e) => setDesdeBulto(e.target.value)} disabled={enviando}
+                      />
+                      <input
+                        className="field-input" type="number" min="1" placeholder="Hasta" style={{ maxWidth: 120 }}
+                        value={hastaBulto} onChange={(e) => setHastaBulto(e.target.value)} disabled={enviando}
+                      />
+                    </div>
+                    <span style={{ fontSize: 'var(--fs-xs)', color: 'var(--ink-2)' }}>
+                      Vacío = todos los bultos. Cada etiqueta sigue mostrando su número real (ej. "3/10").
+                    </span>
                   </div>
                 )}
               </>

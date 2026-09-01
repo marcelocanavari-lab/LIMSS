@@ -15,6 +15,7 @@ import NuevaLecturaPage from './pages/equipos/NuevaLecturaPage';
 import HistorialLecturasPage from './pages/equipos/HistorialLecturasPage';
 import GraficoTendenciaPage from './pages/equipos/GraficoTendenciaPage';
 import ReporteDesviacionesPage from './pages/equipos/ReporteDesviacionesPage';
+import DiasSinRegistrarPage from './pages/equipos/DiasSinRegistrarPage';
 import ImpresionEtiquetasPage from './pages/ImpresionEtiquetasPage';
 import UsuariosPage from './pages/UsuariosPage';
 import ErpConfigPage from './pages/ErpConfigPage';
@@ -107,6 +108,7 @@ export default function App() {
           <Route path="/equipos/historial" element={<PrivateRoute roles={GESTION}><HistorialLecturasPage /></PrivateRoute>} />
           <Route path="/equipos/grafico" element={<PrivateRoute roles={GESTION}><GraficoTendenciaPage /></PrivateRoute>} />
           <Route path="/equipos/reporte-desviaciones" element={<PrivateRoute roles={GESTION}><ReporteDesviacionesPage /></PrivateRoute>} />
+          <Route path="/equipos/dias-sin-registrar" element={<PrivateRoute roles={GESTION}><DiasSinRegistrarPage /></PrivateRoute>} />
 
           {/* ── Datos Maestros (analista_qc, qa, admin) ─────────── */}
           <Route path="/maestros/especificaciones" element={<PrivateRoute roles={GESTION}><EspecificacionesPage /></PrivateRoute>} />

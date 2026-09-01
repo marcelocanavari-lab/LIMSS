@@ -71,6 +71,30 @@ def expandir_bultos(
     return resultado
 
 
+def filtrar_rango_bultos(bultos: list[BultoIndividual], desde_bulto: Optional[int], hasta_bulto: Optional[int]) -> list[BultoIndividual]:
+    """Recorta `bultos` (ya expandido, ver expandir_bultos) a un rango
+    "desde/hasta" opcional -- reimpresión parcial por pérdida o rotura de
+    uno o pocos bultos, sin reimprimir el total completo. None en ambos
+    (default) devuelve la lista completa sin tocar, mismo comportamiento
+    que antes de esta feature.
+
+    Filtra por bulto_actual (la posición real dentro del total, no el
+    índice de esta lista) -- por eso cada etiqueta resultante sigue
+    mostrando su "N/Total" real (ej. "3/10"), nunca se recalcula contra la
+    cantidad de bultos de esta reimpresión puntual.
+
+    Lanza ValueError (el llamador lo traduce a HTTPException 400) si el
+    rango es inconsistente o se sale de los bultos que existen."""
+    total = bultos[0].bulto_total
+    desde = desde_bulto if desde_bulto is not None else 1
+    hasta = hasta_bulto if hasta_bulto is not None else total
+    if desde > hasta:
+        raise ValueError("'Desde bulto' no puede ser mayor que 'Hasta bulto'")
+    if desde < 1 or hasta > total:
+        raise ValueError(f"El rango de bultos debe estar entre 1 y {total}")
+    return [b for b in bultos if desde <= b.bulto_actual <= hasta]
+
+
 def guardar_grupos_bultos(cursor, id_solicitud: int, grupos: list) -> Optional[int]:
     """Reemplaza (DELETE + INSERT) los grupos de bultos de una solicitud --
     completar-datos se puede llamar más de una vez sobre la misma
