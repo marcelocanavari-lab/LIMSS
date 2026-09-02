@@ -15,6 +15,7 @@ import NuevaLecturaPage from './pages/equipos/NuevaLecturaPage';
 import EditarLecturaPage from './pages/equipos/EditarLecturaPage';
 import HistorialLecturasPage from './pages/equipos/HistorialLecturasPage';
 import GraficoTendenciaPage from './pages/equipos/GraficoTendenciaPage';
+import GraficoTodasVariablesPage from './pages/equipos/GraficoTodasVariablesPage';
 import ReporteDesviacionesPage from './pages/equipos/ReporteDesviacionesPage';
 import DiasSinRegistrarPage from './pages/equipos/DiasSinRegistrarPage';
 import ImpresionEtiquetasPage from './pages/ImpresionEtiquetasPage';
@@ -109,6 +110,7 @@ export default function App() {
           <Route path="/equipos/lecturas/:idLectura/editar" element={<PrivateRoute roles={GESTION}><EditarLecturaPage /></PrivateRoute>} />
           <Route path="/equipos/historial" element={<PrivateRoute roles={GESTION}><HistorialLecturasPage /></PrivateRoute>} />
           <Route path="/equipos/grafico" element={<PrivateRoute roles={GESTION}><GraficoTendenciaPage /></PrivateRoute>} />
+          <Route path="/equipos/grafico-todas" element={<PrivateRoute roles={GESTION}><GraficoTodasVariablesPage /></PrivateRoute>} />
           <Route path="/equipos/reporte-desviaciones" element={<PrivateRoute roles={GESTION}><ReporteDesviacionesPage /></PrivateRoute>} />
           <Route path="/equipos/dias-sin-registrar" element={<PrivateRoute roles={GESTION}><DiasSinRegistrarPage /></PrivateRoute>} />
 

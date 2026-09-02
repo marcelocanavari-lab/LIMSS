@@ -5,6 +5,7 @@ const ITEMS = [
   { label: 'Nueva Lectura', ruta: '/equipos/nueva-lectura' },
   { label: 'Historial de Lecturas', ruta: '/equipos/historial' },
   { label: 'Gráfico de Tendencia', ruta: '/equipos/grafico' },
+  { label: 'Todas las Variables', ruta: '/equipos/grafico-todas' },
   { label: 'Reporte de Desviaciones', ruta: '/equipos/reporte-desviaciones' },
   { label: 'Días sin Registrar', ruta: '/equipos/dias-sin-registrar' },
 ];
