@@ -37,6 +37,15 @@ function hace30DiasISO() {
   return d.toISOString().slice(0, 10);
 }
 
+// new Date('YYYY-MM-DD') interpreta la fecha en UTC -- en huso horario
+// negativo (Argentina, UTC-3) se corre un día para atrás al mostrarla con
+// toLocaleDateString() (que usa la zona LOCAL). Se arma con las partes
+// sueltas, sin pasar por Date, mismo criterio que en Equipos.
+function formatearFecha(fechaISO) {
+  const [anio, mes, dia] = fechaISO.split('-');
+  return `${dia}/${mes}/${anio}`;
+}
+
 export default function FacturasPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -173,7 +182,7 @@ export default function FacturasPage() {
                   <tr key={f.id_factura} style={{ cursor: 'pointer' }} onClick={() => navigate(`/facturas/${f.id_factura}`)}>
                     <td style={{ fontFamily: 'var(--font-mono)' }}>{f.nro_factura}</td>
                     <td>{f.laboratorio_nombre}</td>
-                    <td>{new Date(f.fecha_factura).toLocaleDateString()}</td>
+                    <td>{formatearFecha(f.fecha_factura)}</td>
                     <td className="num">{formatMonto(f.monto, f.moneda)}</td>
                     <td className="num">
                       {f.cantidad_envios > 0 ? (

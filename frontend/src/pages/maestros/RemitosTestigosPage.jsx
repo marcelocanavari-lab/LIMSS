@@ -5,6 +5,15 @@ import TopBar from '../../components/TopBar';
 import { testigosRemitosApi } from '../../api/testigosRemitos';
 import { ApiError, abrirPdfConAuth } from '../../api/client';
 
+// new Date('YYYY-MM-DD') interpreta la fecha en UTC -- en huso horario
+// negativo (Argentina, UTC-3) se corre un día para atrás al mostrarla con
+// toLocaleDateString() (que usa la zona LOCAL). Se arma con las partes
+// sueltas, sin pasar por Date, mismo criterio que en Equipos.
+function formatearFecha(fechaISO) {
+  const [anio, mes, dia] = fechaISO.split('-');
+  return `${dia}/${mes}/${anio}`;
+}
+
 export default function RemitosTestigosPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -79,11 +88,11 @@ export default function RemitosTestigosPage() {
                   <tr key={r.id_remito} style={{ cursor: 'pointer' }} onClick={() => navigate(`/maestros/testigos/remitos/${r.id_remito}`)}>
                     <td style={{ fontFamily: 'var(--font-mono)' }}>{r.nro_remito}</td>
                     <td>{r.laboratorio_nombre}</td>
-                    <td>{new Date(r.fecha_envio).toLocaleDateString()}</td>
+                    <td>{formatearFecha(r.fecha_envio)}</td>
                     <td className="num">{r.cantidad_testigos}</td>
                     <td>
                       {r.tiene_copia_firmada ? (
-                        <span className="badge badge-ok">✓ {new Date(r.fecha_recepcion).toLocaleDateString()}</span>
+                        <span className="badge badge-ok">✓ {formatearFecha(r.fecha_recepcion)}</span>
                       ) : (
                         <span className="badge badge-neutral">Pendiente</span>
                       )}

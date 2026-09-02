@@ -15,6 +15,15 @@ function hace30DiasISO() {
   return d.toISOString().slice(0, 10);
 }
 
+// new Date('YYYY-MM-DD') interpreta la fecha en UTC -- en huso horario
+// negativo (Argentina, UTC-3) se corre un día para atrás al mostrarla con
+// toLocaleDateString() (que usa la zona LOCAL). Se arma con las partes
+// sueltas, sin pasar por Date, mismo criterio que DiasSinRegistrarPage.jsx.
+function formatearFecha(fechaISO) {
+  const [anio, mes, dia] = fechaISO.split('-');
+  return `${dia}/${mes}/${anio}`;
+}
+
 // Bloques de variables CONSECUTIVAS con el mismo grupo, para el colSpan del
 // encabezado "Presión de"/"Caudal de" -- mismo criterio que
 // NuevaLecturaPage.jsx (duplicado a propósito, mismo patrón que el resto
@@ -200,7 +209,7 @@ export default function HistorialLecturasPage() {
                         <tr style={{ cursor: 'pointer' }} onClick={() => setExpandidoId(expandido ? null : l.id_lectura)}>
                           <td style={{ whiteSpace: 'nowrap' }}>
                             {l.tiene_fuera_de_rango && <span title="Tiene valores fuera de rango" style={{ color: 'var(--danger)', marginRight: 4 }}>⚠</span>}
-                            {new Date(l.fecha).toLocaleDateString()}
+                            {formatearFecha(l.fecha)}
                           </td>
                           <td style={{ whiteSpace: 'nowrap' }}>{l.hora}</td>
                           {variables.map((v) => {
@@ -285,7 +294,7 @@ export default function HistorialLecturasPage() {
                     const valoresPorVariable = new Map(l.valores.map((v) => [v.id_variable, v]));
                     return (
                       <tr key={l.id_lectura}>
-                        <td style={{ whiteSpace: 'nowrap' }}>{new Date(l.fecha).toLocaleDateString()}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}>{formatearFecha(l.fecha)}</td>
                         <td style={{ whiteSpace: 'nowrap' }}>{l.hora}</td>
                         {variables.map((v) => {
                           const val = valoresPorVariable.get(v.id_variable);

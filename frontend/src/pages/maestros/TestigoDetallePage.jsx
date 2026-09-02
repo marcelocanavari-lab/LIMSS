@@ -7,6 +7,15 @@ import { muestrasApi } from '../../api/muestras';
 import { testigosRemitosApi } from '../../api/testigosRemitos';
 import { ApiError, abrirPdfConAuth } from '../../api/client';
 
+// new Date('YYYY-MM-DD') interpreta la fecha en UTC -- en huso horario
+// negativo (Argentina, UTC-3) se corre un día para atrás al mostrarla con
+// toLocaleDateString() (que usa la zona LOCAL). Se arma con las partes
+// sueltas, sin pasar por Date, mismo criterio que en Equipos.
+function formatearFecha(fechaISO) {
+  const [anio, mes, dia] = fechaISO.split('-');
+  return `${dia}/${mes}/${anio}`;
+}
+
 export default function TestigoDetallePage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -470,7 +479,7 @@ export default function TestigoDetallePage() {
             <tbody>
               {historialEnvios.map((h) => (
                 <tr key={h.id_remito}>
-                  <td>{new Date(h.fecha_envio).toLocaleDateString()}</td>
+                  <td>{formatearFecha(h.fecha_envio)}</td>
                   <td>{h.laboratorio_nombre}</td>
                   <td className="num">{h.cantidad_enviada} {h.unidad}</td>
                   <td style={{ fontFamily: 'var(--font-mono)' }}>{h.nro_remito}</td>

@@ -15,6 +15,15 @@ function hace30DiasISO() {
   return d.toISOString().slice(0, 10);
 }
 
+// new Date('YYYY-MM-DD') interpreta la fecha en UTC -- en huso horario
+// negativo (Argentina, UTC-3) se corre un día para atrás al mostrarla con
+// toLocaleDateString() (que usa la zona LOCAL). Se arma con las partes
+// sueltas, sin pasar por Date, mismo criterio que DiasSinRegistrarPage.jsx.
+function formatearFechaCorta(fechaISO) {
+  const [, mes, dia] = fechaISO.split('-');
+  return `${dia}/${mes}`;
+}
+
 const ANCHO_GRAFICO = 900;
 const ALTO_GRAFICO = 230;
 
@@ -166,7 +175,7 @@ function GraficoLineas({ puntos, limiteInferior, limiteSuperior, unidad, titulo,
       {/* Etiquetas eje X */}
       {indicesEtiquetas.map((i) => (
         <text key={i} x={escalaX(i)} y={M_SUP + altoUtil + M_INF - (paraImprimir ? 28 : 16)} fill={colores.texto} fontSize={fs.fechaX} textAnchor="middle">
-          {new Date(puntos[i].fecha).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })}
+          {formatearFechaCorta(puntos[i].fecha)}
         </text>
       ))}
     </svg>

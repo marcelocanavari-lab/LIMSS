@@ -15,6 +15,15 @@ function hace30DiasISO() {
   return d.toISOString().slice(0, 10);
 }
 
+// new Date('YYYY-MM-DD') interpreta la fecha en UTC -- en huso horario
+// negativo (Argentina, UTC-3) se corre un día para atrás al mostrarla con
+// toLocaleDateString() (que usa la zona LOCAL). Se arma con las partes
+// sueltas, sin pasar por Date, mismo criterio que DiasSinRegistrarPage.jsx.
+function formatearFecha(fechaISO) {
+  const [anio, mes, dia] = fechaISO.split('-');
+  return `${dia}/${mes}/${anio}`;
+}
+
 function nombreVariable(v) {
   return v.grupo ? `${v.grupo} ${v.nombre}` : v.nombre;
 }
@@ -198,7 +207,7 @@ export default function ReporteDesviacionesPage() {
                 <tbody>
                   {filas.map((f) => (
                     <tr key={f.id}>
-                      <td style={{ whiteSpace: 'nowrap' }}>{new Date(f.fecha).toLocaleDateString()}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{formatearFecha(f.fecha)}</td>
                       <td style={{ whiteSpace: 'nowrap' }}>{f.hora}</td>
                       <td>{nombreVariable(f.variable)}</td>
                       <td className="num" style={{ color: 'var(--danger)', fontWeight: 600 }}>
@@ -237,7 +246,7 @@ export default function ReporteDesviacionesPage() {
                 <tbody>
                   {filas.map((f) => (
                     <tr key={f.id}>
-                      <td style={{ whiteSpace: 'nowrap' }}>{new Date(f.fecha).toLocaleDateString()}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{formatearFecha(f.fecha)}</td>
                       <td style={{ whiteSpace: 'nowrap' }}>{f.hora}</td>
                       <td>{nombreVariable(f.variable)}</td>
                       <td style={{ fontWeight: 700, border: '2px solid #b71c1c' }}>

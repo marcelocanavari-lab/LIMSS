@@ -9,6 +9,15 @@ function hoyISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// new Date('YYYY-MM-DD') interpreta la fecha en UTC -- en huso horario
+// negativo (Argentina, UTC-3) se corre un día para atrás al mostrarla con
+// toLocaleDateString() (que usa la zona LOCAL). Se arma con las partes
+// sueltas, sin pasar por Date, mismo criterio que en Equipos.
+function formatearFecha(fechaISO) {
+  const [anio, mes, dia] = fechaISO.split('-');
+  return `${dia}/${mes}/${anio}`;
+}
+
 export default function RemitoTestigoDetallePage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -124,7 +133,7 @@ export default function RemitoTestigoDetallePage() {
           <table className="data-table">
             <tbody>
               <tr><td>Laboratorio</td><td style={{ textAlign: 'left' }}>{remito.laboratorio_nombre}</td></tr>
-              <tr><td>Fecha de envío</td><td style={{ textAlign: 'left' }}>{new Date(remito.fecha_envio).toLocaleDateString()}</td></tr>
+              <tr><td>Fecha de envío</td><td style={{ textAlign: 'left' }}>{formatearFecha(remito.fecha_envio)}</td></tr>
               <tr><td>Generado por</td><td style={{ textAlign: 'left' }}>{remito.usuario_nombre}</td></tr>
               {remito.observaciones && (
                 <tr><td>Observaciones</td><td style={{ textAlign: 'left' }}>{remito.observaciones}</td></tr>
@@ -166,7 +175,7 @@ export default function RemitoTestigoDetallePage() {
             <>
               <table className="data-table" style={{ marginBottom: 'var(--sp-4)' }}>
                 <tbody>
-                  <tr><td>Fecha de recepción</td><td style={{ textAlign: 'left' }}>{new Date(remito.fecha_recepcion).toLocaleDateString()}</td></tr>
+                  <tr><td>Fecha de recepción</td><td style={{ textAlign: 'left' }}>{formatearFecha(remito.fecha_recepcion)}</td></tr>
                   <tr><td>Recibido por</td><td style={{ textAlign: 'left' }}>{remito.recibido_por}</td></tr>
                 </tbody>
               </table>

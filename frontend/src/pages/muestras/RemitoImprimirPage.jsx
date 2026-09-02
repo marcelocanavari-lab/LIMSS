@@ -10,6 +10,17 @@ function hoyISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// new Date('YYYY-MM-DD') interpreta la fecha en UTC -- en huso horario
+// negativo (Argentina, UTC-3) se corre un día para atrás al mostrarla con
+// toLocaleDateString() (que usa la zona LOCAL). Se arma con las partes
+// sueltas, sin pasar por Date, mismo criterio que en Equipos. Solo aplica a
+// fecha_recepcion (tipo `date` en el backend) -- fecha_muestreo/
+// fecha_despacho/fecha_generacion son `datetime`, no tienen este problema.
+function formatearFecha(fechaISO) {
+  const [anio, mes, dia] = fechaISO.split('-');
+  return `${dia}/${mes}/${anio}`;
+}
+
 export default function RemitoImprimirPage() {
   const { id, idEnvio } = useParams();
   const navigate = useNavigate();
@@ -324,7 +335,7 @@ export default function RemitoImprimirPage() {
               <>
                 <table className="data-table" style={{ marginBottom: 'var(--sp-4)' }}>
                   <tbody>
-                    <tr><td>Fecha de recepción</td><td style={{ textAlign: 'left' }}>{new Date(remito.fecha_recepcion).toLocaleDateString()}</td></tr>
+                    <tr><td>Fecha de recepción</td><td style={{ textAlign: 'left' }}>{formatearFecha(remito.fecha_recepcion)}</td></tr>
                     <tr><td>Recibido por</td><td style={{ textAlign: 'left' }}>{remito.recibido_por}</td></tr>
                   </tbody>
                 </table>

@@ -21,6 +21,15 @@ function formatMonto(monto, moneda) {
   return `${moneda} ${Number(monto).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+// new Date('YYYY-MM-DD') interpreta la fecha en UTC -- en huso horario
+// negativo (Argentina, UTC-3) se corre un día para atrás al mostrarla con
+// toLocaleDateString() (que usa la zona LOCAL). Se arma con las partes
+// sueltas, sin pasar por Date, mismo criterio que en Equipos.
+function formatearFecha(fechaISO) {
+  const [anio, mes, dia] = fechaISO.split('-');
+  return `${dia}/${mes}/${anio}`;
+}
+
 export default function FacturaDetallePage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -146,13 +155,13 @@ export default function FacturaDetallePage() {
           <table className="data-table">
             <tbody>
               <tr><td>Laboratorio</td><td style={{ textAlign: 'left' }}>{factura.laboratorio_nombre}</td></tr>
-              <tr><td>Fecha de factura</td><td className="num" style={{ textAlign: 'left' }}>{new Date(factura.fecha_factura).toLocaleDateString()}</td></tr>
-              <tr><td>Fecha de recepción</td><td className="num" style={{ textAlign: 'left' }}>{factura.fecha_recepcion ? new Date(factura.fecha_recepcion).toLocaleDateString() : '—'}</td></tr>
+              <tr><td>Fecha de factura</td><td className="num" style={{ textAlign: 'left' }}>{formatearFecha(factura.fecha_factura)}</td></tr>
+              <tr><td>Fecha de recepción</td><td className="num" style={{ textAlign: 'left' }}>{factura.fecha_recepcion ? formatearFecha(factura.fecha_recepcion) : '—'}</td></tr>
               <tr><td>Monto</td><td className="num" style={{ textAlign: 'left' }}>{formatMonto(factura.monto, factura.moneda)}</td></tr>
               <tr><td>Descripción</td><td style={{ textAlign: 'left' }}>{factura.descripcion || '—'}</td></tr>
               {factura.estado_pago === 'pagado' && (
                 <>
-                  <tr><td>Fecha de pago</td><td className="num" style={{ textAlign: 'left' }}>{factura.fecha_pago ? new Date(factura.fecha_pago).toLocaleDateString() : '—'}</td></tr>
+                  <tr><td>Fecha de pago</td><td className="num" style={{ textAlign: 'left' }}>{factura.fecha_pago ? formatearFecha(factura.fecha_pago) : '—'}</td></tr>
                   <tr><td>N° comprobante de pago</td><td style={{ textAlign: 'left' }}>{factura.nro_comprobante_pago || '—'}</td></tr>
                 </>
               )}
