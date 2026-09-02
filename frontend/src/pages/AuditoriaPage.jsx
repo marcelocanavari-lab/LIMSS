@@ -6,6 +6,16 @@ import { ApiError } from '../api/client';
 
 const POR_PAGINA = 100;
 
+function hoyISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function hace30DiasISO() {
+  const d = new Date();
+  d.setDate(d.getDate() - 30);
+  return d.toISOString().slice(0, 10);
+}
+
 function formatFechaHora(iso) {
   const d = new Date(iso);
   const pad = (n) => String(n).padStart(2, '0');
@@ -16,12 +26,15 @@ export default function AuditoriaPage() {
   const navigate = useNavigate();
 
   const [usuarios, setUsuarios] = useState([]);
-  const [fechaDesde, setFechaDesde] = useState('');
-  const [fechaHasta, setFechaHasta] = useState('');
+  const [fechaDesde, setFechaDesde] = useState(hace30DiasISO());
+  const [fechaHasta, setFechaHasta] = useState(hoyISO());
   const [idUsuario, setIdUsuario] = useState('');
   const [accion, setAccion] = useState('');
 
-  const [filtrosAplicados, setFiltrosAplicados] = useState({});
+  // Arranca con el mismo rango de 30 días que se ve en los inputs -- así la
+  // pantalla carga sola con ese default apenas se entra, sin necesitar
+  // click en "Filtrar" (mismo criterio en todo el sistema).
+  const [filtrosAplicados, setFiltrosAplicados] = useState({ fechaDesde: hace30DiasISO(), fechaHasta: hoyISO() });
   const [pagina, setPagina] = useState(0);
 
   const [registros, setRegistros] = useState([]);

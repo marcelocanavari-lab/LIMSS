@@ -88,6 +88,25 @@ class ValorLecturaResponse(BaseModel):
     fuera_de_rango: bool
 
 
+class LecturaUpdate(BaseModel):
+    """Corrige una lectura ya guardada -- valor cargado con error, fecha/
+    hora, o quién la realizó/verificó. No incluye id_equipo: el equipo de
+    una lectura no se cambia por acá (cambiar de equipo implicaría otro
+    juego de variables completamente distinto, no es una "corrección"
+    sino recargar la lectura de cero bajo otro equipo).
+
+    `valores` es el estado COMPLETO deseado (mismo criterio que
+    LecturaCreate) -- el backend arma el diff contra lo que ya había: la
+    que falta se agrega, la que cambió se actualiza, la que se dejó
+    afuera se borra (el usuario vació a propósito un valor cargado por
+    error), la que quedó igual no se toca."""
+    fecha: date
+    hora: str = Field(..., min_length=1, max_length=5)
+    id_usuario_realizo: Optional[int] = None
+    id_usuario_verifico: Optional[int] = None
+    valores: list[ValorLecturaInput] = []
+
+
 class LecturaResponse(BaseModel):
     id_lectura: int
     id_equipo: int

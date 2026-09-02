@@ -1,43 +1,43 @@
 {
-  "fecha_corrida": "2026-09-01T17:29:34.045455",
+  "fecha_corrida": "2026-09-01T21:33:34.419626",
   "modo": "real",
   "csv": "\\\\LAMARSERVER\\Empresa\\Lamar\\LIMSS_DEV\\backend\\Scripts\\data\\lecturas_equipo_agua_completo.csv",
-  "total_filas_en_csv": 1211,
-  "lecturas_borradas_antes": 248,
-  "valores_borrados_antes": 3224,
-  "lecturas_nuevas_insertadas": 1207,
-  "valores_nuevos_insertados": 15609,
+  "total_filas_en_csv": 1213,
+  "lecturas_borradas_antes": 1207,
+  "valores_borrados_antes": 15609,
+  "lecturas_nuevas_insertadas": 1209,
+  "valores_nuevos_insertados": 15635,
   "errores": 4,
   "filas_con_algun_valor_fuera_de_rango": 997,
   "rango_fechas_final": {
     "desde": "2020-12-10",
     "hasta": "2026-08-31",
-    "n_lecturas_en_bd": 1207
+    "n_lecturas_en_bd": 1209
   },
   "detalle_errores": [
     {
       "linea_csv": 420,
       "fecha": "10/10/24",
       "hora": "14:20",
-      "error": "could not convert string to float: 'Si'"
+      "error": "could not convert string to float: 'SÃ\\xad'"
     },
     {
       "linea_csv": 1046,
       "fecha": "23/04/21",
       "hora": "13:20",
-      "error": "could not convert string to float: 'texto'"
+      "error": "could not convert string to float: '<7'"
     },
     {
       "linea_csv": 1083,
       "fecha": "22/06/21",
       "hora": "16:20",
-      "error": "could not convert string to float: 'texto'"
+      "error": "could not convert string to float: '>13'"
     },
     {
       "linea_csv": 1120,
       "fecha": "27/08/21",
       "hora": "16:40",
-      "error": "could not convert string to float: 'texto'"
+      "error": "could not convert string to float: '<2.8'"
     }
   ],
   "detalle_filas_con_desviacion": [

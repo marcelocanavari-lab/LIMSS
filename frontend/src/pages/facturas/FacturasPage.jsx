@@ -27,6 +27,16 @@ function formatMonto(monto, moneda) {
   return `${moneda} ${Number(monto).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function hoyISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function hace30DiasISO() {
+  const d = new Date();
+  d.setDate(d.getDate() - 30);
+  return d.toISOString().slice(0, 10);
+}
+
 export default function FacturasPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -36,8 +46,14 @@ export default function FacturasPage() {
   const [laboratorios, setLaboratorios] = useState([]);
   const [idLaboratorio, setIdLaboratorio] = useState('');
   const [estadoPago, setEstadoPago] = useState('');
-  const [fechaDesde, setFechaDesde] = useState('');
-  const [fechaHasta, setFechaHasta] = useState('');
+  const [fechaDesde, setFechaDesde] = useState(hace30DiasISO());
+  const [fechaHasta, setFechaHasta] = useState(hoyISO());
+  // Rango REALMENTE usado en la consulta -- separado de los inputs de
+  // fecha (mismo criterio que ConsultaMuestrasPage.jsx): <input
+  // type="date"> puede disparar onChange con un valor a medio tipear, así
+  // que solo la fecha requiere el click en "Aplicar filtro"; laboratorio y
+  // estado de pago (selects) siguen disparando la consulta al toque.
+  const [fechaAplicada, setFechaAplicada] = useState({ desde: hace30DiasISO(), hasta: hoyISO() });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -55,8 +71,8 @@ export default function FacturasPage() {
       .listarFacturas({
         idLaboratorio: idLaboratorio || undefined,
         estadoPago: estadoPago || undefined,
-        fechaDesde: fechaDesde || undefined,
-        fechaHasta: fechaHasta || undefined,
+        fechaDesde: fechaAplicada.desde || undefined,
+        fechaHasta: fechaAplicada.hasta || undefined,
       })
       .then((data) => activo && setFacturas(data))
       .catch((err) => activo && setError(err instanceof ApiError ? err.message : 'No se pudo cargar el listado'))
@@ -64,7 +80,11 @@ export default function FacturasPage() {
     return () => {
       activo = false;
     };
-  }, [autorizado, idLaboratorio, estadoPago, fechaDesde, fechaHasta]);
+  }, [autorizado, idLaboratorio, estadoPago, fechaAplicada]);
+
+  function aplicarFecha() {
+    setFechaAplicada({ desde: fechaDesde, hasta: fechaHasta });
+  }
 
   if (!autorizado) {
     return (
@@ -117,6 +137,11 @@ export default function FacturasPage() {
           <div className="field" style={{ flex: 1, minWidth: 150, marginBottom: 0 }}>
             <label className="field-label" htmlFor="fechaHasta">Hasta</label>
             <input id="fechaHasta" className="field-input" type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', marginBottom: 0 }}>
+            <button className="btn btn-primary" onClick={aplicarFecha} disabled={loading}>
+              Aplicar filtro →
+            </button>
           </div>
         </div>
 

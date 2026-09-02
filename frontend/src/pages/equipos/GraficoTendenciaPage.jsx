@@ -9,9 +9,9 @@ function hoyISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function haceMesesISO(meses) {
+function hace30DiasISO() {
   const d = new Date();
-  d.setMonth(d.getMonth() - meses);
+  d.setDate(d.getDate() - 30);
   return d.toISOString().slice(0, 10);
 }
 
@@ -182,7 +182,7 @@ export default function GraficoTendenciaPage() {
   const [idEquipo, setIdEquipo] = useState('');
   const [variables, setVariables] = useState([]);
   const [idVariable, setIdVariable] = useState('');
-  const [fechaDesde, setFechaDesde] = useState(haceMesesISO(3));
+  const [fechaDesde, setFechaDesde] = useState(hace30DiasISO());
   const [fechaHasta, setFechaHasta] = useState(hoyISO());
   const [lecturas, setLecturas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -218,7 +218,17 @@ export default function GraficoTendenciaPage() {
     }).catch(() => setVariables([]));
   }, [idEquipo]);
 
-  useEffect(() => {
+  // Carga las lecturas con el rango de fechas ACTUAL de los inputs -- se
+  // llama automáticamente al cambiar de equipo (selección completa, sin
+  // riesgo de "valor a medio tipear"), y a demanda desde el botón
+  // "Generar" para las fechas. Antes las fechas también estaban en las
+  // dependencias del efecto: como <input type="date"> puede disparar
+  // onChange con un valor todavía incompleto mientras se escribe a mano
+  // (no solo al elegir del selector nativo), cada tecla llegaba a pedir el
+  // gráfico con una fecha inválida a mitad de tipeo -- el mismo patrón ya
+  // usado en Libro de Ingresos (botón "Generar reporte" en vez de
+  // auto-disparar por cambio de input) evita eso.
+  function cargarLecturas() {
     if (!idEquipo) return;
     setLoading(true);
     setError('');
@@ -227,7 +237,9 @@ export default function GraficoTendenciaPage() {
       .then(setLecturas)
       .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo cargar las lecturas'))
       .finally(() => setLoading(false));
-  }, [idEquipo, fechaDesde, fechaHasta]);
+  }
+
+  useEffect(cargarLecturas, [idEquipo]);
 
   const variableElegida = variables.find((v) => String(v.id_variable) === idVariable);
   const equipoElegido = equipos.find((eq) => String(eq.id_equipo) === idEquipo);
@@ -329,6 +341,9 @@ export default function GraficoTendenciaPage() {
               <label className="field-label" htmlFor="hasta">Hasta</label>
               <input id="hasta" className="field-input" type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} />
             </div>
+            <button className="btn btn-primary" onClick={cargarLecturas} disabled={loading}>
+              {loading ? <span className="spinner" /> : 'Generar →'}
+            </button>
             {puntos.length > 0 && (
               <>
                 <button className="btn btn-secondary" onClick={descargarImagen} disabled={exportandoImagen}>

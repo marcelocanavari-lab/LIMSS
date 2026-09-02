@@ -5,6 +5,16 @@ import TopBar from '../../components/TopBar';
 import { equiposApi } from '../../api/equipos';
 import { ApiError, descargarArchivoConAuth } from '../../api/client';
 
+function hoyISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function hace30DiasISO() {
+  const d = new Date();
+  d.setDate(d.getDate() - 30);
+  return d.toISOString().slice(0, 10);
+}
+
 function nombreVariable(v) {
   return v.grupo ? `${v.grupo} ${v.nombre}` : v.nombre;
 }
@@ -30,8 +40,8 @@ export default function ReporteDesviacionesPage() {
   const [idEquipo, setIdEquipo] = useState('');
   const [variables, setVariables] = useState([]);
   const [idVariable, setIdVariable] = useState(''); // '' = todas
-  const [fechaDesde, setFechaDesde] = useState('');
-  const [fechaHasta, setFechaHasta] = useState('');
+  const [fechaDesde, setFechaDesde] = useState(hace30DiasISO());
+  const [fechaHasta, setFechaHasta] = useState(hoyISO());
   const [lecturas, setLecturas] = useState([]);
   const [fechaGeneracion, setFechaGeneracion] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -57,6 +67,13 @@ export default function ReporteDesviacionesPage() {
     }).catch(() => setVariables([]));
   }, [idEquipo]);
 
+  // Carga las lecturas con el rango de fechas ACTUAL de los inputs -- se
+  // llama automáticamente al cambiar de equipo (selección completa de un
+  // <select>, sin riesgo de "valor a medio tipear"), y a demanda desde el
+  // botón "Generar" para las fechas. Mismo fix y mismo criterio ya
+  // aplicado en GraficoTendenciaPage.jsx/HistorialLecturasPage.jsx --
+  // idVariable no está acá porque ya filtra 100% client-side sobre
+  // `lecturas` (ver `filas` más abajo), nunca disparó una consulta nueva.
   function cargar() {
     if (!idEquipo) return;
     setLoading(true);
@@ -71,7 +88,7 @@ export default function ReporteDesviacionesPage() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(cargar, [idEquipo, fechaDesde, fechaHasta]);
+  useEffect(cargar, [idEquipo]);
 
   async function exportarCsv() {
     setError('');
@@ -140,6 +157,9 @@ export default function ReporteDesviacionesPage() {
               <label className="field-label" htmlFor="hasta">Hasta</label>
               <input id="hasta" className="field-input" type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} />
             </div>
+            <button className="btn btn-primary" onClick={cargar} disabled={loading}>
+              {loading ? <span className="spinner" /> : 'Generar →'}
+            </button>
             {filas.length > 0 && (
               <>
                 <button className="btn btn-secondary" onClick={exportarCsv} disabled={exportando}>

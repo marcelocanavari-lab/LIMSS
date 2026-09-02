@@ -8,9 +8,9 @@ function hoyISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function primerDiaMesActualISO() {
+function hace30DiasISO() {
   const d = new Date();
-  d.setDate(1);
+  d.setDate(d.getDate() - 30);
   return d.toISOString().slice(0, 10);
 }
 
@@ -33,7 +33,7 @@ export default function DiasSinRegistrarPage() {
 
   const [equipos, setEquipos] = useState([]);
   const [idEquipo, setIdEquipo] = useState('');
-  const [fechaDesde, setFechaDesde] = useState(primerDiaMesActualISO());
+  const [fechaDesde, setFechaDesde] = useState(hace30DiasISO());
   const [fechaHasta, setFechaHasta] = useState(hoyISO());
   const [dias, setDias] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -46,8 +46,14 @@ export default function DiasSinRegistrarPage() {
     }).catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo cargar la pantalla'));
   }, []);
 
-  useEffect(() => {
-    if (!idEquipo || !fechaDesde || !fechaHasta) return;
+  // Carga el reporte con el rango de fechas ACTUAL de los inputs -- se
+  // llama automáticamente al cambiar de equipo (selección completa de un
+  // <select>, sin riesgo de "valor a medio tipear"), y a demanda desde el
+  // botón "Generar" para las fechas. Mismo fix y mismo criterio que
+  // GraficoTendenciaPage.jsx/HistorialLecturasPage.jsx/
+  // ReporteDesviacionesPage.jsx.
+  function cargar() {
+    if (!idEquipo) return;
     setLoading(true);
     setError('');
     equiposApi
@@ -55,7 +61,9 @@ export default function DiasSinRegistrarPage() {
       .then(setDias)
       .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo cargar el reporte'))
       .finally(() => setLoading(false));
-  }, [idEquipo, fechaDesde, fechaHasta]);
+  }
+
+  useEffect(cargar, [idEquipo]);
 
   const equipoElegido = equipos.find((eq) => String(eq.id_equipo) === idEquipo);
 
@@ -81,6 +89,9 @@ export default function DiasSinRegistrarPage() {
               <label className="field-label" htmlFor="hasta">Hasta</label>
               <input id="hasta" className="field-input" type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} />
             </div>
+            <button className="btn btn-primary" onClick={cargar} disabled={loading}>
+              {loading ? <span className="spinner" /> : 'Generar →'}
+            </button>
           </div>
         </div>
 

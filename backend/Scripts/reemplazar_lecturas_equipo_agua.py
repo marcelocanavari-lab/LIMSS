@@ -51,6 +51,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from app.core.config import get_settings
 from app.db.connections import get_limss_conn
 
 logger = logging.getLogger("reemplazar_lecturas_equipo_agua")
@@ -108,9 +109,12 @@ def main(dry_run: bool, ruta_csv: Path):
     with open(ruta_csv, encoding="utf-8-sig") as f:
         filas = list(csv.DictReader(f))
 
+    nombre_bd = get_settings().limss_db_name
+
     logger.info("CSV: %s", ruta_csv)
     logger.info("Filas en el CSV: %d", len(filas))
-    logger.info("Modo: %s", "DRY RUN (no se escribe nada)" if dry_run else "REEMPLAZO REAL EN LIMSS_DEV")
+    logger.info("Base de datos configurada: %s", nombre_bd)
+    logger.info("Modo: %s", "DRY RUN (no se escribe nada)" if dry_run else f"REEMPLAZO REAL EN {nombre_bd}")
 
     creadas = []
     errores = []
@@ -134,14 +138,31 @@ def main(dry_run: bool, ruta_csv: Path):
         )
         variables = cursor.fetchall()
         variables_por_codigo = {(v.codigo or "").strip().lower(): v for v in variables if v.codigo}
-        variables_por_nombre = {(v.nombre or "").strip().lower(): v for v in variables if not v.codigo}
+        # Las 3 variables sin código propio (ORP/pH/Conductividad) se
+        # resuelven por coincidencia PARCIAL de nombre (LIKE %clave%, no
+        # nombre exacto) -- el nombre real en lims_equipo_variables puede
+        # variar levemente entre entornos (ej. "pH Alimentación" en vez de
+        # "pH" a secas), y una comparación exacta rompía la resolución ahí.
+        variables_sin_codigo = [v for v in variables if not v.codigo]
+
+        def _resolver_por_nombre(clave: str):
+            clave_low = clave.strip().lower()
+            coincidencias = [v for v in variables_sin_codigo if clave_low in (v.nombre or "").lower()]
+            if len(coincidencias) == 1:
+                return coincidencias[0]
+            if len(coincidencias) > 1:
+                logger.error(
+                    "El nombre '%s' matchea más de una variable (%s) -- ambiguo, abortando sin tocar nada.",
+                    clave, [v.nombre for v in coincidencias],
+                )
+                sys.exit(1)
+            return None
 
         columna_a_variable = {}
         for columna, criterio, clave in MAPEO_COLUMNAS:
-            tabla = variables_por_codigo if criterio == "codigo" else variables_por_nombre
-            variable = tabla.get(clave.strip().lower())
+            variable = variables_por_codigo.get(clave.strip().lower()) if criterio == "codigo" else _resolver_por_nombre(clave)
             if not variable:
-                logger.error("No se pudo resolver la variable para la columna '%s' (%s='%s') -- abortando, no se tocó nada.", columna, criterio, clave)
+                logger.error("No se pudo resolver la variable para la columna '%s' (%s~'%s') -- abortando, no se tocó nada.", columna, criterio, clave)
                 sys.exit(1)
             columna_a_variable[columna] = variable
         logger.info("Las 13 columnas del CSV resolvieron correctamente contra lims_equipo_variables.")

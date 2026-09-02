@@ -31,6 +31,7 @@ from app.schemas.equipos import (
     EquipoUpdate,
     LecturaCreate,
     LecturaResponse,
+    LecturaUpdate,
     ValorLecturaResponse,
     VariableEquipoCreate,
     VariableEquipoResponse,
@@ -580,3 +581,126 @@ def dias_sin_registrar(
         dia += timedelta(days=1)
 
     return dias_faltantes
+
+
+@router.get("/lecturas/{id_lectura}", response_model=LecturaResponse)
+def obtener_lectura(
+    id_lectura: int,
+    user: dict = Depends(get_current_user),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Una lectura puntual, con todos sus valores -- para precargar el
+    formulario de Editar Lectura (ver editar_lectura más abajo)."""
+    cursor = conn.cursor()
+    return _obtener_lectura(cursor, id_lectura)
+
+
+@router.put("/lecturas/{id_lectura}", response_model=LecturaResponse)
+def editar_lectura(
+    id_lectura: int,
+    body: LecturaUpdate,
+    user: dict = Depends(require_rol(*_ROLES)),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Corrige una lectura ya guardada -- un valor cargado con error, la
+    fecha/hora, o quién la realizó/verificó. Mismos roles que crear_lectura
+    (analista_qc/qa/admin): no es una excepción controlada a ninguna regla
+    de bloqueo (a diferencia de "Corregir datos de recepción" en
+    solicitudes_muestreo.py) -- una lectura de equipo nunca tuvo un estado
+    tipo "confirmada"/"cerrada" que impidiera tocarla, así que corregirla
+    es la misma operación de siempre, con el mismo nivel de acceso.
+
+    No cambia id_equipo (ver LecturaUpdate). El "fuera de rango" del
+    resultado ya sale recalculado contra los límites actuales de cada
+    variable (_obtener_lectura -> _fuera_de_rango), así que el Historial y
+    el Gráfico de Tendencia reflejan el valor corregido apenas vuelven a
+    pedir la lectura -- no hace falta ningún paso extra para eso."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM lims_equipo_lecturas WHERE id_lectura = ?", id_lectura)
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Lectura no encontrada")
+
+    if body.valores:
+        cursor.execute(
+            "SELECT id_variable FROM lims_equipo_variables WHERE id_equipo = ? AND activo = 1",
+            row.id_equipo,
+        )
+        ids_validos = {r.id_variable for r in cursor.fetchall()}
+        invalidas = [v.id_variable for v in body.valores if v.id_variable not in ids_validos]
+        if invalidas:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Las variables {invalidas} no pertenecen a este equipo (o están inactivas)",
+            )
+
+    valor_anterior: dict = {}
+    valor_nuevo: dict = {}
+
+    fecha_actual = _a_fecha(row.fecha)
+    if body.fecha != fecha_actual:
+        valor_anterior["fecha"] = fecha_actual.isoformat() if fecha_actual else None
+        valor_nuevo["fecha"] = body.fecha.isoformat()
+    if body.hora != row.hora:
+        valor_anterior["hora"] = row.hora
+        valor_nuevo["hora"] = body.hora
+    if body.id_usuario_realizo != row.id_usuario_realizo:
+        valor_anterior["id_usuario_realizo"] = row.id_usuario_realizo
+        valor_nuevo["id_usuario_realizo"] = body.id_usuario_realizo
+    if body.id_usuario_verifico != row.id_usuario_verifico:
+        valor_anterior["id_usuario_verifico"] = row.id_usuario_verifico
+        valor_nuevo["id_usuario_verifico"] = body.id_usuario_verifico
+
+    cursor.execute(
+        """
+        UPDATE lims_equipo_lecturas
+        SET fecha = ?, hora = ?, id_usuario_realizo = ?, id_usuario_verifico = ?
+        WHERE id_lectura = ?
+        """,
+        _a_datetime(body.fecha), body.hora, body.id_usuario_realizo, body.id_usuario_verifico, id_lectura,
+    )
+
+    # Diff de valores contra lo que ya había -- agrega la que falta,
+    # actualiza la que cambió, borra la que el usuario vació a propósito
+    # (corrige un valor que nunca debió cargarse), no toca la que quedó
+    # igual (ver docstring de LecturaUpdate).
+    cursor.execute("SELECT id_variable, valor FROM lims_equipo_lectura_valores WHERE id_lectura = ?", id_lectura)
+    valores_antes = {r.id_variable: float(r.valor) for r in cursor.fetchall()}
+    valores_nuevos = {v.id_variable: v.valor for v in body.valores}
+
+    valores_diff: dict = {}
+    for id_variable, valor in valores_nuevos.items():
+        anterior = valores_antes.get(id_variable)
+        if anterior is None:
+            cursor.execute(
+                "INSERT INTO lims_equipo_lectura_valores (id_lectura, id_variable, valor) VALUES (?, ?, ?)",
+                id_lectura, id_variable, valor,
+            )
+            valores_diff[str(id_variable)] = {"anterior": None, "nuevo": valor}
+        elif abs(anterior - valor) > 1e-9:
+            cursor.execute(
+                "UPDATE lims_equipo_lectura_valores SET valor = ? WHERE id_lectura = ? AND id_variable = ?",
+                valor, id_lectura, id_variable,
+            )
+            valores_diff[str(id_variable)] = {"anterior": anterior, "nuevo": valor}
+
+    for id_variable, anterior in valores_antes.items():
+        if id_variable not in valores_nuevos:
+            cursor.execute(
+                "DELETE FROM lims_equipo_lectura_valores WHERE id_lectura = ? AND id_variable = ?",
+                id_lectura, id_variable,
+            )
+            valores_diff[str(id_variable)] = {"anterior": anterior, "nuevo": None}
+
+    if valores_diff:
+        valor_anterior["valores"] = {k: v["anterior"] for k, v in valores_diff.items()}
+        valor_nuevo["valores"] = {k: v["nuevo"] for k, v in valores_diff.items()}
+
+    if valor_nuevo:
+        audit.registrar(
+            conn, entidad="equipo_lectura", accion="editar",
+            id_usuario=user["id_usuario"], id_entidad=id_lectura,
+            valor_anterior=valor_anterior, valor_nuevo=valor_nuevo,
+        )
+
+    return _obtener_lectura(cursor, id_lectura)

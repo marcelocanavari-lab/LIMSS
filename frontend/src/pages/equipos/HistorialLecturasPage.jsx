@@ -5,6 +5,16 @@ import TopBar from '../../components/TopBar';
 import { equiposApi } from '../../api/equipos';
 import { ApiError, descargarArchivoConAuth } from '../../api/client';
 
+function hoyISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function hace30DiasISO() {
+  const d = new Date();
+  d.setDate(d.getDate() - 30);
+  return d.toISOString().slice(0, 10);
+}
+
 // Bloques de variables CONSECUTIVAS con el mismo grupo, para el colSpan del
 // encabezado "Presión de"/"Caudal de" -- mismo criterio que
 // NuevaLecturaPage.jsx (duplicado a propósito, mismo patrón que el resto
@@ -30,8 +40,8 @@ export default function HistorialLecturasPage() {
   const [equipos, setEquipos] = useState([]);
   const [idEquipo, setIdEquipo] = useState('');
   const [variables, setVariables] = useState([]);
-  const [fechaDesde, setFechaDesde] = useState('');
-  const [fechaHasta, setFechaHasta] = useState('');
+  const [fechaDesde, setFechaDesde] = useState(hace30DiasISO());
+  const [fechaHasta, setFechaHasta] = useState(hoyISO());
   const [lecturas, setLecturas] = useState([]);
   const [fechaGeneracion, setFechaGeneracion] = useState(null);
   const [expandidoId, setExpandidoId] = useState(null);
@@ -66,6 +76,14 @@ export default function HistorialLecturasPage() {
     equiposApi.listarVariables(idEquipo).then(setVariables).catch(() => setVariables([]));
   }, [idEquipo]);
 
+  // Carga las lecturas con el rango de fechas ACTUAL de los inputs -- se
+  // llama automáticamente al cambiar de equipo (selección completa de un
+  // <select>, sin riesgo de "valor a medio tipear"), y a demanda desde el
+  // botón "Generar" para las fechas. Mismo fix y mismo criterio ya
+  // aplicado en GraficoTendenciaPage.jsx: <input type="date"> puede
+  // disparar onChange con un valor todavía incompleto mientras se escribe
+  // a mano, así que tenerlas en las dependencias del efecto pedía el
+  // historial con una fecha inválida a mitad de tipeo.
   function cargar() {
     if (!idEquipo) return;
     setLoading(true);
@@ -80,7 +98,7 @@ export default function HistorialLecturasPage() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(cargar, [idEquipo, fechaDesde, fechaHasta]);
+  useEffect(cargar, [idEquipo]);
 
   async function exportarCsv() {
     setError('');
@@ -121,6 +139,9 @@ export default function HistorialLecturasPage() {
               <label className="field-label" htmlFor="hasta">Hasta</label>
               <input id="hasta" className="field-input" type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} />
             </div>
+            <button className="btn btn-primary" onClick={cargar} disabled={loading}>
+              {loading ? <span className="spinner" /> : 'Generar →'}
+            </button>
             {lecturas.length > 0 && (
               <>
                 <button className="btn btn-secondary" onClick={exportarCsv} disabled={exportando}>
@@ -202,9 +223,17 @@ export default function HistorialLecturasPage() {
                         {expandido && (
                           <tr>
                             <td colSpan={cantidadColumnas} style={{ background: 'var(--surf-2)', fontSize: 'var(--fs-sm)', color: 'var(--ink-2)' }}>
-                              <div style={{ display: 'flex', gap: 'var(--sp-5)' }}>
+                              <div style={{ display: 'flex', gap: 'var(--sp-5)', alignItems: 'center', flexWrap: 'wrap' }}>
                                 <span>Realizó: {l.usuario_realizo_nombre || '—'}</span>
                                 <span>Verificó: {l.usuario_verifico_nombre || '—'}</span>
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost"
+                                  style={{ marginLeft: 'auto' }}
+                                  onClick={(e) => { e.stopPropagation(); navigate(`/equipos/lecturas/${l.id_lectura}/editar`); }}
+                                >
+                                  Editar
+                                </button>
                               </div>
                             </td>
                           </tr>

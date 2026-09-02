@@ -8,6 +8,16 @@ import { ESTADOS, BADGE_POR_ESTADO } from '../muestras/MuestrasPage';
 
 const LABEL_ESTADO = Object.fromEntries(ESTADOS.filter((e) => e.value).map((e) => [e.value, e.label]));
 
+function hoyISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function hace30DiasISO() {
+  const d = new Date();
+  d.setDate(d.getDate() - 30);
+  return d.toISOString().slice(0, 10);
+}
+
 function formatFecha(iso) {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');
@@ -28,8 +38,8 @@ export default function LibroIngresosPage() {
   const navigate = useNavigate();
   const autorizado = ['analista_qc', 'qa', 'admin'].includes(user?.rol);
 
-  const [fechaDesde, setFechaDesde] = useState('');
-  const [fechaHasta, setFechaHasta] = useState('');
+  const [fechaDesde, setFechaDesde] = useState(hace30DiasISO());
+  const [fechaHasta, setFechaHasta] = useState(hoyISO());
 
   const [lineas, setLineas] = useState(null);
   const [fechaGeneracion, setFechaGeneracion] = useState(null);
@@ -69,6 +79,16 @@ export default function LibroIngresosPage() {
       setGenerando(false);
     }
   }
+
+  // Carga automática al entrar a la pantalla, con el rango por defecto (30
+  // días) -- cualquier cambio posterior de fechas requiere click en
+  // "Generar reporte" (mismo criterio en todo el sistema, ver
+  // GraficoTendenciaPage.jsx).
+  useEffect(() => {
+    if (!autorizado) return;
+    generarReporte();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autorizado]);
 
   async function exportarCsv() {
     setError('');

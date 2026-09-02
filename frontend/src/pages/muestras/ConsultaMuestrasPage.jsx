@@ -5,6 +5,16 @@ import { muestrasApi } from '../../api/muestras';
 import { ApiError } from '../../api/client';
 import { BADGE_POR_ESTADO, ESTADOS } from './MuestrasPage';
 
+function hoyISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function hace30DiasISO() {
+  const d = new Date();
+  d.setDate(d.getDate() - 30);
+  return d.toISOString().slice(0, 10);
+}
+
 const TIPOS_MATERIAL = [
   { value: '', label: 'Todos los materiales' },
   { value: 'materia_prima', label: 'Materia Prima' },
@@ -21,8 +31,18 @@ export default function ConsultaMuestrasPage() {
   const [buscar, setBuscar] = useState('');
   const [estado, setEstado] = useState('');
   const [tipoMaterial, setTipoMaterial] = useState('');
-  const [fechaDesde, setFechaDesde] = useState('');
-  const [fechaHasta, setFechaHasta] = useState('');
+  const [fechaDesde, setFechaDesde] = useState(hace30DiasISO());
+  const [fechaHasta, setFechaHasta] = useState(hoyISO());
+  // Rango REALMENTE usado en la consulta -- separado de los inputs de
+  // fecha de arriba a propósito: <input type="date"> puede disparar
+  // onChange con un valor todavía incompleto mientras se escribe a mano,
+  // así que si fechaDesde/fechaHasta estuvieran directo en las deps del
+  // efecto, cada tecla dispararía una consulta con una fecha inválida a
+  // mitad de tipeo. El resto de los filtros (buscar/estado/tipoMaterial/
+  // idLaboratorio) no tiene ese riesgo -- son selects o ya toleran texto
+  // parcial -- así que siguen disparando la consulta al toque; solo la
+  // fecha requiere el click en "Aplicar filtro".
+  const [fechaAplicada, setFechaAplicada] = useState({ desde: hace30DiasISO(), hasta: hoyISO() });
   const [idLaboratorio, setIdLaboratorio] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -39,8 +59,8 @@ export default function ConsultaMuestrasPage() {
       .listarMuestras({
         buscar, estado,
         tipoMaterial: tipoMaterial || undefined,
-        fechaDesde: fechaDesde || undefined,
-        fechaHasta: fechaHasta || undefined,
+        fechaDesde: fechaAplicada.desde || undefined,
+        fechaHasta: fechaAplicada.hasta || undefined,
         idLaboratorio: idLaboratorio || undefined,
       })
       .then((data) => activo && setMuestras(data))
@@ -49,7 +69,11 @@ export default function ConsultaMuestrasPage() {
     return () => {
       activo = false;
     };
-  }, [buscar, estado, tipoMaterial, fechaDesde, fechaHasta, idLaboratorio]);
+  }, [buscar, estado, tipoMaterial, fechaAplicada, idLaboratorio]);
+
+  function aplicarFecha() {
+    setFechaAplicada({ desde: fechaDesde, hasta: fechaHasta });
+  }
 
   return (
     <div className="screen">
@@ -95,6 +119,9 @@ export default function ConsultaMuestrasPage() {
             onChange={(e) => setFechaHasta(e.target.value)}
             title="Fecha de muestreo hasta"
           />
+          <button className="btn btn-primary" onClick={aplicarFecha} disabled={loading}>
+            Aplicar filtro →
+          </button>
         </div>
 
         {error && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-4)' }}>{error}</div>}

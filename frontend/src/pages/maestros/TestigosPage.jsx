@@ -67,6 +67,13 @@ export default function TestigosPage() {
   const [origenes, setOrigenes] = useState([]);
   const [idOrigen, setIdOrigen] = useState('');
   const [fechaRef, setFechaRef] = useState(hoyISO());
+  // Fecha REALMENTE usada en la consulta -- separada del input de arriba:
+  // <input type="date"> puede disparar onChange con un valor a medio
+  // tipear, así que un cambio de fecha requiere click explícito en
+  // "Aplicar" (mismo criterio que ConsultaMuestrasPage.jsx/FacturasPage.jsx).
+  // El resto de los filtros de esta pantalla (estados, categoría, origen,
+  // orden) sigue disparando la consulta al toque, sin cambios.
+  const [fechaRefAplicada, setFechaRefAplicada] = useState(hoyISO());
   const [diasAnticipacion, setDiasAnticipacion] = useState(DEFAULT_DIAS_ANTICIPACION);
   const [orden, setOrden] = useState(DEFAULT_ORDEN);
   const [loading, setLoading] = useState(true);
@@ -84,6 +91,7 @@ export default function TestigosPage() {
     setIdCategoria('');
     setIdOrigen('');
     setFechaRef(hoyISO());
+    setFechaRefAplicada(hoyISO());
     setDiasAnticipacion(DEFAULT_DIAS_ANTICIPACION);
     setOrden(DEFAULT_ORDEN);
   }, []);
@@ -163,7 +171,7 @@ export default function TestigosPage() {
     maestrosApi
       .listarTestigos({
         buscar, estados, idCategoria: idCategoria || undefined,
-        fechaRef, diasAnticipacion: diasAnticipacion !== '' ? Number(diasAnticipacion) : undefined,
+        fechaRef: fechaRefAplicada, diasAnticipacion: diasAnticipacion !== '' ? Number(diasAnticipacion) : undefined,
         orden,
       })
       .then((data) => activo && setTestigos(data))
@@ -172,7 +180,11 @@ export default function TestigosPage() {
     return () => {
       activo = false;
     };
-  }, [buscar, estados, idCategoria, fechaRef, diasAnticipacion, orden]);
+  }, [buscar, estados, idCategoria, fechaRefAplicada, diasAnticipacion, orden]);
+
+  function aplicarFechaRef() {
+    setFechaRefAplicada(fechaRef);
+  }
 
   // El origen no tiene filtro propio en el backend -- se filtra en memoria
   // sobre lo ya traído, sin agregar un parámetro nuevo al endpoint.
@@ -253,6 +265,9 @@ export default function TestigosPage() {
               value={fechaRef}
               onChange={(e) => setFechaRef(e.target.value)}
             />
+            <button className="btn btn-primary" style={{ height: 32, padding: '0 var(--sp-3)', fontSize: 'var(--fs-xs)' }} onClick={aplicarFechaRef}>
+              Aplicar
+            </button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <label className="field-label" style={{ fontSize: 'var(--fs-xs)', whiteSpace: 'nowrap' }}>Días anticip.:</label>

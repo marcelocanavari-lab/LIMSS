@@ -18,6 +18,11 @@ export const equiposApi = {
   editarVariable: (idEquipo, idVariable, data) => api.put(`/api/equipos/${idEquipo}/variables/${idVariable}`, data),
 
   crearLectura: (data) => api.post('/api/equipos/lecturas', data),
+  obtenerLectura: (idLectura) => api.get(`/api/equipos/lecturas/${idLectura}`),
+  // Corrige una lectura ya guardada -- valor cargado con error, fecha/hora,
+  // o quién la realizó/verificó. `data.valores` es el estado COMPLETO
+  // deseado (mismo criterio que crearLectura), el backend arma el diff.
+  editarLectura: (idLectura, data) => api.put(`/api/equipos/lecturas/${idLectura}`, data),
   listarLecturas: ({ idEquipo, fechaDesde, fechaHasta, soloFueraDeRango } = {}) => {
     const params = new URLSearchParams();
     if (idEquipo) params.set('id_equipo', idEquipo);

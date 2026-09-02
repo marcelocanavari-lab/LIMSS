@@ -141,6 +141,11 @@ function SeccionTestigosPorVencer({ navigate }) {
   const [estados, setEstados] = useState([]);
   const [orden, setOrden] = useState('vencimiento_asc');
   const [fechaRef, setFechaRef] = useState(hoyISO());
+  // Fecha REALMENTE usada en la consulta -- separada del input de arriba
+  // (mismo criterio que TestigosPage.jsx/ConsultaMuestrasPage.jsx): un
+  // <input type="date"> puede disparar onChange con un valor a medio
+  // tipear, así que un cambio de fecha requiere click en "Aplicar".
+  const [fechaRefAplicada, setFechaRefAplicada] = useState(hoyISO());
   const [diasAnticipacion, setDiasAnticipacion] = useState('30');
   const [testigos, setTestigos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -150,14 +155,18 @@ function SeccionTestigosPorVencer({ navigate }) {
     setLoading(true);
     setError('');
     dashboardApi
-      .obtenerTestigos({ estados, orden, limite: 100, fechaRef, diasAnticipacion: Number(diasAnticipacion) || 0 })
+      .obtenerTestigos({ estados, orden, limite: 100, fechaRef: fechaRefAplicada, diasAnticipacion: Number(diasAnticipacion) || 0 })
       .then(setTestigos)
       .catch((err) => {
         setTestigos([]);
         setError(err instanceof ApiError ? err.message : 'No se pudo cargar la lista de testigos');
       })
       .finally(() => setLoading(false));
-  }, [estados, orden, fechaRef, diasAnticipacion]);
+  }, [estados, orden, fechaRefAplicada, diasAnticipacion]);
+
+  function aplicarFechaRef() {
+    setFechaRefAplicada(fechaRef);
+  }
 
   function toggleEstado(value) {
     setEstados((prev) => (prev.includes(value) ? prev.filter((e) => e !== value) : [...prev, value]));
@@ -182,6 +191,9 @@ function SeccionTestigosPorVencer({ navigate }) {
             value={fechaRef}
             onChange={(e) => setFechaRef(e.target.value)}
           />
+          <button type="button" className="btn btn-primary" style={{ height: 32, padding: '0 var(--sp-3)', fontSize: 'var(--fs-xs)' }} onClick={aplicarFechaRef}>
+            Aplicar
+          </button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <label className="field-label" style={{ fontSize: 'var(--fs-xs)', whiteSpace: 'nowrap' }}>Días anticip.:</label>

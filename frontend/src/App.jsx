@@ -12,6 +12,7 @@ import LibroIngresosPage from './pages/reportes/LibroIngresosPage';
 import MuestrasMenuPage from './pages/MuestrasMenuPage';
 import EquiposMenuPage from './pages/EquiposMenuPage';
 import NuevaLecturaPage from './pages/equipos/NuevaLecturaPage';
+import EditarLecturaPage from './pages/equipos/EditarLecturaPage';
 import HistorialLecturasPage from './pages/equipos/HistorialLecturasPage';
 import GraficoTendenciaPage from './pages/equipos/GraficoTendenciaPage';
 import ReporteDesviacionesPage from './pages/equipos/ReporteDesviacionesPage';
@@ -105,6 +106,7 @@ export default function App() {
           {/* ── Equipos: Control de Variables (analista_qc, qa, admin) ── */}
           <Route path="/menu-equipos" element={<PrivateRoute roles={GESTION}><EquiposMenuPage /></PrivateRoute>} />
           <Route path="/equipos/nueva-lectura" element={<PrivateRoute roles={GESTION}><NuevaLecturaPage /></PrivateRoute>} />
+          <Route path="/equipos/lecturas/:idLectura/editar" element={<PrivateRoute roles={GESTION}><EditarLecturaPage /></PrivateRoute>} />
           <Route path="/equipos/historial" element={<PrivateRoute roles={GESTION}><HistorialLecturasPage /></PrivateRoute>} />
           <Route path="/equipos/grafico" element={<PrivateRoute roles={GESTION}><GraficoTendenciaPage /></PrivateRoute>} />
           <Route path="/equipos/reporte-desviaciones" element={<PrivateRoute roles={GESTION}><ReporteDesviacionesPage /></PrivateRoute>} />
