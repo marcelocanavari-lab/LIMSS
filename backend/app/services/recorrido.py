@@ -308,6 +308,7 @@ def construir_recorrido(cursor, id_muestra: int) -> Optional[RecorridoResponse]:
     return RecorridoResponse(
         id_muestra=muestra.id_muestra,
         codigo_muestra=muestra.codigo_muestra,
+        id_especificacion=muestra.id_especificacion,
         erp_CODART=muestra.erp_CODART,
         erp_DESART=muestra.erp_DESART,
         tipo_material=muestra.tipo_material,

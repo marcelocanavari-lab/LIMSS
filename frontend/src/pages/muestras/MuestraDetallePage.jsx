@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import TopBar from '../../components/TopBar';
 import ChecklistMuestreo from '../../components/ChecklistMuestreo';
+import EspecificacionCelda from '../../components/EspecificacionCelda';
 import { muestrasApi } from '../../api/muestras';
 import { ApiError } from '../../api/client';
 import { BADGE_POR_ESTADO } from './MuestrasPage';
@@ -48,20 +49,6 @@ export default function MuestraDetallePage() {
   const [guardando, setGuardando] = useState(false);
   const [errorEdit, setErrorEdit] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
-
-  // "Vincular especificación" -- caso real: la muestra se creó antes de que
-  // la especificación de su artículo existiera en Datos Maestros, quedó con
-  // id_especificacion NULL y no había forma de reconectarla después (ver
-  // especificacionCandidata/vincularEspecificacion en la API). El modal se
-  // abre a demanda (no se busca la candidata hasta que la persona lo pide)
-  // porque para la gran mayoría de las muestras esto nunca hace falta.
-  const [modalVincularAbierto, setModalVincularAbierto] = useState(false);
-  const [buscandoCandidata, setBuscandoCandidata] = useState(false);
-  // undefined = todavía no se buscó; null = ya se buscó, no hay ninguna
-  // vigente; objeto = se encontró una candidata para confirmar.
-  const [especCandidata, setEspecCandidata] = useState(undefined);
-  const [vinculando, setVinculando] = useState(false);
-  const [errorVincular, setErrorVincular] = useState('');
 
   useEffect(() => {
     setLoading(true);
@@ -146,38 +133,9 @@ export default function MuestraDetallePage() {
     }
   }
 
-  function abrirVincular() {
-    setErrorVincular('');
-    setModalVincularAbierto(true);
-    setBuscandoCandidata(true);
-    muestrasApi
-      .especificacionCandidata(id)
-      .then(setEspecCandidata)
-      .catch((err) => setErrorVincular(err instanceof ApiError ? err.message : 'No se pudo buscar la especificación'))
-      .finally(() => setBuscandoCandidata(false));
-  }
-
-  function cerrarVincular() {
-    setModalVincularAbierto(false);
-    setEspecCandidata(undefined);
-    setErrorVincular('');
-  }
-
-  async function confirmarVincular() {
-    if (!especCandidata) return;
-    setVinculando(true);
-    setErrorVincular('');
-    try {
-      const actualizada = await muestrasApi.vincularEspecificacion(id, especCandidata.id_especificacion);
-      setMuestra(actualizada);
-      setModalVincularAbierto(false);
-      setEspecCandidata(undefined);
-      setSuccessMsg(`Especificación #${especCandidata.id_especificacion} vinculada correctamente`);
-    } catch (err) {
-      setErrorVincular(err instanceof ApiError ? err.message : 'No se pudo vincular la especificación');
-    } finally {
-      setVinculando(false);
-    }
+  function onEspecificacionVinculada(actualizada) {
+    setMuestra(actualizada);
+    setSuccessMsg(`Especificación #${actualizada.id_especificacion} vinculada correctamente`);
   }
 
   if (loading) {
@@ -253,18 +211,13 @@ export default function MuestraDetallePage() {
                 <tr>
                   <td>Especificación</td>
                   <td style={{ textAlign: 'left' }}>
-                    {muestra.id_especificacion ? (
-                      `#${muestra.id_especificacion}`
-                    ) : (
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', flexWrap: 'wrap' }}>
-                        <span className="badge badge-warn">Sin especificación vinculada</span>
-                        {puedeEditar && (
-                          <button type="button" className="btn btn-ghost" onClick={abrirVincular}>
-                            Vincular especificación →
-                          </button>
-                        )}
-                      </span>
-                    )}
+                    <EspecificacionCelda
+                      idMuestra={id}
+                      idEspecificacion={muestra.id_especificacion}
+                      erpCodart={muestra.erp_CODART}
+                      puedeEditar={puedeEditar}
+                      onVinculada={onEspecificacionVinculada}
+                    />
                   </td>
                 </tr>
                 <tr><td>Fecha de muestreo</td><td style={{ textAlign: 'left' }}>{new Date(muestra.fecha_muestreo).toLocaleString()}</td></tr>
@@ -331,59 +284,6 @@ export default function MuestraDetallePage() {
                 {checklistGuardando ? <span className="spinner" /> : 'Guardar checklist'}
               </button>
             )}
-          </div>
-        )}
-
-        {modalVincularAbierto && (
-          <div
-            style={{
-              position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 'var(--sp-4)',
-            }}
-            onClick={() => !vinculando && cerrarVincular()}
-          >
-            <div className="card" style={{ width: '90%', maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
-              <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Vincular especificación</h2>
-
-              {buscandoCandidata ? (
-                <div className="state-block"><span className="spinner" /></div>
-              ) : especCandidata ? (
-                <>
-                  <p style={{ marginBottom: 'var(--sp-3)' }}>
-                    Se encontró una especificación vigente para <b>{muestra.erp_CODART}</b>:
-                  </p>
-                  <table className="data-table data-table-compact" style={{ marginBottom: 'var(--sp-3)' }}>
-                    <tbody>
-                      <tr><td>Código</td><td style={{ textAlign: 'left' }}>{especCandidata.erp_CODART}</td></tr>
-                      <tr><td>Descripción</td><td style={{ textAlign: 'left' }}>{especCandidata.erp_DESART}</td></tr>
-                      <tr><td>Tipo de material</td><td style={{ textAlign: 'left' }}>{LABEL_TIPO_MATERIAL[especCandidata.tipo_material] || especCandidata.tipo_material}</td></tr>
-                      <tr><td>Versión</td><td style={{ textAlign: 'left' }}>{especCandidata.version}</td></tr>
-                    </tbody>
-                  </table>
-                  <p style={{ color: 'var(--ink-2)', fontSize: 'var(--fs-sm)', marginBottom: 'var(--sp-3)' }}>
-                    Confirmá que corresponde antes de vincularla -- esta acción no se puede deshacer desde acá.
-                  </p>
-                </>
-              ) : (
-                <p style={{ color: 'var(--ink-2)', marginBottom: 'var(--sp-3)' }}>
-                  Todavía no hay ninguna especificación vigente cargada para {muestra.erp_CODART}. Cargala primero en
-                  Datos Maestros y volvé a intentar desde acá.
-                </p>
-              )}
-
-              {errorVincular && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-3)' }}>{errorVincular}</div>}
-
-              <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
-                <button type="button" className="btn btn-ghost" onClick={cerrarVincular} disabled={vinculando}>
-                  Cerrar
-                </button>
-                {especCandidata && (
-                  <button type="button" className="btn btn-primary" onClick={confirmarVincular} disabled={vinculando}>
-                    {vinculando ? <span className="spinner" /> : 'Confirmar y vincular'}
-                  </button>
-                )}
-              </div>
-            </div>
           </div>
         )}
       </div>

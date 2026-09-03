@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import TopBar from '../../components/TopBar';
+import EspecificacionCelda from '../../components/EspecificacionCelda';
 import { muestrasApi } from '../../api/muestras';
 import { ApiError, abrirPdfConAuth } from '../../api/client';
 import { BADGE_POR_ESTADO } from './MuestrasPage';
@@ -306,6 +307,18 @@ export default function ConsultaMuestraDetallePage() {
                 <tr><td>Nombre</td><td style={{ textAlign: 'left' }}>{recorrido.erp_DESART}</td></tr>
                 <tr><td>Código</td><td style={{ textAlign: 'left' }}>{recorrido.erp_CODART}</td></tr>
                 <tr><td>Tipo de material</td><td style={{ textAlign: 'left' }}>{recorrido.tipo_material || '—'}</td></tr>
+                <tr>
+                  <td>Especificación</td>
+                  <td style={{ textAlign: 'left' }}>
+                    <EspecificacionCelda
+                      idMuestra={id}
+                      idEspecificacion={recorrido.id_especificacion}
+                      erpCodart={recorrido.erp_CODART}
+                      puedeEditar
+                      onVinculada={(actualizada) => setRecorrido((prev) => ({ ...prev, id_especificacion: actualizada.id_especificacion }))}
+                    />
+                  </td>
+                </tr>
                 {proveedorTexto && <tr><td>Proveedor</td><td style={{ textAlign: 'left' }}>{proveedorTexto}</td></tr>}
                 {s?.lote_proveedor && <tr><td>Lote del proveedor</td><td style={{ textAlign: 'left' }}>{s.lote_proveedor}</td></tr>}
                 {s?.fecha_vencimiento && <tr><td>Fecha de vencimiento</td><td style={{ textAlign: 'left' }}>{formatFechaSimple(s.fecha_vencimiento)}</td></tr>}

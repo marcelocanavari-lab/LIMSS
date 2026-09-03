@@ -1069,11 +1069,19 @@ def listar_muestras(
         condiciones.append("m.tipo_material = ?")
         params.append(tipo_material)
     if fecha_desde:
+        # m.fecha_muestreo es DATETIME (no DATE): pasar la fecha como string
+        # ('YYYY-MM-DD') es riesgoso acá -- bajo DATEFORMAT=dmy (idioma
+        # Español del server, ver DBCC USEROPTIONS) SQL Server interpreta ese
+        # string invirtiendo mes/día al convertirlo a datetime (silencioso
+        # con día <= 12, error con día > 12). Se convierte a un objeto
+        # datetime de Python -- el driver lo bindea nativo (SQL_TIMESTAMP),
+        # sin pasar por el parseo de string sujeto a DATEFORMAT (mismo
+        # criterio que auditoria.py/equipos.py con columnas DATETIME).
         condiciones.append("m.fecha_muestreo >= ?")
-        params.append(fecha_desde)
+        params.append(datetime.combine(fecha_desde, datetime.min.time()))
     if fecha_hasta:
         condiciones.append("m.fecha_muestreo < DATEADD(day, 1, ?)")
-        params.append(fecha_hasta)
+        params.append(datetime.combine(fecha_hasta, datetime.min.time()))
     if id_laboratorio:
         condiciones.append(
             "EXISTS (SELECT 1 FROM lims_envios e WHERE e.id_muestra = m.id_muestra AND e.id_laboratorio = ?)"

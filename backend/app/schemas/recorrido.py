@@ -76,6 +76,12 @@ class SolicitudRecorridoInfo(BaseModel):
 class RecorridoResponse(BaseModel):
     id_muestra: int
     codigo_muestra: str
+    # None si la muestra se creó antes de que la especificación de su
+    # artículo existiera en Datos Maestros (condición de carrera, ver
+    # especificacion_candidata/vincular_especificacion en muestras.py) --
+    # el frontend usa esto para ofrecer "Vincular especificación" en
+    # ConsultaMuestraDetallePage.jsx, igual que ya hace MuestraDetallePage.jsx.
+    id_especificacion: Optional[int] = None
     erp_CODART: str
     erp_DESART: str
     tipo_material: Optional[str] = None
