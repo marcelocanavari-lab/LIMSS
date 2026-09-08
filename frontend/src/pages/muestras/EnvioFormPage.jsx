@@ -17,6 +17,13 @@ export default function EnvioFormPage() {
   const [testigos, setTestigos] = useState([]);
   const [testigosEspec, setTestigosEspec] = useState([]);
   const [ensayosEspec, setEnsayosEspec] = useState([]);
+  // Otros laboratorios (distintos del elegido) con ensayos activos en la
+  // misma especificación -- caso real: S0105 tenía un ensayo asignado al
+  // laboratorio equivocado, el envío se generó sin él y nadie lo notó hasta
+  // revisar manualmente. Aviso no bloqueante antes de confirmar (ver
+  // handleSubmit) para que la persona pueda revisar Datos Maestros si no
+  // era intencional.
+  const [otrosLaboratorios, setOtrosLaboratorios] = useState([]);
   const [idsEnsayoElegidos, setIdsEnsayoElegidos] = useState([]);
   const [idsTestigoElegidos, setIdsTestigoElegidos] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -51,14 +58,16 @@ export default function EnvioFormPage() {
     if (!idLaboratorio) {
       setEnsayosEspec([]);
       setIdsEnsayoElegidos([]);
+      setOtrosLaboratorios([]);
       return;
     }
     setCargandoEnsayos(true);
     muestrasApi
       .ensayosParaEnvio(id, idLaboratorio)
-      .then((es) => {
-        setEnsayosEspec(es);
-        setIdsEnsayoElegidos(es.map((e) => e.id_espec_ensayo));
+      .then((res) => {
+        setEnsayosEspec(res.ensayos);
+        setIdsEnsayoElegidos(res.ensayos.map((e) => e.id_espec_ensayo));
+        setOtrosLaboratorios(res.otros_laboratorios);
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudieron cargar los ensayos'))
       .finally(() => setCargandoEnsayos(false));
@@ -146,6 +155,14 @@ export default function EnvioFormPage() {
     if (sinEnsayosLab) {
       setError('El laboratorio seleccionado no tiene ensayos asignados para este producto. Verificá la configuración en Datos Maestros.');
       return;
+    }
+    if (otrosLaboratorios.length > 0) {
+      const laboratorioElegidoNombre = laboratorios.find((l) => l.id_laboratorio === Number(idLaboratorio))?.nombre || 'este laboratorio';
+      const otrosNombres = otrosLaboratorios.map((l) => l.nombre).join(', ');
+      const seguir = window.confirm(
+        `Esta especificación también tiene ensayos asignados a ${otrosNombres}. ¿Confirmás que corresponde enviar solo a ${laboratorioElegidoNombre}?`
+      );
+      if (!seguir) return;
     }
     if (testigosVencidosElegidos.length > 0) {
       setError(`El testigo "${testigosVencidosElegidos[0].codigo}" está vencido — no se puede enviar`);

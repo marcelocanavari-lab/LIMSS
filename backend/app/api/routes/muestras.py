@@ -24,6 +24,7 @@ from app.schemas.muestras import (
     ContactoLaboratorioResponse,
     ContactoLaboratorioUpdate,
     EnsayoSolicitado,
+    EnsayosParaEnvioResponse,
     EnvioCreate,
     EnvioResponse,
     EspecificacionCandidata,
@@ -34,6 +35,7 @@ from app.schemas.muestras import (
     ImpresoraEtiquetaUpdate,
     ImprimirDirectoBody,
     ImprimirDirectoResponse,
+    LaboratorioSimple,
     ItemImpresionEtiquetas,
     LaboratorioCreate,
     LaboratorioResponse,
@@ -1243,7 +1245,7 @@ def guardar_checklist_muestreo_muestra(
 
 # ── Envío a laboratorio externo (REQ-ENV-004/005) ─────────────────
 
-@router.get("/{id_muestra}/ensayos-para-envio", response_model=list[EnsayoSolicitado])
+@router.get("/{id_muestra}/ensayos-para-envio", response_model=EnsayosParaEnvioResponse)
 def ensayos_para_envio(
     id_muestra: int,
     id_laboratorio: int = Query(...),
@@ -1252,14 +1254,20 @@ def ensayos_para_envio(
 ):
     """Ensayos de la especificación de la muestra que tienen asignado
     justamente el laboratorio elegido para este envío -- el formulario de
-    envío recalcula esta lista cada vez que cambia el laboratorio."""
+    envío recalcula esta lista cada vez que cambia el laboratorio.
+
+    otros_laboratorios: aviso preventivo (caso real: S0105, ver
+    lims_audit_trail entidad='envio_ensayo') -- si la especificación tiene
+    ensayos activos repartidos en más de un laboratorio, puede ser señal de
+    una carga incorrecta (un ensayo asignado al laboratorio equivocado). No
+    bloquea nada acá, solo informa; el frontend decide si avisa."""
     cursor = conn.cursor()
     cursor.execute("SELECT id_especificacion FROM lims_muestras WHERE id_muestra = ?", id_muestra)
     muestra = cursor.fetchone()
     if not muestra:
         raise HTTPException(status_code=404, detail="Muestra no encontrada")
     if not muestra.id_especificacion:
-        return []
+        return EnsayosParaEnvioResponse(ensayos=[], otros_laboratorios=[])
 
     cursor.execute(
         """
@@ -1272,7 +1280,7 @@ def ensayos_para_envio(
         """,
         muestra.id_especificacion, id_laboratorio,
     )
-    return [
+    ensayos = [
         EnsayoSolicitado(
             id_espec_ensayo=e.id_espec_ensayo, nombre_ensayo=e.nombre_ensayo,
             requerido_por_defecto=bool(e.requerido_por_defecto),
@@ -1280,6 +1288,23 @@ def ensayos_para_envio(
         )
         for e in cursor.fetchall()
     ]
+
+    cursor.execute(
+        """
+        SELECT DISTINCT se.id_laboratorio, lab.nombre
+        FROM lims_especificacion_ensayos se
+        INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = se.id_laboratorio
+        WHERE se.id_especificacion = ? AND se.activo = 1
+          AND se.id_laboratorio IS NOT NULL AND se.id_laboratorio <> ?
+        """,
+        muestra.id_especificacion, id_laboratorio,
+    )
+    otros_laboratorios = [
+        LaboratorioSimple(id_laboratorio=r.id_laboratorio, nombre=r.nombre)
+        for r in cursor.fetchall()
+    ]
+
+    return EnsayosParaEnvioResponse(ensayos=ensayos, otros_laboratorios=otros_laboratorios)
 
 
 @router.post("/{id_muestra}/envios", response_model=EnvioResponse, status_code=201)

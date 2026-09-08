@@ -317,6 +317,22 @@ class EnsayoSolicitado(BaseModel):
     dentro_especificacion: Optional[bool] = None
 
 
+class LaboratorioSimple(BaseModel):
+    id_laboratorio: int
+    nombre: str
+
+
+class EnsayosParaEnvioResponse(BaseModel):
+    ensayos: list[EnsayoSolicitado]
+    # Otros laboratorios (distintos del elegido) que también tienen ensayos
+    # activos en esta especificación -- caso real: la especificación de
+    # S0105 tenía un ensayo mal asignado a otro laboratorio, el envío se
+    # generó sin él y quedó afuera del remito sin que nadie lo notara hasta
+    # revisar manualmente. El frontend usa esto para un aviso no
+    # bloqueante (ver EnvioFormPage.jsx) antes de generar el envío.
+    otros_laboratorios: list[LaboratorioSimple] = []
+
+
 class TestigoEnviado(BaseModel):
     id_testigo: int
     codigo: str
