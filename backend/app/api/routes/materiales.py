@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from app.core.security import require_rol
 from app.db.connections import erp_db, limss_db
 from app.schemas.maestros import ArticuloERP
-from app.services.erp_materiales import buscar_materiales, obtener_codsar_por_tipo, obtener_codsars_material_empaque
+from app.services.erp_materiales import buscar_materiales, obtener_codsars_por_tipo
 
 router = APIRouter(prefix="/api/materiales", tags=["Materiales ERP"])
 
@@ -21,9 +21,6 @@ def listar_materiales(
     erp: pyodbc.Connection = Depends(erp_db),
     conn: pyodbc.Connection = Depends(limss_db),
 ):
-    if tipo == "material_empaque":
-        codsares = obtener_codsars_material_empaque(conn)
-    else:
-        codsares = [obtener_codsar_por_tipo(conn)[tipo]]
+    codsares = obtener_codsars_por_tipo(conn, tipo)
     rows = buscar_materiales(erp, codsares, buscar)
     return [ArticuloERP(IdM21=r.IdM21, CODART=r.CODART, DESART=r.DESART) for r in rows]

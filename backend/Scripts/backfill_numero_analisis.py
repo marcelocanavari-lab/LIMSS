@@ -32,8 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.db.connections import get_limss_conn
 from app.services.erp_materiales import (
-    obtener_codsar_por_tipo,
-    obtener_codsars_material_empaque,
+    obtener_codsars_por_tipo,
     tiene_numero_analisis,
 )
 
@@ -50,9 +49,9 @@ def main():
             print("lims_muestras.numero_analisis / lims_contador_numero_analisis no existen todavía en este entorno -- abortando.")
             return
 
-        codsar_materia_prima = obtener_codsar_por_tipo(conn).get("materia_prima")
-        codsars_empaque = obtener_codsars_material_empaque(conn)
-        codsares = [c for c in [codsar_materia_prima, *codsars_empaque] if c]
+        codsars_materia_prima = obtener_codsars_por_tipo(conn, "materia_prima")
+        codsars_empaque = obtener_codsars_por_tipo(conn, "material_empaque")
+        codsares = [c for c in [*codsars_materia_prima, *codsars_empaque] if c]
         print(f"CODSAR considerados Materia Prima/Material de Empaque: {codsares}")
 
         placeholders = ",".join("?" * len(codsares))

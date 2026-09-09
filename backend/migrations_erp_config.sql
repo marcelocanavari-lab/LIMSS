@@ -7,7 +7,7 @@
 -- ese mapeo se pueda editar desde una pantalla de administración
 -- (solo admin) sin tocar código. El servicio sigue teniendo los
 -- valores hardcodeados como fallback si la consulta a esta tabla
--- falla -- ver obtener_codsar_por_tipo() en erp_materiales.py.
+-- falla -- ver obtener_codsars_por_tipo() en erp_materiales.py.
 --
 -- Idempotente (igual que el resto de backend/*.sql).
 --
@@ -42,7 +42,7 @@ BEGIN
     INSERT INTO lims_erp_config (clave, valor, descripcion, editable) VALUES
     ('codsar_materia_prima',      '0001', 'Código CODSAR para Materia Prima en GIT59SAR (ERP GI_LX)',       1),
     ('codsar_granel',             '0002', 'Código CODSAR para Granel en GIT59SAR (ERP GI_LX)',               1),
-    ('codsar_semi_elaborado',     '0003', 'Código CODSAR para Semi Elaborado en GIT59SAR (ERP GI_LX)',       1),
+    ('codsar_semi_elaborado',     '0003,0007,0008,0009', 'Código(s) CODSAR para Semi Elaborado en GIT59SAR (ERP GI_LX) -- comprimidos/liquidos/inyectables/blisteres', 1),
     ('codsar_producto_terminado', '0000', 'Código CODSAR para Producto Terminado en GIT59SAR (ERP GI_LX)',   1);
     PRINT 'Valores iniciales de lims_erp_config insertados';
 END

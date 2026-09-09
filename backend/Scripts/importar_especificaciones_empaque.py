@@ -53,7 +53,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.db.connections import get_erp_conn, get_limss_conn
 from app.services.erp_ir import resolver_codsar_por_codart
-from app.services.erp_materiales import obtener_codsars_material_empaque
+from app.services.erp_materiales import obtener_codsars_por_tipo
 
 logger = logging.getLogger("importar_especificaciones_empaque")
 
@@ -112,7 +112,7 @@ def main(dry_run: bool):
     with get_limss_conn() as conn, get_erp_conn() as erp:
         cursor = conn.cursor()
         ecursor = erp.cursor()
-        codsares_empaque = obtener_codsars_material_empaque(cursor)
+        codsares_empaque = obtener_codsars_por_tipo(conn, "material_empaque")
         logger.info("CODSAR de Material de Empaque: %s", codsares_empaque)
 
         cursor.execute("SELECT id_ensayo_maestro, nombre_ensayo FROM lims_ensayos_maestro")

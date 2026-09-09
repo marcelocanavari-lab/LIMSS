@@ -12,8 +12,8 @@
 --    y migrations_muestras_tipo_material.sql) -- se ubica la restricción CHECK
 --    por nombre fijo (ya tiene nombre en ambas tablas) y se reemplaza.
 -- 2. lims_erp_config: 'codsar_material_empaque' = '0005,0006' (lista separada
---    por comas -- a diferencia del resto de los tipos, que son un único
---    CODSAR, ver obtener_codsars_material_empaque() en erp_materiales.py).
+--    por comas -- mismo criterio que 'codsar_semi_elaborado', ver
+--    obtener_codsars_por_tipo() en erp_materiales.py).
 -- 3. lims_novedades_empaque -- tabla ya creada manualmente antes de esta
 --    migración; el CREATE TABLE queda acá solo para que el archivo refleje
 --    el esquema real (mismo criterio ya usado en migrations_cajas.sql).

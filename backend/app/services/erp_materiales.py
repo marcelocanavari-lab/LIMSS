@@ -3,14 +3,17 @@ Búsqueda de materiales del ERP filtrados por tipo (GIT59SAR.CODSAR), para el
 flujo de creación de especificaciones: primero se elige el tipo de material,
 después se busca solo entre los artículos de ese tipo.
 
-Mapeo CODSAR confirmado por el usuario (Lamar):
+Mapeo CODSAR confirmado por el usuario (Lamar) -- un tipo_material de LIMSS
+puede corresponder a MÁS DE UN CODSAR real del ERP (por eso CODSAR_POR_TIPO
+mapea siempre a una lista, nunca a un único valor):
     '0000' -> Producto Terminado
     '0001' -> Materia Prima (tiene IR en el ERP)
     '0002' -> Granel
-    '0003' -> Semi-Elaborado
-    '0005' / '0006' -> Material de Empaque (codificado / sin codificar --
-        ver CODSAR_MATERIAL_EMPAQUE más abajo: a diferencia del resto, es UN
-        tipo_material que cubre DOS subartículos del ERP)
+    '0003' / '0007' / '0008' / '0009' -> Semi-Elaborado (Comprimidos /
+        Líquidos / Inyectables / Blísteres -- 4 sub-tipos del ERP que LIMSS
+        trata como un solo tipo_material, mismo criterio que Material de
+        Empaque)
+    '0005' / '0006' -> Material de Empaque (codificado / sin codificar)
 """
 from typing import Optional
 
@@ -20,55 +23,32 @@ import pyodbc
 # corrió la migración) o si falla la consulta por cualquier motivo. Nunca debe
 # romper el flujo de creación de muestras/especificaciones por esto.
 CODSAR_POR_TIPO = {
-    "materia_prima": "0001",
-    "granel": "0002",
-    "semi_elaborado": "0003",
-    "producto_terminado": "0000",
+    "materia_prima": ["0001"],
+    "granel": ["0002"],
+    "semi_elaborado": ["0003", "0007", "0008", "0009"],
+    "producto_terminado": ["0000"],
+    "material_empaque": ["0005", "0006"],
 }
 
-# Material de Empaque es el único tipo_material respaldado por dos
-# subartículos del ERP a la vez (codificado y sin codificar) -- por eso vive
-# aparte de CODSAR_POR_TIPO (un único código cada uno) en vez de forzar ahí
-# un valor de lista que rompería a los demás consumidores de ese mapeo.
-CODSAR_MATERIAL_EMPAQUE = ["0005", "0006"]
 
-
-def obtener_codsar_por_tipo(conn: pyodbc.Connection) -> dict:
-    """Mapeo tipo_material -> CODSAR, editable desde Datos Maestros >
-    Configuración ERP (tabla lims_erp_config, claves 'codsar_<tipo>').
-    Si la consulta falla, devuelve el mapeo hardcodeado de CODSAR_POR_TIPO."""
+def obtener_codsars_por_tipo(conn: pyodbc.Connection, tipo: str) -> list[str]:
+    """CODSAR(es) del ERP para un tipo_material de LIMSS -- editable desde
+    Datos Maestros > Configuración ERP (tabla lims_erp_config, clave
+    'codsar_<tipo>', valor separado por comas, ej. '0003,0007,0008,0009').
+    Reemplaza el mapeo 1:1 de antes (un tipo_material podía tener como mucho
+    un CODSAR): varios tipos -- semi_elaborado, material_empaque -- cubren
+    más de un subartículo real del ERP. Si la consulta falla o no hay
+    override cargado para este tipo, cae al default hardcodeado de
+    CODSAR_POR_TIPO."""
+    default = CODSAR_POR_TIPO.get(tipo, [])
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT clave, valor FROM lims_erp_config WHERE clave LIKE 'codsar_%'")
-        filas = cursor.fetchall()
-    except Exception:
-        return dict(CODSAR_POR_TIPO)
-
-    mapeo = dict(CODSAR_POR_TIPO)
-    for fila in filas:
-        tipo = fila.clave[len("codsar_"):]
-        mapeo[tipo] = fila.valor
-    return mapeo
-
-
-def obtener_codsars_material_empaque(conn: pyodbc.Connection) -> list[str]:
-    """CODSAR de Material de Empaque -- a diferencia del resto de los tipos
-    (un único CODSAR cada uno, ver obtener_codsar_por_tipo), cubre dos
-    subartículos del ERP (0005 codificado, 0006 sin codificar) que en LIMSS
-    se tratan como un solo tipo_material: la distinción codificado/sin
-    codificar solo importa para decidir si el lote del proveedor y la fecha
-    de vencimiento son obligatorios al crear la Solicitud de Muestreo (ver
-    crear_solicitud en solicitudes_muestreo.py), no para separar en dos
-    tipos de especificación. Editable desde Configuración ERP igual que el
-    resto (clave 'codsar_material_empaque', valor separado por comas)."""
-    try:
-        cursor = conn.cursor()
-        cursor.execute("SELECT valor FROM lims_erp_config WHERE clave = 'codsar_material_empaque'")
+        cursor.execute("SELECT valor FROM lims_erp_config WHERE clave = ?", f"codsar_{tipo}")
         fila = cursor.fetchone()
     except Exception:
-        return list(CODSAR_MATERIAL_EMPAQUE)
+        return list(default)
     if not fila or not fila.valor:
-        return list(CODSAR_MATERIAL_EMPAQUE)
+        return list(default)
     return [c.strip() for c in fila.valor.split(",") if c.strip()]
 
 
@@ -161,9 +141,9 @@ def asignar_numero_analisis_si_corresponde(conn: pyodbc.Connection, id_especific
     if not codsar:
         return None
 
-    codsar_materia_prima = obtener_codsar_por_tipo(conn).get("materia_prima")
-    codsars_empaque = obtener_codsars_material_empaque(conn)
-    if codsar != codsar_materia_prima and codsar not in codsars_empaque:
+    codsars_materia_prima = obtener_codsars_por_tipo(conn, "materia_prima")
+    codsars_empaque = obtener_codsars_por_tipo(conn, "material_empaque")
+    if codsar not in codsars_materia_prima and codsar not in codsars_empaque:
         return None
 
     cursor.execute(

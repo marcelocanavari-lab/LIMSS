@@ -19,21 +19,26 @@ entre los resultados, igual que con el IR.
 import pyodbc
 
 
-def buscar_lote(erp: pyodbc.Connection, codsar: str, nro_lote: str):
+def buscar_lote(erp: pyodbc.Connection, codsares: list[str], nro_lote: str):
+    """codsares es siempre una lista -- un tipo_material de LIMSS puede
+    corresponder a varios CODSAR reales del ERP (ej. semi_elaborado:
+    comprimidos/líquidos/inyectables/blísteres), mismo criterio que
+    buscar_materiales en erp_materiales.py."""
     cursor = erp.cursor()
+    placeholders = ",".join("?" * len(codsares))
     # RTRIM en CODART/DESART: GIM21ART es CHAR de ancho fijo, ver la nota en
     # erp_ir.py -- se recorta al leer, único punto de esta consulta.
     cursor.execute(
-        """
+        f"""
         SELECT art.M21Id AS IdM21, RTRIM(art.CODART) AS CODART, RTRIM(art.DESART) AS DESART, umd.ABREV AS unidad
         FROM GIT52DSC dsc
         INNER JOIN GIM25ALT alt ON alt.IdT521 = dsc.T52Id
         INNER JOIN GIM21ART art ON art.M21Id = alt.IdM21
         INNER JOIN GIT59SAR sar ON sar.T59Id = art.IdT59
         LEFT JOIN GIT21UMD umd ON umd.T21Id = art.IdT21M
-        WHERE dsc.IdT51 = 2 AND RTRIM(dsc.CODDSC) = ? AND sar.CODSAR = ?
+        WHERE dsc.IdT51 = 2 AND RTRIM(dsc.CODDSC) = ? AND sar.CODSAR IN ({placeholders})
         """,
-        nro_lote, codsar,
+        nro_lote, *codsares,
     )
     return cursor.fetchall()
 

@@ -78,7 +78,7 @@ from app.services.formato import etiqueta_referencia, formatear_cantidad, normal
 from app.services.especificaciones import guardar_checklist_muestreo, obtener_checklist_muestreo, tiene_ensayos_analisis
 from app.services.erp_ir import buscar_todos_candidatos_ir, formatear_nro_ir, normalizar_fecha_sentinel
 from app.services.erp_lotes import buscar_lote
-from app.services.erp_materiales import asignar_numero_analisis_si_corresponde, obtener_codsar_por_tipo, tiene_numero_analisis
+from app.services.erp_materiales import asignar_numero_analisis_si_corresponde, obtener_codsars_por_tipo, tiene_numero_analisis
 from app.services.pdf_legajo import AdjuntoLegajo, generar_pdf_legajo
 from app.services.recorrido import construir_recorrido
 
@@ -639,7 +639,7 @@ def buscar_material(
             for r in rows
         ]
 
-    rows = buscar_lote(erp, obtener_codsar_por_tipo(conn)[tipo], referencia)
+    rows = buscar_lote(erp, obtener_codsars_por_tipo(conn, tipo), referencia)
     if not rows:
         raise HTTPException(status_code=404, detail=f"No se encontró el lote '{referencia}' en el ERP para este tipo de material")
     return [

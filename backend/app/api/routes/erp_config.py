@@ -1,10 +1,12 @@
 """
 Configuración editable de la integración LIMSS-ERP (lims_erp_config).
 
-Hoy solo guarda el mapeo tipo_material -> CODSAR (GIT59SAR, ERP GI_LX) que
-antes estaba hardcodeado en erp_materiales.CODSAR_POR_TIPO -- ver
-obtener_codsar_por_tipo() en ese módulo, que lee de acá con ese mismo
-hardcodeo como fallback si la consulta falla.
+Hoy solo guarda el mapeo tipo_material -> CODSAR(es) (GIT59SAR, ERP GI_LX,
+valor separado por comas cuando un tipo cubre más de un CODSAR real -- ej.
+semi_elaborado, material_empaque) que antes estaba hardcodeado en
+erp_materiales.CODSAR_POR_TIPO -- ver obtener_codsars_por_tipo() en ese
+módulo, que lee de acá con ese mismo hardcodeo como fallback si la consulta
+falla.
 
 Pantalla exclusiva para admin (son parámetros de integración con el ERP,
 no algo que deba tocar un analista/QA en el día a día).
