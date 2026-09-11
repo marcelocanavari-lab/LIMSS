@@ -78,6 +78,14 @@ export const maestrosApi = {
   eliminarTestigo: (id) => api.del(`/api/maestros/testigos/${id}`),
   ajustarStockTestigo: (id, cantidad, observaciones) =>
     api.post(`/api/maestros/testigos/${id}/movimiento`, { cantidad, observaciones }),
+  // Testigo comprado externamente, sin comprobante IR real en el ERP --
+  // avanza GIT30NUM.NUMCOM (ver investigación) y marca ir_manual=1. Exige
+  // motivo; confirmarSobreescritura solo hace falta si el testigo ya tenía
+  // un nro_ir cargado (el backend devuelve 409 si no se manda).
+  asignarIrManualTestigo: (id, motivo, confirmarSobreescritura = false) =>
+    api.post(`/api/maestros/testigos/${id}/asignar-ir-manual`, {
+      motivo, confirmar_sobreescritura: confirmarSobreescritura,
+    }),
 
   // Laboratorios asignados a un testigo (muchos a muchos)
   listarLaboratoriosTestigo: (id) => api.get(`/api/maestros/testigos/${id}/laboratorios`),

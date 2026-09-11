@@ -507,6 +507,20 @@ ANCHO_CARACTER_XS_PT = 17
 # ajustado.
 TAMANO_CELDA_QR_CONDENSADA_MM = 0.6
 
+# Texto fijo en el vértice inferior derecho de cada mitad, en reemplazo del
+# logo que se usó antes ahí (mismo lugar, mismo criterio "info secundaria" --
+# ver el bloque de geometría en dibujar_mitad, dentro de
+# generar_sbpl_etiqueta_par). _LOGO_PCX_BYTES/_cmd_grafico_pcx (más arriba)
+# siguen en uso -- son de generar_sbpl_etiqueta_estado (CUARENTENA/APROBADO/
+# RECHAZADO), una etiqueta distinta que no forma parte de este cambio.
+_TEXTO_LABORATORIO = "Laboratorio Lamar SRL"
+# A 2x (<L>0202) -- tamaño duplicado a pedido, mismo mecanismo ENTERO de
+# <L> que ya usa MULT_DESTACADO para Nombre/IR (SBPL no tiene un múltiplo
+# fraccionario, ver el encabezado del archivo).
+_MULT_TEXTO_LABORATORIO = 2
+_ANCHO_TEXTO_LABORATORIO_PT = len(_TEXTO_LABORATORIO) * ANCHO_CARACTER_XS_PT * _MULT_TEXTO_LABORATORIO
+_ALTO_TEXTO_LABORATORIO_PT = ANCHO_CARACTER_XS_PT * _MULT_TEXTO_LABORATORIO
+
 
 def armar_pares_etiquetas_muestra(etiquetas: list[dict]) -> list[tuple[dict, Optional[dict]]]:
     """Agrupa la lista de etiquetas de a 2, en el orden en que vienen -- la
@@ -550,8 +564,10 @@ def generar_sbpl_etiqueta_par(
     fecha + iniciales del muestreador, QR. Cantidad/Laboratorio se habían
     quedado afuera en un ajuste anterior (regresión real: dejaban de
     imprimirse) -- hay espacio de sobra en la mitad disponible como para no
-    tener que sacar nada: hasta 9 renglones de texto (con nombre en 2
-    líneas) usan ~310pt de los ~339pt de cada mitad (100x85mm a 203dpi).
+    tener que sacar nada: hasta 10 renglones de texto (con nombre en 2
+    líneas + "Laboratorio Lamar SRL" a <L>0202 como último renglón, ver más
+    abajo) usan ~325pt de los ~339pt de cada mitad (100x85mm a 203dpi, salto
+    ya recortado para que entre incluso en ese caso más denso).
     Nombre e IR/LOTE se destacan a 2x para que se vean del mismo tamaño
     relativo que en el PDF de esta misma etiqueta (ver la nota de
     MULT_DESTACADO más abajo) -- antes estaban a 1x, igual que el resto de
@@ -571,8 +587,15 @@ def generar_sbpl_etiqueta_par(
     margen = mm_a_puntos(3, dpi)
     # Mismo "aire" proporcional que salto (5mm para un glifo XM de 24pt) --
     # escalado al glifo más chico de XS (17pt) en vez de un valor nuevo
-    # inventado.
-    salto = round(mm_a_puntos(5, dpi) * ANCHO_CARACTER_XS_PT / ANCHO_CARACTER_XM_PT)
+    # inventado. Recortado 4pt (confirmado con el usuario): con "Laboratorio
+    # Lamar SRL" a <L>0202 como renglón final (ver más abajo), el layout más
+    # denso -- nombre de producto a 2 líneas + laboratorio + lote, EN LAS
+    # DOS MITADES a la vez -- se pasaba del borde físico inferior de la
+    # etiqueta (confirmado con el diagnóstico de superposición: "SE PASA DEL
+    # ALTO TOTAL"). Este recorte se aplica 6 veces en la secuencia completa
+    # de una mitad (y de ahí también a AVANCE_2X_XS, que depende de salto),
+    # así que 4pt alcanzan de sobra para volver a entrar siempre, con margen.
+    salto = round(mm_a_puntos(5, dpi) * ANCHO_CARACTER_XS_PT / ANCHO_CARACTER_XM_PT) - 4
 
     # Nombre del producto e IR/LOTE: destacados a 2x (mismo criterio de
     # "un paso de <L> más grande que el resto" que ya usan generar_sbpl_
@@ -636,6 +659,19 @@ def generar_sbpl_etiqueta_par(
         gap_texto_qr_pt = mm_a_puntos(2, dpi)
         max_chars_nombre = max(10, (h_qr - gap_texto_qr_pt - h) // (ANCHO_CARACTER_XS_PT * MULT_DESTACADO))
 
+        # "Laboratorio Lamar SRL" a <L>0202 (tamaño duplicado a pedido) mide
+        # 714pt de ancho (21 caracteres x 17pt x2) -- en un total de
+        # ancho_pt=799pt (100mm a 203dpi), eso es prácticamente TODO el
+        # ancho útil de la etiqueta. A ese tamaño ya no cabe compartiendo
+        # banda vertical con ningún otro campo (probado con el diagnóstico
+        # de superposición: chocaba contra IR, Cantidad, Lote/Lab y Fecha
+        # según dónde se lo probara) -- necesita su PROPIO renglón exclusivo,
+        # a diferencia de la versión 1x anterior que sí convivía al costado
+        # del QR o a la altura de IR. Se agrega como último renglón de la
+        # secuencia (después de Fecha, ver más abajo) en vez de en una
+        # posición fija -- mismo mecanismo que ya usan Tipo/Nombre/IR/etc.
+        h_logo = ancho_pt - margen - _ANCHO_TEXTO_LABORATORIO_PT
+
         campo(_texto(datos.get("titulo")), nombre_diag="Tipo")
         campo(_texto(datos.get("identificador")), nombre_diag="N solicitud")
         campo(_texto(datos.get("erp_codart")), nombre_diag="Codigo")
@@ -662,15 +698,63 @@ def generar_sbpl_etiqueta_par(
         cantidad_final = datos.get("cantidad_muestra_texto") or datos.get("cantidad_texto")
         campo(f"Cant: {_texto(cantidad_final)}", nombre_diag="Cantidad")
 
+        # Laboratorio + Lote del proveedor -- mismo campo lote_proveedor ya
+        # usado en remitos y en la etiqueta PDF (ver _dibujar_etiqueta en
+        # pdf_solicitud_muestreo.py). Combinados en UN solo renglón (mismo
+        # criterio que el PDF, no uno propio cada uno): con nombre a 2
+        # líneas + Lab, ya se llega a 9 renglones (~310 de los ~339pt
+        # disponibles, ver el docstring de esta función) -- agregar Lote
+        # como renglón aparte empuja a 10 y el diagnóstico de superposición
+        # confirmó que la Fecha termina invadiendo la línea divisoria entre
+        # las dos mitades (bug real detectado con esta misma prueba, no
+        # hipotético). Lote va PRIMERO en el texto combinado (igual que en
+        # el PDF): si hiciera falta truncar por ancho, se pierde el final de
+        # "Lab: ..." y no el Lote recién agregado -- ya no comparte banda
+        # vertical con "Laboratorio Lamar SRL" (ver más arriba, ahora debajo
+        # del QR), así que ya no hace falta acotar el ancho contra ESO --
+        # pero sigue habiendo un límite real: el borde físico derecho de la
+        # etiqueta. max_chars_ancho_fisico solo evita que un lote/laboratorio
+        # (o fecha+muestreador) extremadamente largo se salga del papel; no
+        # es el recorte ajustado de antes, así que en la práctica entra
+        # prácticamente cualquier valor razonable sin cortarse.
+        max_chars_ancho_fisico = max(10, (ancho_pt - margen - h) // ANCHO_CARACTER_XS_PT)
+        partes_lote_lab = []
+        if datos.get("lote_proveedor"):
+            partes_lote_lab.append(f"Lote: {datos['lote_proveedor']}")
         if datos.get("laboratorio_nombre"):
-            campo(f"Lab: {datos['laboratorio_nombre']}", nombre_diag="Laboratorio")
+            partes_lote_lab.append(f"Lab: {datos['laboratorio_nombre']}")
+        if partes_lote_lab:
+            texto_lote_lab = _envolver_texto("   ".join(partes_lote_lab), max_chars_ancho_fisico, 1)[0]
+            campo(texto_lote_lab, nombre_diag="Lote/Lab")
 
         fecha = datos.get("fecha")
         fecha_texto = fecha.strftime("%d/%m/%Y") if fecha else "-"
         linea_fecha = f"Fecha: {fecha_texto}"
         if datos.get("iniciales_muestreador"):
             linea_fecha += f"  Mstr: {datos['iniciales_muestreador']}"
-        campo(linea_fecha, nombre_diag="Fecha")
+        campo(_envolver_texto(linea_fecha, max_chars_ancho_fisico, 1)[0], nombre_diag="Fecha")
+
+        # "Laboratorio Lamar SRL" -- último renglón de la secuencia (ver el
+        # comentario de h_logo más arriba: a este tamaño necesita su propio
+        # renglón exclusivo). No usa campo() porque ese helper siempre
+        # dibuja alineado contra el margen izquierdo (H=margen) -- acá va
+        # alineado a la derecha (H=h_logo, corrido a la derecha, mismo
+        # criterio que la versión anterior), en la posición V que ya dejó
+        # lista Fecha (nonlocal v, mismo mecanismo de avance secuencial).
+        #
+        # Con el salto recortado (ver más arriba) entra incluso en el caso
+        # más denso posible -- nombre de producto a 2 líneas + laboratorio +
+        # lote, en LAS DOS MITADES a la vez -- confirmado con el diagnóstico
+        # de superposición (sin "CHOCA CON" ni "SE PASA" en ningún campo).
+        v_logo = v
+        comandos.append(_cmd("V", f"{v_logo:04d}"))
+        comandos.append(_cmd("H", f"{h_logo:04d}"))
+        comandos.append(_cmd("L", f"{_MULT_TEXTO_LABORATORIO:02d}{_MULT_TEXTO_LABORATORIO:02d}"))
+        comandos.append(_cmd("XS", _TEXTO_LABORATORIO))
+        diagnostico.append((
+            f"{etiqueta_diag} Texto laboratorio", v_logo, h_logo,
+            _ALTO_TEXTO_LABORATORIO_PT, _ANCHO_TEXTO_LABORATORIO_PT,
+        ))
 
         # QR, mismo dato (identificador) que generar_sbpl_etiqueta -- celda
         # más chica (TAMANO_CELDA_QR_CONDENSADA_MM), alineado contra el

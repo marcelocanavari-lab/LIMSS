@@ -30,6 +30,11 @@ from reportlab.platypus import Paragraph
 
 from app.services.formato import etiqueta_referencia, formatear_cantidad, titulo_etiqueta_por_tipo
 
+# Texto fijo en el vértice inferior derecho de la etiqueta, en reemplazo del
+# logo que se usó antes ahí (mismo lugar, mismo criterio "info secundaria,
+# no debe competir con el QR ni el texto principal" -- ver _dibujar_etiqueta).
+_TEXTO_LABORATORIO = "Laboratorio Lamar SRL"
+
 _ESTILO_ESPECIFICACION = ParagraphStyle(
     "especificacion_solicitud", fontName="Helvetica", fontSize=8, leading=9.5,
 )
@@ -271,7 +276,26 @@ def _dibujar_etiqueta(
     e = _ESCALA_ETIQUETA
     margen = 0.3 * cm * e
     qr_tam = 2 * cm * e
-    ancho_texto_max = ancho - 2 * margen - qr_tam - 0.2 * cm * e
+    # "Laboratorio Lamar SRL" DEBAJO del QR (no al costado, corrido a la
+    # derecha -- ver el dibujo más abajo), en vez de la franja angosta
+    # rotada de la versión anterior: esa franja sumaba su propio ancho
+    # reservado AL LADO del QR (ancho_logo + gap_logo, restados del ancho
+    # disponible para el resto del texto), apretando Lab/Muestreador más de
+    # lo necesario. Apilado debajo, comparte columna con el QR -- pero a
+    # este tamaño (tam_logo duplicado a pedido) el texto es MÁS ANCHO que
+    # el propio QR (stringWidth ya no cabe en qr_tam, a diferencia del
+    # tamaño original) -- ancho_texto_max tiene que reservar el ANCHO REAL
+    # del texto, no solo qr_tam, o el renglón de Lote/Lab/Fecha se
+    # superpone con él (bug real confirmado con el renderizado de prueba de
+    # este mismo ajuste). El QR sube (ver qr_y más abajo) lo justo para
+    # dejarle un renglón (alto_texto_logo) + aire (gap_logo) libre debajo,
+    # contra el margen inferior.
+    tam_logo = 10 * e
+    alto_texto_logo = tam_logo * 1.1
+    ancho_texto_logo = stringWidth(_TEXTO_LABORATORIO, "Helvetica", tam_logo)
+    ancho_columna_derecha = max(qr_tam, ancho_texto_logo)
+    gap_logo = 0.15 * cm * e
+    ancho_texto_max = ancho - 2 * margen - ancho_columna_derecha - 0.2 * cm * e
 
     c.rect(x0, y0, ancho, alto)
 
@@ -308,8 +332,26 @@ def _dibujar_etiqueta(
     y -= 0.55 * cm * e
 
     c.setFont("Helvetica", 9 * e)
+    # Lote + Lab comparten renglón (mismo campo lote_proveedor ya usado en
+    # remitos, ver EnvioFormPage.jsx/completar-datos) -- una línea propia
+    # para el lote desbordaba la etiqueta por abajo (probado con nombre de
+    # artículo largo a 2 líneas + lab + lote + fecha: la última línea
+    # quedaba cortada por el borde). Lote va PRIMERO a propósito:
+    # _truncar_a_ancho recorta por el FINAL de la cadena, así que si el
+    # renglón combinado no entra, lo que se acorta es "Lab: ..." (dato ya
+    # visible en el envío/remito) y el lote -- la info nueva que pidió esta
+    # tarea -- nunca queda truncado. getattr con default None porque
+    # generar_pdf_etiqueta_muestra arma un shim (SimpleNamespace) sin este
+    # campo, para una muestra sin Solicitud detrás -- no corresponde
+    # mostrar lote ahí.
+    lote_proveedor = getattr(solicitud, "lote_proveedor", None)
+    partes_lote_lab = []
+    if lote_proveedor:
+        partes_lote_lab.append(f"Lote: {lote_proveedor}")
     if laboratorio_nombre:
-        c.drawString(x, y, _truncar_a_ancho(f"Lab: {laboratorio_nombre}", "Helvetica", 9 * e, ancho_texto_max))
+        partes_lote_lab.append(f"Lab: {laboratorio_nombre}")
+    if partes_lote_lab:
+        c.drawString(x, y, _truncar_a_ancho("   ".join(partes_lote_lab), "Helvetica", 9 * e, ancho_texto_max))
         y -= 0.38 * cm * e
     # Iniciales del muestreador en la misma línea que la fecha (no suma
     # altura a la etiqueta, que ya tiene el espacio bastante ajustado con
@@ -319,7 +361,17 @@ def _dibujar_etiqueta(
         fecha_texto += f"   Muestreador: {iniciales_muestreador}"
     c.drawString(x, y, _truncar_a_ancho(fecha_texto, "Helvetica", 9 * e, ancho_texto_max))
 
-    _dibujar_qr(c, solicitud.nro_solicitud, x0 + ancho - qr_tam - margen, y0 + margen, qr_tam)
+    qr_x = x0 + ancho - margen - qr_tam
+    qr_y = y0 + margen + alto_texto_logo + gap_logo
+    _dibujar_qr(c, solicitud.nro_solicitud, qr_x, qr_y, qr_tam)
+
+    # "Laboratorio Lamar SRL" debajo del QR, horizontal, alineado contra el
+    # mismo margen derecho que el QR (drawRightString) -- corrido a la
+    # derecha en vez de centrado bajo el QR, mismo criterio "info
+    # secundaria, no debe competir" que ya tenía la franja rotada que
+    # reemplaza, ahora sin restarle ancho a ancho_texto_max.
+    c.setFont("Helvetica", tam_logo)
+    c.drawRightString(x0 + ancho - margen, y0 + margen, _TEXTO_LABORATORIO)
 
 
 # ── Grilla de etiquetas por hoja ────────────────────────────────────

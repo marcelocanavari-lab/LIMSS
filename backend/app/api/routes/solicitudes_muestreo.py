@@ -1287,6 +1287,7 @@ def _armar_etiquetas_logicas_de_solicitud(cursor, row) -> list[dict]:
         "etiqueta_referencia": etiqueta_referencia(getattr(row, "tipo_referencia", "ir")),
         "fecha": row.fecha_solicitud,
         "iniciales_muestreador": iniciales,
+        "lote_proveedor": getattr(row, "lote_proveedor", None),
     }
 
     # Igual que el PDF: si ya hay tipos confirmados (lims_solicitud_muestras

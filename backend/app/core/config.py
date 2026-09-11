@@ -10,6 +10,17 @@ class Settings(BaseSettings):
     erp_db_password: str
     erp_db_driver: str = "ODBC Driver 17 for SQL Server"
 
+    # ERP GI_LX -- login limss_erp, con UPDATE acotado sobre GIT30NUM.NUMCOM/
+    # ULTFEC (ver investigación previa) -- SOLO para asignar_ir_manual en
+    # maestros.py, nunca reemplaza erp_db_user (ebr_readonly, solo lectura,
+    # usado por el resto del sistema). Mismo server/name/driver que la
+    # conexión de solo lectura (es la misma base, otro login) -- no hace
+    # falta duplicar esos tres campos. Default vacío: el resto de la app
+    # arranca igual aunque todavía no se haya cargado la contraseña real en
+    # .env, la conexión de escritura recién falla si se llega a usar.
+    erp_write_db_user: str = ""
+    erp_write_db_password: str = ""
+
     # LIMSS (lectura/escritura)
     limss_db_server: str
     limss_db_name: str

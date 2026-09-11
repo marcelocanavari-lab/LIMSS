@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from fastapi.responses import FileResponse
 
 from app.core.security import get_current_user, require_rol
-from app.db.connections import erp_db, limss_db
+from app.db.connections import erp_db, erp_write_db, limss_db
 from app.schemas.maestros import (
     ArticuloERP,
     CategoriaEnsayoResponse,
@@ -34,6 +34,7 @@ from app.schemas.maestros import (
     EspecificacionTestigoResponse,
     LaboratorioAsignado,
     TestigoAjusteStock,
+    TestigoAsignarIrManual,
     TestigoCategoriaCreate,
     TestigoCategoriaResponse,
     TestigoCategoriaUpdate,
@@ -48,7 +49,7 @@ from app.schemas.maestros import (
 from app.services import audit, storage
 from app.services.formato import normalizar_unidad
 from app.services.erp_articulos import buscar_articulos
-from app.services.erp_ir import resolver_codsar_por_codart
+from app.services.erp_ir import formatear_nro_ir, resolver_codsar_por_codart
 
 router = APIRouter(prefix="/api/maestros", tags=["Datos Maestros"])
 
@@ -425,6 +426,10 @@ def _fila_a_testigo(row, fecha_ref: Optional[date] = None, dias_anticipacion: in
         origen_nombre=getattr(row, "origen_nombre", None),
         id_categoria=getattr(row, "id_categoria", None),
         categoria_nombre=getattr(row, "categoria_nombre", None),
+        # getattr con default: ir_manual es de migrations_testigos_ir_manual.sql,
+        # puede no estar corrida todavía en algún entorno (mismo criterio de
+        # tolerancia que id_laboratorio/id_origen más arriba).
+        ir_manual=bool(getattr(row, "ir_manual", False)),
     )
 
 
@@ -1803,6 +1808,99 @@ def editar_testigo(
         conn, entidad="testigo", accion="modificar",
         id_usuario=user["id_usuario"], id_entidad=id_testigo,
         valor_anterior=valor_anterior or None, valor_nuevo=valor_nuevo or None,
+    )
+
+    cursor.execute(_select_testigos_sql(cursor) + "WHERE t.id_testigo = ?", id_testigo)
+    return _fila_a_testigo(cursor.fetchone(), cursor=cursor)
+
+
+@router.post("/testigos/{id_testigo}/asignar-ir-manual", response_model=TestigoResponse)
+def asignar_ir_manual(
+    id_testigo: int,
+    body: TestigoAsignarIrManual,
+    user: dict = Depends(require_rol("analista_qc", "admin", "qa")),
+    conn: pyodbc.Connection = Depends(limss_db),
+    erp_write: pyodbc.Connection = Depends(erp_write_db),
+):
+    """Asigna un IR manualmente a un testigo comprado externamente, sin
+    comprobante real en el ERP detrás -- avanza el MISMO contador
+    (GIT30NUM.NUMCOM) que usa el ERP para numerar IRs reales, para que el
+    número asignado nunca choque con uno que el ERP emita después (ver la
+    investigación previa: GIT30NUM es la tabla de correlativos real detrás
+    de GIN01CPB.NUMCOMO; T30Id=1046 es la fila de configuración del tipo de
+    comprobante 'IR' -- T05Id=1076 en GIT05TCM, CODTCM='IR'). Deliberadamente
+    NO crea ningún comprobante en GIN01CPB -- deja un hueco permanente en la
+    numeración real del ERP: es el costo aceptado de no tener un
+    comprobante real detrás, no un efecto secundario a corregir.
+
+    UPDATE ... OUTPUT en una sola sentencia contra el ERP (no SELECT +
+    UPDATE separados): dos asignaciones simultáneas nunca pueden leer el
+    mismo NUMCOM antes de que la otra lo incremente -- SQL Server serializa
+    el UPDATE de esa fila puntual, así que la fila con el lock ganador ve
+    el valor ya incrementado por la otra.
+
+    erp_write usa el login limss_erp (permiso de UPDATE acotado a
+    GIT30NUM.NUMCOM/ULTFEC), nunca el login de solo lectura del resto del
+    sistema (erp_db/ebr_readonly, ver app/db/connections.py). Si el UPDATE a
+    lims_testigos o el audit.registrar de abajo fallan, FastAPI cierra la
+    dependencia erp_write por la excepción antes de llegar a su commit (ver
+    get_erp_write_conn) y el incremento del contador se revierte -- no
+    puede quedar el contador avanzado sin que haya quedado nada guardado en
+    LIMSS."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT COL_LENGTH('lims_testigos', 'ir_manual') AS c")
+    if cursor.fetchone().c is None:
+        raise HTTPException(
+            status_code=503,
+            detail="La asignación manual de IR todavía no está habilitada en esta base -- "
+                   "falta aplicar migrations_testigos_ir_manual.sql.",
+        )
+
+    cursor.execute("SELECT * FROM lims_testigos WHERE id_testigo = ?", id_testigo)
+    testigo = cursor.fetchone()
+    if not testigo:
+        raise HTTPException(status_code=404, detail="Testigo no encontrado")
+
+    if testigo.nro_ir and not body.confirmar_sobreescritura:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Este testigo ya tiene un IR cargado ({testigo.nro_ir}). "
+                "Confirmá explícitamente si querés sobreescribirlo."
+            ),
+        )
+
+    erp_cursor = erp_write.cursor()
+    erp_cursor.execute(
+        """
+        UPDATE GIT30NUM SET NUMCOM = NUMCOM + 1, ULTFEC = GETDATE()
+        OUTPUT INSERTED.NUMCOM AS numcom
+        WHERE T30Id = 1046
+        """
+    )
+    fila_erp = erp_cursor.fetchone()
+    if not fila_erp:
+        raise HTTPException(
+            status_code=502,
+            detail="No se pudo incrementar el contador de IR en el ERP (GIT30NUM, T30Id=1046 no encontrado)",
+        )
+    nuevo_numero = fila_erp.numcom
+
+    nro_ir_anterior = testigo.nro_ir
+    ir_manual_anterior = bool(getattr(testigo, "ir_manual", False))
+    nro_ir_nuevo = formatear_nro_ir(str(nuevo_numero), date.today())
+
+    cursor.execute(
+        "UPDATE lims_testigos SET nro_ir = ?, ir_manual = 1 WHERE id_testigo = ?",
+        nro_ir_nuevo, id_testigo,
+    )
+
+    audit.registrar(
+        conn, entidad="testigo", accion="asignar_ir_manual",
+        id_usuario=user["id_usuario"], id_entidad=id_testigo,
+        valor_anterior={"nro_ir": nro_ir_anterior, "ir_manual": ir_manual_anterior},
+        valor_nuevo={"nro_ir": nro_ir_nuevo, "ir_manual": True, "numcom_erp_git30num": nuevo_numero},
+        motivo=body.motivo,
     )
 
     cursor.execute(_select_testigos_sql(cursor) + "WHERE t.id_testigo = ?", id_testigo)
