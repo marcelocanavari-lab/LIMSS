@@ -2054,7 +2054,7 @@ def _datos_etiqueta_para_impresion(cursor, id_muestra: int) -> dict:
 
     cursor.execute(
         """
-        SELECT s.id_solicitud, s.nro_solicitud, lab.nombre AS laboratorio_nombre
+        SELECT s.id_solicitud, s.nro_solicitud, s.lote_proveedor, lab.nombre AS laboratorio_nombre
         FROM lims_solicitudes_muestreo s
         LEFT JOIN lims_laboratorios lab ON lab.id_laboratorio = s.id_laboratorio
         WHERE s.id_muestra = ?
@@ -2077,6 +2077,7 @@ def _datos_etiqueta_para_impresion(cursor, id_muestra: int) -> dict:
         "etiqueta_referencia": etiqueta_referencia(muestra.tipo_referencia),
         "cantidad_texto": cantidad_texto,
         "laboratorio_nombre": solicitud.laboratorio_nombre if solicitud else None,
+        "lote_proveedor": solicitud.lote_proveedor if solicitud else None,
         "fecha": muestra.fecha_muestreo,
         "iniciales_muestreador": iniciales_muestreador(cursor, muestra.id_usuario_muestreo),
         "id_solicitud": solicitud.id_solicitud if solicitud else None,

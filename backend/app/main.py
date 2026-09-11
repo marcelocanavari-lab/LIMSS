@@ -5,6 +5,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.datastructures import MutableHeaders
 from app.core.config import get_settings
 from app.api.routes import auth, maestros, muestras, resultados, dictamenes, materiales, envios, testigos_remitos, erp_config, auditoria, solicitudes_muestreo, erp, dashboard, facturas, integraciones, cajas, novedades_empaque, empaque_ia, reportes, equipos
 from app.services import agente_muestreo
@@ -33,6 +34,48 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["X-Remito-Numero", "X-Remito-Fecha"],
 )
+
+
+class PrivateNetworkAccessMiddleware:
+    """Agrega Access-Control-Allow-Private-Network: true a la respuesta de
+    cualquier preflight OPTIONS -- caso real: Chrome/Edge (Private Network
+    Access) exigen este header, además de los headers CORS normales, cuando
+    origen y destino están en una red privada (acá los dos en 192.168.10.99,
+    puertos distintos). Sin él, el navegador bloquea la request real
+    SILENCIOSAMENTE aunque el preflight responda 200 -- bug real que bloqueó
+    "agregar ensayo" en producción, confirmado con el preflight real de
+    Chrome (manda Access-Control-Request-Private-Network: true) devolviendo
+    200 sin este header. CORSMiddleware de Starlette todavía no lo agrega
+    nativamente.
+
+    Tiene que registrarse DESPUÉS de CORSMiddleware (ver más abajo) para
+    quedar MÁS AFUERA en la pila de middlewares -- add_middleware inserta al
+    principio de la lista, así que el último agregado es el que más afuera
+    envuelve al resto. CORSMiddleware corta el request ahí mismo para
+    OPTIONS (nunca llega al router) y devuelve su propia respuesta; este
+    middleware, por estar afuera, ve esa respuesta de vuelta y solo le suma
+    el header, sin duplicar ni reemplazar nada de la lógica CORS ya
+    existente (allow_origins/allow_headers/etc. siguen resolviéndose igual
+    que antes)."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope["method"] != "OPTIONS":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_con_header(message):
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                headers.append("Access-Control-Allow-Private-Network", "true")
+            await send(message)
+
+        await self.app(scope, receive, send_con_header)
+
+
+app.add_middleware(PrivateNetworkAccessMiddleware)
 
 # Routers
 app.include_router(auth.router)
