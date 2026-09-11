@@ -72,6 +72,12 @@ class EnvioPendienteResultados(BaseModel):
     nro_remito_interno: Optional[str] = None
     codigo_muestra: str
     erp_DESART: str
+    # IR/Lote de la muestra y lote del proveedor -- mismo criterio que
+    # EnvioParaCarga más arriba (esta es la bandeja/primera pantalla del
+    # mismo flujo, EnvioParaCarga es el detalle/segunda pantalla).
+    tipo_referencia: Optional[str] = None
+    nro_referencia: Optional[str] = None
+    lote_proveedor: Optional[str] = None
     laboratorio_nombre: str
     ensayos_pendientes: int
     total_ensayos: int

@@ -233,7 +233,12 @@ def listar_pendientes_resultados(
     cursor.execute(
         """
         SELECT e.id_envio, e.fecha_despacho, m.codigo_muestra, m.erp_DESART,
+               m.tipo_referencia, m.nro_referencia,
                lab.nombre AS laboratorio_nombre, rem.nro_remito_interno,
+               -- N° de lote del proveedor (si la muestra viene de una Solicitud
+               -- de Muestreo) -- mismo campo y mismo LEFT JOIN que ya usan el
+               -- remito, la Carga de Resultados (detalle) y Dictamen.
+               s.lote_proveedor,
                (SELECT COUNT(*) FROM lims_envio_ensayos ee
                 LEFT JOIN lims_resultados r ON r.id_espec_ensayo = ee.id_espec_ensayo AND r.id_envio = ee.id_envio
                 WHERE ee.id_envio = e.id_envio AND r.id_resultado IS NULL) AS ensayos_pendientes,
@@ -241,6 +246,7 @@ def listar_pendientes_resultados(
         FROM lims_envios e
         INNER JOIN lims_muestras m ON m.id_muestra = e.id_muestra
         INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = e.id_laboratorio
+        LEFT JOIN lims_solicitudes_muestreo s ON s.id_muestra = m.id_muestra
         OUTER APPLY (
             SELECT TOP 1 nro_remito_interno FROM lims_remitos r2
             WHERE r2.id_envio = e.id_envio ORDER BY r2.id_remito DESC
@@ -260,6 +266,9 @@ def listar_pendientes_resultados(
             nro_remito_interno=r.nro_remito_interno,
             codigo_muestra=r.codigo_muestra,
             erp_DESART=r.erp_DESART,
+            tipo_referencia=r.tipo_referencia,
+            nro_referencia=r.nro_referencia,
+            lote_proveedor=r.lote_proveedor,
             laboratorio_nombre=r.laboratorio_nombre,
             ensayos_pendientes=r.ensayos_pendientes,
             total_ensayos=r.total_ensayos,

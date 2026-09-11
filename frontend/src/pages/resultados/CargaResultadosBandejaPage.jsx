@@ -48,6 +48,8 @@ export default function CargaResultadosBandejaPage() {
                   <th>N° Remito</th>
                   <th>Muestra</th>
                   <th>Material</th>
+                  <th>IR/Lote</th>
+                  <th>Lote proveedor</th>
                   <th>Laboratorio</th>
                   <th>Estado</th>
                   <th>Ensayos pendientes</th>
@@ -62,6 +64,10 @@ export default function CargaResultadosBandejaPage() {
                       <td style={{ fontFamily: 'var(--font-mono)' }}>{e.nro_remito_interno || '—'}</td>
                       <td style={{ fontFamily: 'var(--font-mono)' }}>{e.codigo_muestra}</td>
                       <td>{e.erp_DESART}</td>
+                      <td style={{ fontFamily: 'var(--font-mono)' }}>
+                        {e.tipo_referencia === 'ir' ? 'IR' : 'Lote'} {e.nro_referencia}
+                      </td>
+                      <td>{e.lote_proveedor || '—'}</td>
                       <td>{e.laboratorio_nombre}</td>
                       <td><span className={`badge ${badge.clase}`}>{badge.texto}</span></td>
                       <td><span className="badge badge-warn">{e.ensayos_pendientes} de {e.total_ensayos}</span></td>
