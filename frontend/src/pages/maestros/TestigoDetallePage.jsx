@@ -49,6 +49,12 @@ export default function TestigoDetallePage() {
   const [ajustando, setAjustando] = useState(false);
   const [ajusteError, setAjusteError] = useState('');
 
+  const [mostrarAsignarIr, setMostrarAsignarIr] = useState(false);
+  const [motivoIr, setMotivoIr] = useState('');
+  const [confirmarSobreescrituraIr, setConfirmarSobreescrituraIr] = useState(false);
+  const [asignandoIr, setAsignandoIr] = useState(false);
+  const [errorIr, setErrorIr] = useState('');
+
   function cargar() {
     setLoading(true);
     Promise.all([maestrosApi.obtenerTestigo(id), maestrosApi.historialMovimientos(id), testigosRemitosApi.historialEnvios(id)])
@@ -166,6 +172,27 @@ export default function TestigoDetallePage() {
     }
   }
 
+  async function handleAsignarIrManual(e) {
+    e.preventDefault();
+    setErrorIr('');
+    if (!motivoIr.trim()) {
+      setErrorIr('El motivo es obligatorio -- por qué no hay un comprobante IR real y quién lo autorizó');
+      return;
+    }
+    setAsignandoIr(true);
+    try {
+      const actualizado = await maestrosApi.asignarIrManualTestigo(id, motivoIr.trim(), confirmarSobreescrituraIr);
+      setTestigo(actualizado);
+      setMostrarAsignarIr(false);
+      setMotivoIr('');
+      setConfirmarSobreescrituraIr(false);
+    } catch (err) {
+      setErrorIr(err instanceof ApiError ? err.message : 'No se pudo asignar el IR manual');
+    } finally {
+      setAsignandoIr(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="screen" style={{ alignItems: 'center', justifyContent: 'center' }}>
@@ -207,7 +234,21 @@ export default function TestigoDetallePage() {
           <table className="data-table">
             <tbody>
               <tr><td>Lote</td><td className="num" style={{ textAlign: 'left' }}>{testigo.nro_lote}</td></tr>
-              <tr><td>N° de IR</td><td className="num" style={{ textAlign: 'left' }}>{testigo.nro_ir || '—'}</td></tr>
+              <tr>
+                <td>N° de IR</td>
+                <td className="num" style={{ textAlign: 'left' }}>
+                  {testigo.nro_ir || '—'}
+                  {testigo.ir_manual && (
+                    <span
+                      className="badge badge-warn"
+                      style={{ marginLeft: 'var(--sp-2)' }}
+                      title="Asignado manualmente -- no corresponde a un comprobante IR real del ERP"
+                    >
+                      IR manual
+                    </span>
+                  )}
+                </td>
+              </tr>
               <tr><td>Vencimiento</td><td className="num" style={{ textAlign: 'left' }}>{testigo.fecha_vencimiento || 'Sin vencimiento'}</td></tr>
               <tr><td>Stock actual</td><td className="num" style={{ textAlign: 'left' }}>{testigo.stock_actual} {testigo.unidad_medida || ''}</td></tr>
               <tr><td>Stock mínimo</td><td className="num" style={{ textAlign: 'left' }}>{testigo.stock_minimo} {testigo.unidad_medida || ''}</td></tr>
@@ -229,7 +270,78 @@ export default function TestigoDetallePage() {
                 {testigo.activo ? 'Desactivar' : 'Activar'}
               </button>
             )}
+            {puedeGestionar && (
+              <button
+                className="btn btn-secondary"
+                onClick={() => {
+                  setMostrarAsignarIr((v) => !v);
+                  setErrorIr('');
+                }}
+              >
+                Asignar IR manual
+              </button>
+            )}
           </div>
+
+          {mostrarAsignarIr && (
+            <form onSubmit={handleAsignarIrManual} style={{ marginTop: 'var(--sp-4)', paddingTop: 'var(--sp-4)', borderTop: '1px solid var(--border)' }}>
+              <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--ink-2)', marginBottom: 'var(--sp-3)' }}>
+                Para testigos comprados externamente, sin comprobante IR real en el ERP. Genera un número
+                nuevo avanzando el mismo contador que usa el ERP para IRs reales (así nunca choca con uno
+                que se emita después), pero <strong>no crea ningún comprobante real</strong> -- queda
+                marcado como "IR manual" y registrado en auditoría.
+              </p>
+
+              {testigo.nro_ir && (
+                <div className="alert alert-warn" style={{ marginBottom: 'var(--sp-3)' }}>
+                  Este testigo ya tiene el IR <strong>{testigo.nro_ir}</strong> cargado
+                  {testigo.ir_manual ? ' (también manual)' : ' (real, del ERP)'}. Asignar uno nuevo lo
+                  reemplaza.
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)', marginTop: 'var(--sp-2)' }}>
+                    <input
+                      type="checkbox"
+                      checked={confirmarSobreescrituraIr}
+                      onChange={(e) => setConfirmarSobreescrituraIr(e.target.checked)}
+                      disabled={asignandoIr}
+                    />
+                    Confirmo que quiero sobreescribir el IR existente
+                  </label>
+                </div>
+              )}
+
+              <div className="field">
+                <label className="field-label" htmlFor="motivoIr">Motivo (por qué no hay comprobante real, quién lo autorizó)</label>
+                <textarea
+                  id="motivoIr"
+                  className="field-input"
+                  rows={2}
+                  value={motivoIr}
+                  onChange={(e) => setMotivoIr(e.target.value)}
+                  disabled={asignandoIr}
+                />
+              </div>
+
+              {errorIr && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-3)' }}>{errorIr}</div>}
+
+              <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={asignandoIr || (testigo.nro_ir && !confirmarSobreescrituraIr)}
+                >
+                  {asignandoIr ? <span className="spinner" /> : 'Confirmar asignación'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => setMostrarAsignarIr(false)}
+                  disabled={asignandoIr}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          )}
         </div>
 
         <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>

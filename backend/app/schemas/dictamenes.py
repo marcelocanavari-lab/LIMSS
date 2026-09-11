@@ -16,6 +16,13 @@ class DictamenPendienteResponse(BaseModel):
     erp_CODART: str
     erp_DESART: str
     fecha_muestreo: datetime
+    # IR/Lote de la muestra y lote del proveedor -- mismo criterio que
+    # EnvioParaCarga (app/schemas/resultados.py): tipo_referencia/
+    # nro_referencia son de lims_muestras, lote_proveedor es de la
+    # Solicitud de Muestreo asociada (si la hay).
+    tipo_referencia: Optional[str] = None
+    nro_referencia: Optional[str] = None
+    lote_proveedor: Optional[str] = None
     cantidad_envios: int
     cantidad_oos: int
 

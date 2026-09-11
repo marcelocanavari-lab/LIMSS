@@ -287,6 +287,18 @@ class TestigoResponse(BaseModel):
     origen_nombre: Optional[str] = None
     id_categoria: Optional[int] = None
     categoria_nombre: Optional[str] = None
+    # True si nro_ir se asignó a mano (avanzando GIT30NUM.NUMCOM en el ERP
+    # sin comprobante real detrás, ver asignar_ir_manual) en vez de venir de
+    # un IR real -- gatea el badge "IR manual" en TestigosPage.jsx.
+    ir_manual: bool = False
+
+
+class TestigoAsignarIrManual(BaseModel):
+    motivo: str = Field(..., min_length=1, max_length=500)
+    # False (default) exige que el testigo NO tenga ya un nro_ir cargado --
+    # ver asignar_ir_manual. True confirma explícitamente que se quiere
+    # sobreescribir uno existente (real o manual).
+    confirmar_sobreescritura: bool = False
 
 
 class TestigoOrigenCreate(BaseModel):

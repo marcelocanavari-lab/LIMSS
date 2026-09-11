@@ -311,7 +311,7 @@ export default function TestigosPage() {
               <col style={{ width: 90 }} />
               <col style={{ width: '16%' }} />
               <col style={{ width: '11%' }} />
-              <col style={{ width: 90 }} />
+              <col style={{ width: 110 }} />
               <col style={{ width: 100 }} />
               <col style={{ width: 90 }} />
               <col style={{ width: '11%' }} />
@@ -347,7 +347,18 @@ export default function TestigosPage() {
                   <td style={{ fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{t.codigo}</td>
                   <td>{t.nombre}</td>
                   <td>{t.nro_lote}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}>{t.nro_ir || '—'}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    {t.nro_ir || '—'}
+                    {t.ir_manual && (
+                      <span
+                        className="badge badge-warn"
+                        style={{ marginLeft: 'var(--sp-2)', fontSize: 'var(--fs-xs)' }}
+                        title="Asignado manualmente -- no corresponde a un comprobante IR real del ERP"
+                      >
+                        Manual
+                      </span>
+                    )}
+                  </td>
                   <td className="num" style={{ whiteSpace: 'nowrap' }}>{formatFecha(t.fecha_vencimiento)}</td>
                   <td className="num" style={{ whiteSpace: 'nowrap' }}>{t.stock_actual} {t.unidad_medida || ''}</td>
                   <td>

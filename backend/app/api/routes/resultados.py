@@ -49,10 +49,18 @@ def _obtener_envio_o_404(cursor, id_envio: int):
     cursor.execute(
         """
         SELECT e.*, m.codigo_muestra, m.erp_CODART, m.erp_DESART, m.estado AS estado_muestra,
-               m.tipo_material AS tipo_material_muestra, lab.nombre AS laboratorio_nombre
+               m.tipo_material AS tipo_material_muestra, m.tipo_referencia, m.nro_referencia,
+               lab.nombre AS laboratorio_nombre,
+               -- N° de lote del proveedor, cargado en la Solicitud de Muestreo (si la
+               -- muestra viene de ese flujo) -- mismo LEFT JOIN y mismo campo que ya
+               -- usa el remito (ver _SELECT_DATOS_REMITO en envios.py): puede no
+               -- haber ninguna solicitud asociada (muestra creada por "Nueva
+               -- Muestra"), en cuyo caso queda NULL.
+               s.lote_proveedor
         FROM lims_envios e
         INNER JOIN lims_muestras m ON m.id_muestra = e.id_muestra
         INNER JOIN lims_laboratorios lab ON lab.id_laboratorio = e.id_laboratorio
+        LEFT JOIN lims_solicitudes_muestreo s ON s.id_muestra = m.id_muestra
         WHERE e.id_envio = ?
         """,
         id_envio,
@@ -122,6 +130,9 @@ def _obtener_envio_para_carga(cursor, envio) -> EnvioParaCarga:
         laboratorio_nombre=envio.laboratorio_nombre,
         estado_muestra=envio.estado_muestra,
         tipo_material=envio.tipo_material_muestra,
+        tipo_referencia=envio.tipo_referencia,
+        nro_referencia=envio.nro_referencia,
+        lote_proveedor=envio.lote_proveedor,
         ensayos=ensayos,
         protocolo=protocolo,
         observacion_ia=envio.observacion_ia,

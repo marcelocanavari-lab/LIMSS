@@ -45,6 +45,17 @@ class EnvioParaCarga(BaseModel):
     # De lims_muestras.tipo_material -- gatea si la pantalla ofrece la
     # comparación de etiquetas con IA (solo Material de Empaque).
     tipo_material: Optional[str] = None
+    # IR/Lote de la muestra (lims_muestras.tipo_referencia/nro_referencia) --
+    # mismo criterio de formato que ya usa el resto del frontend (Consulta de
+    # Muestras, Dictamen, Remito, etc.): "IR"/"Lote" según tipo_referencia.
+    tipo_referencia: Optional[str] = None
+    nro_referencia: Optional[str] = None
+    # Lote del proveedor (lims_solicitudes_muestreo.lote_proveedor, si la
+    # muestra viene de ese flujo) -- mismo campo ya usado en el remito, ver
+    # _SELECT_DATOS_REMITO en envios.py. Distinto de nro_referencia: éste es
+    # el N° de lote que declaró el proveedor, no la referencia IR/lote
+    # interna de la muestra.
+    lote_proveedor: Optional[str] = None
     ensayos: list[EnsayoParaCarga]
     protocolo: Optional[ProtocoloResponse] = None
     # Comparación de etiquetas con IA (solo Material de Empaque) -- UNA sola

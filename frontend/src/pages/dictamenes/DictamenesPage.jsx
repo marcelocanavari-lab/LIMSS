@@ -53,6 +53,8 @@ export default function DictamenesPage() {
               <tr>
                 <th>Código</th>
                 <th>Material</th>
+                <th>IR/Lote</th>
+                <th>Lote proveedor</th>
                 <th>Envíos</th>
                 <th>Fecha muestreo</th>
                 <th>Resultados</th>
@@ -63,6 +65,10 @@ export default function DictamenesPage() {
                 <tr key={p.id_muestra} style={{ cursor: 'pointer' }} onClick={() => navigate(`/dictamenes/muestras/${p.id_muestra}`)}>
                   <td style={{ fontFamily: 'var(--font-mono)' }}>{p.codigo_muestra}</td>
                   <td>{p.erp_CODART} — {p.erp_DESART}</td>
+                  <td style={{ fontFamily: 'var(--font-mono)' }}>
+                    {p.tipo_referencia === 'ir' ? 'IR' : 'Lote'} {p.nro_referencia}
+                  </td>
+                  <td>{p.lote_proveedor || '—'}</td>
                   <td>{p.cantidad_envios} laboratorio{p.cantidad_envios === 1 ? '' : 's'}</td>
                   <td>{new Date(p.fecha_muestreo).toLocaleDateString()}</td>
                   <td>

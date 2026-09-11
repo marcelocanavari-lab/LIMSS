@@ -361,6 +361,11 @@ export default function CargaResultadosPage() {
         onBack={() => navigate(-1)}
       />
       <div className="screen-content">
+        <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--ink-2)', fontSize: 'var(--fs-sm)', marginBottom: 'var(--sp-4)' }}>
+          {envio.tipo_referencia === 'ir' ? 'IR' : 'Lote'} {envio.nro_referencia}
+          {envio.lote_proveedor && ` — Lote proveedor: ${envio.lote_proveedor}`}
+        </div>
+
         {mensajeOk && <div className="alert alert-ok" style={{ marginBottom: 'var(--sp-4)' }}>{mensajeOk}</div>}
 
         <form onSubmit={handleGuardarResultados}>

@@ -149,6 +149,12 @@ def listar_pendientes(
     cursor.execute(
         f"""
         SELECT m.id_muestra, m.codigo_muestra, m.erp_CODART, m.erp_DESART, m.fecha_muestreo,
+               m.tipo_referencia, m.nro_referencia,
+               -- N° de lote del proveedor (si la muestra viene de una Solicitud de
+               -- Muestreo) -- mismo campo y mismo LEFT JOIN que ya usan el remito
+               -- (_SELECT_DATOS_REMITO en envios.py) y la Carga de Resultados
+               -- (_obtener_envio_o_404 en resultados.py).
+               s.lote_proveedor,
                (SELECT COUNT(*) FROM lims_envios e2 WHERE e2.id_muestra = m.id_muestra) AS cantidad_envios,
                (SELECT COUNT(*) FROM lims_resultados r
                 WHERE r.id_muestra = m.id_muestra AND r.dentro_especificacion = 0)
@@ -160,6 +166,7 @@ def listar_pendientes(
                (SELECT COUNT(*) FROM lims_resultados_muestreo rm2
                 WHERE rm2.id_muestra = m.id_muestra AND rm2.dentro_especificacion = 0) AS cantidad_oos
         FROM lims_muestras m
+        LEFT JOIN lims_solicitudes_muestreo s ON s.id_muestra = m.id_muestra
         WHERE {WHERE_MUESTRA_PENDIENTE_DICTAMEN}
         ORDER BY m.fecha_muestreo ASC
         """
@@ -171,6 +178,9 @@ def listar_pendientes(
             erp_CODART=r.erp_CODART,
             erp_DESART=r.erp_DESART,
             fecha_muestreo=r.fecha_muestreo,
+            tipo_referencia=r.tipo_referencia,
+            nro_referencia=r.nro_referencia,
+            lote_proveedor=r.lote_proveedor,
             cantidad_envios=r.cantidad_envios,
             cantidad_oos=r.cantidad_oos,
         )
