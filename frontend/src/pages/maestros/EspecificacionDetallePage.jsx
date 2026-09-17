@@ -300,11 +300,21 @@ export default function EspecificacionDetallePage() {
     setCatalogoBuscar('');
     setCatalogoResultados([]);
     setNombreNuevoEnsayo('');
+    // categoriaMostrada (no categoriaActiva) -- categoriaActiva arranca en
+    // null y solo se actualiza cuando el usuario hace click en una pestaña
+    // (ver setCategoriaActiva más abajo); si todavía no clickeó ninguna, el
+    // formulario quedaba precargado con id_categoria=null, Number(null)=0
+    // al armar el body, y el backend lo rechazaba con 404 "La categoría
+    // indicada no existe" -- bug real confirmado (agregar un ensayo apenas
+    // se entra a la pantalla, sin tocar las pestañas). categoriaMostrada ya
+    // resuelve ese mismo problema para las pestañas (cae a la primera
+    // categoría visible si categoriaActiva no es válida) -- se reutiliza acá
+    // en vez de duplicar la lógica de fallback.
     setFormEnsayo({
       ...ENSAYO_FORM_VACIO,
-      id_categoria: categoriaActiva,
-      tipo_dato: momentoDeCategoria(categoriaActiva) === 'muestreo' ? 'cualitativo' : 'numerico',
-      orden: ensayosDeCategoria(categoriaActiva).length + 1,
+      id_categoria: categoriaMostrada,
+      tipo_dato: momentoDeCategoria(categoriaMostrada) === 'muestreo' ? 'cualitativo' : 'numerico',
+      orden: ensayosDeCategoria(categoriaMostrada).length + 1,
     });
     setErrorEnsayo('');
     setModalAbierto(true);
@@ -355,6 +365,18 @@ export default function EspecificacionDetallePage() {
     e.preventDefault();
     if (!ensayoMaestroElegido) {
       setErrorEnsayo('Elegí un ensayo del catálogo o creá uno nuevo');
+      return;
+    }
+    // Guarda explícita antes de armar el body: sin esto, un id_categoria
+    // inválido (null/'' -- ver el comentario de abrirAgregarEnsayo más
+    // arriba) se convertía en 0 al hacer Number(...) más abajo, y el
+    // backend lo rechazaba recién después con un 404 confuso ("La
+    // categoría indicada no existe"). categoriaMostrada ya cubre el caso
+    // normal (pestañas con categorías reales), así que esto solo debería
+    // dispararse en un caso borde (ej. la especificación sin ninguna
+    // categoría visible todavía).
+    if (!formEnsayo.id_categoria) {
+      setErrorEnsayo('Elegí una categoría para el ensayo');
       return;
     }
     if (formEnsayo.tipo_dato === 'numerico' && formEnsayo.limite_inferior === '' && formEnsayo.limite_superior === '') {
