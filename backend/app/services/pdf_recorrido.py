@@ -196,7 +196,6 @@ def _dibujar_recorrido(c: canvas.Canvas, r: RecorridoResponse):
         campo("Materias extrañas", df.materias_extranas)
         campo("Olor", df.olor)
         campo("Color", df.color)
-        campo("Fecha de vencimiento real", _fmt_fecha(df.fecha_vencimiento_real) if df.fecha_vencimiento_real else None)
         campo("Fecha de reanálisis real", _fmt_fecha(df.fecha_reanalisis_real) if df.fecha_reanalisis_real else None)
         y[0] -= 0.15 * cm
         c.setFont("Helvetica-Bold", 9)

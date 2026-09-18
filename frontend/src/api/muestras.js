@@ -58,6 +58,11 @@ export const muestrasApi = {
   confirmarEnvio: (id, data) => api.post(`/api/muestras/${id}/envios`, data),
   listarEnvios: (id) => api.get(`/api/muestras/${id}/envios`),
   obtenerRemito: (id, idEnvio) => api.get(`/api/muestras/${id}/envios/${idEnvio}/remito`),
+  // Testigo asignado a la especificación DESPUÉS de confirmado el envío --
+  // ver RemitoResponse.testigos_pendientes. Acción consciente del usuario
+  // (descuenta stock real), nunca automática.
+  agregarTestigoAEnvio: (id, idEnvio, idTestigo, motivo) =>
+    api.post(`/api/muestras/${id}/envios/${idEnvio}/testigos`, { id_testigo: idTestigo, motivo }),
   ensayosParaEnvio: (id, idLaboratorio) => api.get(`/api/muestras/${id}/ensayos-para-envio?id_laboratorio=${idLaboratorio}`),
 
   // Etiqueta (REQ-ENV-003)

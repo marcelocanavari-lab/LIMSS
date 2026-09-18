@@ -35,6 +35,15 @@ export default function RemitoImprimirPage() {
   const [generando, setGenerando] = useState(false);
   const [pdfError, setPdfError] = useState('');
 
+  // Testigo asignado a la especificación DESPUÉS de confirmado este envío
+  // (ver remito.testigos_pendientes) -- agregarlo es una acción consciente
+  // del usuario, nunca automática (descuenta stock real), por eso pide un
+  // motivo explícito antes de confirmar.
+  const [idTestigoAAgregar, setIdTestigoAAgregar] = useState(null);
+  const [motivoTestigo, setMotivoTestigo] = useState('');
+  const [agregandoTestigo, setAgregandoTestigo] = useState(false);
+  const [errorAgregarTestigo, setErrorAgregarTestigo] = useState('');
+
   // Historial completo de remitos generados (append-only: "Generar uno
   // nuevo" nunca sobrescribe uno existente, ver el docstring del módulo en
   // envios.py) -- antes solo se veía el más reciente, lo que podía llevar a
@@ -90,9 +99,9 @@ export default function RemitoImprimirPage() {
   }, [remito?.id_envio]);
 
   async function handleGenerar() {
-    // Aviso antes de generar/regenerar si nadie confirmó todavía el
-    // vencimiento (ni una fecha real cargada, ni el checkbox "no tiene
-    // vencimiento" tildado en Ejecutar Muestreo) -- no bloquea, solo evita
+    // Aviso antes de generar/regenerar si la Solicitud de Muestreo todavía
+    // no tiene cargada la fecha de vencimiento (ni el checkbox "sin
+    // vencimiento" tildado en Completar Datos) -- no bloquea, solo evita
     // que se genere el documento sin que la persona se haya dado cuenta de
     // que ese dato quedó sin revisar. Si ya está confirmado como "sin
     // vencimiento" a propósito, no se pregunta nada -- ese caso ya está
@@ -100,7 +109,7 @@ export default function RemitoImprimirPage() {
     // Solicitud asociada) tampoco pregunta -- ese mecanismo de confirmación
     // vive en la Solicitud, así que para esas muestras nunca puede existir
     // una confirmación y no corresponde pedirla (bug real: SAMP-2026-0010).
-    if (remito.tiene_solicitud_muestreo && !remito.fecha_vencimiento_confirmada && !remito.sin_vencimiento_confirmado) {
+    if (remito.tiene_solicitud_muestreo && !remito.fecha_vencimiento && !remito.sin_vencimiento_ingreso_confirmado) {
       const seguir = window.confirm(
         'Esta muestra no tiene fecha de vencimiento cargada ni confirmada como "sin vencimiento". ¿Generar el remito igual?',
       );
@@ -117,6 +126,16 @@ export default function RemitoImprimirPage() {
       );
       if (!seguir) return;
     }
+    // Mismo patrón que los dos avisos de arriba: la especificación puede
+    // tener un testigo asignado DESPUÉS de confirmado este envío (ver
+    // testigos_pendientes más abajo, con la acción real de agregarlo) -- acá
+    // solo se recuerda antes de generar, no bloquea ni agrega nada solo.
+    if (remito.testigos_pendientes.length > 0) {
+      const seguir = window.confirm(
+        `La especificación de este material tiene ${remito.testigos_pendientes.length === 1 ? 'un testigo asignado' : `${remito.testigos_pendientes.length} testigos asignados`} después de confirmado este envío, todavía no incluido en el remito. ¿Generar igual sin agregarlo?`,
+      );
+      if (!seguir) return;
+    }
     setPdfError('');
     setGenerando(true);
     try {
@@ -128,6 +147,25 @@ export default function RemitoImprimirPage() {
       setPdfError(err instanceof ApiError ? err.message : 'No se pudo generar el remito');
     } finally {
       setGenerando(false);
+    }
+  }
+
+  async function handleAgregarTestigo(idTestigo) {
+    if (!motivoTestigo.trim()) {
+      setErrorAgregarTestigo('El motivo es obligatorio');
+      return;
+    }
+    setErrorAgregarTestigo('');
+    setAgregandoTestigo(true);
+    try {
+      const actualizado = await muestrasApi.agregarTestigoAEnvio(id, idEnvio, idTestigo, motivoTestigo.trim());
+      setRemito(actualizado);
+      setIdTestigoAAgregar(null);
+      setMotivoTestigo('');
+    } catch (err) {
+      setErrorAgregarTestigo(err instanceof ApiError ? err.message : 'No se pudo agregar el testigo');
+    } finally {
+      setAgregandoTestigo(false);
     }
   }
 
@@ -462,18 +500,91 @@ export default function RemitoImprimirPage() {
               </div>
             )}
 
-            {remito.testigo_codigo && (
+            {remito.testigos.length > 0 && (
               <div className="card" style={{ marginBottom: 'var(--sp-4)' }}>
-                <h2>Testigo enviado</h2>
+                <h2>Testigos enviados</h2>
                 <table className="data-table">
+                  <thead>
+                    <tr><th>Código</th><th>Nombre</th><th>Lote</th><th>Vencimiento</th></tr>
+                  </thead>
                   <tbody>
-                    <tr><td>Código</td><td style={{ textAlign: 'left' }}>{remito.testigo_codigo}</td></tr>
-                    <tr><td>Nombre</td><td style={{ textAlign: 'left' }}>{remito.testigo_nombre}</td></tr>
-                    <tr><td>Lote</td><td style={{ textAlign: 'left' }}>{remito.testigo_nro_lote || '—'}</td></tr>
-                    <tr><td>Vencimiento</td><td style={{ textAlign: 'left' }}>{remito.testigo_fecha_vencimiento || '—'}</td></tr>
-                    <tr><td>Cantidad enviada</td><td style={{ textAlign: 'left' }}>{remito.cantidad_testigo}</td></tr>
+                    {remito.testigos.map((t) => (
+                      <tr key={t.id_testigo}>
+                        <td style={{ textAlign: 'left' }}>{t.codigo}</td>
+                        <td style={{ textAlign: 'left' }}>{t.nombre}</td>
+                        <td style={{ textAlign: 'left' }}>{t.nro_lote || '—'}</td>
+                        <td style={{ textAlign: 'left' }}>{t.fecha_vencimiento ? formatearFecha(t.fecha_vencimiento) : '—'}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {remito.testigos_pendientes.length > 0 && (
+              <div className="card no-print" style={{ marginBottom: 'var(--sp-4)' }}>
+                <h2>Testigo asignado después de este envío</h2>
+                <div className="alert alert-warn" style={{ marginBottom: 'var(--sp-3)' }}>
+                  {remito.testigos_pendientes.length === 1
+                    ? 'La especificación tiene un testigo asignado después de confirmado este envío — todavía no está incluido en el remito.'
+                    : `La especificación tiene ${remito.testigos_pendientes.length} testigos asignados después de confirmado este envío — todavía no están incluidos en el remito.`}
+                </div>
+                <table className="data-table">
+                  <thead>
+                    <tr><th>Código</th><th>Nombre</th><th>Lote</th><th>Vencimiento</th><th></th></tr>
+                  </thead>
+                  <tbody>
+                    {remito.testigos_pendientes.map((t) => (
+                      <tr key={t.id_testigo}>
+                        <td style={{ textAlign: 'left' }}>{t.codigo}</td>
+                        <td style={{ textAlign: 'left' }}>{t.nombre}</td>
+                        <td style={{ textAlign: 'left' }}>{t.nro_lote || '—'}</td>
+                        <td style={{ textAlign: 'left' }}>{t.fecha_vencimiento ? formatearFecha(t.fecha_vencimiento) : '—'}</td>
+                        <td style={{ textAlign: 'right' }}>
+                          {idTestigoAAgregar !== t.id_testigo ? (
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              onClick={() => { setIdTestigoAAgregar(t.id_testigo); setMotivoTestigo(''); setErrorAgregarTestigo(''); }}
+                            >
+                              Agregar al envío
+                            </button>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)', alignItems: 'flex-end' }}>
+                              <input
+                                className="field-input"
+                                placeholder="Motivo (obligatorio)"
+                                value={motivoTestigo}
+                                onChange={(e) => setMotivoTestigo(e.target.value)}
+                                disabled={agregandoTestigo}
+                                autoFocus
+                              />
+                              <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost"
+                                  onClick={() => { setIdTestigoAAgregar(null); setMotivoTestigo(''); setErrorAgregarTestigo(''); }}
+                                  disabled={agregandoTestigo}
+                                >
+                                  Cancelar
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-primary"
+                                  onClick={() => handleAgregarTestigo(t.id_testigo)}
+                                  disabled={agregandoTestigo}
+                                >
+                                  {agregandoTestigo ? <span className="spinner" /> : 'Confirmar'}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {errorAgregarTestigo && <div className="alert alert-danger" style={{ marginTop: 'var(--sp-3)' }}>{errorAgregarTestigo}</div>}
               </div>
             )}
 

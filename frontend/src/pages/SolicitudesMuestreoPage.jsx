@@ -115,10 +115,9 @@ export default function SolicitudesMuestreoPage() {
   const [protocoloProveedor, setProtocoloProveedor] = useState(null);
   const [loteProveedor, setLoteProveedor] = useState('');
   // Se precarga con el valor del ERP (VENCOM) al buscar el IR, pero queda
-  // editable -- el dato del ERP puede estar mal o desactualizado. El
-  // checkbox de "sin vencimiento" es un mecanismo propio de este campo,
-  // independiente del que ya existe en Ejecutar Muestreo para el
-  // vencimiento confirmado físicamente (fecha_vencimiento_real).
+  // editable -- el dato del ERP puede estar mal o desactualizado (único
+  // campo de vencimiento del flujo: no hay un "vencimiento real" aparte
+  // confirmado en Ejecutar Muestreo, ver envios.py/generar_remito).
   const [fechaVencimiento, setFechaVencimiento] = useState('');
   const [sinVencimientoIngresoConfirmado, setSinVencimientoIngresoConfirmado] = useState(false);
   const [fechaReanalisis, setFechaReanalisis] = useState('');
@@ -778,10 +777,12 @@ export default function SolicitudesMuestreoPage() {
                       )}
                     </td>
                     <td title={s.laboratorio_nombre || ''}>
-                      {s.laboratorio_nombre ? (
+                      {s.laboratorio_estado === 'ok' ? (
                         <span style={celdaTruncada(190)}>{s.laboratorio_nombre}</span>
+                      ) : s.laboratorio_estado === 'falta_asignar' ? (
+                        <span className="badge badge-warn" title="Algún ensayo de análisis activo de la especificación no tiene laboratorio asignado">Falta asignar</span>
                       ) : (
-                        <span style={{ color: 'var(--ink-3)' }}>Sin asignar</span>
+                        <span style={{ color: 'var(--ink-3)' }}>N/A</span>
                       )}
                     </td>
                     <td title={s.muestreador_nombre || ''}>

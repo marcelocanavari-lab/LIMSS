@@ -168,16 +168,17 @@ export default function ConsultaMuestraDetallePage() {
       ].filter(([, valor]) => valor !== null && valor !== undefined && valor !== '')
     : [];
 
-  // Bloque "Aspecto de la Materia Prima": aspecto/olor/color observados +
-  // vencimiento real confirmado durante el muestreo (distinto del
-  // vencimiento "de catálogo" que ya se muestra en Identificación).
+  // Bloque "Aspecto de la Materia Prima": aspecto/olor/color observados
+  // durante el muestreo. El vencimiento es un solo campo unificado
+  // (fecha_vencimiento, precargado del ERP y corregible por QA en
+  // Completar Datos), ya mostrado en Identificación -- no hay un
+  // "vencimiento real" aparte confirmado por el muestreador.
   const aspectoMateriaPrima = s
     ? [
         ['Aspecto de la MP', s.datos_fisicos.aspecto_mp],
         ['Materias extrañas', s.datos_fisicos.materias_extranas],
         ['Olor', s.datos_fisicos.olor],
         ['Color', s.datos_fisicos.color],
-        ['Fecha de vencimiento real', formatFechaSimple(s.datos_fisicos.fecha_vencimiento_real)],
         ['Fecha de reanálisis real', formatFechaSimple(s.datos_fisicos.fecha_reanalisis_real)],
       ].filter(([, valor]) => valor !== null && valor !== undefined && valor !== '')
     : [];
@@ -262,7 +263,7 @@ export default function ConsultaMuestraDetallePage() {
           </div>
         )}
 
-        <div className="printable">
+        <div className="printable recorrido-consulta">
           {/* Encabezado liviano -- no es uno de los bloques del reporte, solo
               título y estado; los datos en sí van en Identificación. */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--sp-2)' }}>

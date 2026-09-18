@@ -33,6 +33,8 @@ export default function MuestraNuevaPage() {
   const [advertencia, setAdvertencia] = useState('');
   const [cantidadEnviada, setCantidadEnviada] = useState('');
   const [unidadEnviada, setUnidadEnviada] = useState('');
+  const [fechaVencimiento, setFechaVencimiento] = useState('');
+  const [sinVencimientoConfirmado, setSinVencimientoConfirmado] = useState(false);
   const [observaciones, setObservaciones] = useState('');
   const [buscando, setBuscando] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -44,6 +46,11 @@ export default function MuestraNuevaPage() {
     if (!linea) return;
     setCantidadEnviada('');
     setUnidadEnviada('');
+    // Precargado del ERP (VENCOM del comprobante, ya sea IR o LOTE -- ver
+    // MaterialEncontrado.fecha_vencimiento) pero siempre editable, mismo
+    // criterio que fecha_vencimiento en Solicitudes de Muestreo.
+    setFechaVencimiento(linea.fecha_vencimiento || '');
+    setSinVencimientoConfirmado(false);
     maestrosApi
       .listarEspecificaciones({ vigente: true, buscar: linea.CODART })
       .then((specs) => {
@@ -108,6 +115,10 @@ export default function MuestraNuevaPage() {
       setError('Seleccioná el material encontrado');
       return;
     }
+    if (!fechaVencimiento && !sinVencimientoConfirmado) {
+      setError('Falta la fecha de vencimiento (o confirmar que el material no tiene vencimiento)');
+      return;
+    }
     setError('');
     setGuardando(true);
     try {
@@ -123,6 +134,8 @@ export default function MuestraNuevaPage() {
         erp_proveedor: linea.proveedor || null,
         cantidad_enviada: cantidadEnviada !== '' ? Number(cantidadEnviada) : null,
         unidad_enviada: unidadEnviada.trim() || null,
+        fecha_vencimiento: sinVencimientoConfirmado ? null : (fechaVencimiento || null),
+        sin_vencimiento_confirmado: sinVencimientoConfirmado,
         observaciones: observaciones.trim() || null,
       });
       navigate(`/muestras/${muestra.id_muestra}`, { replace: true });
@@ -261,6 +274,36 @@ export default function MuestraNuevaPage() {
                     onChange={(e) => setUnidadEnviada(e.target.value)}
                     disabled={guardando}
                   />
+                </div>
+              </div>
+            </div>
+
+            <div className="card" style={{ marginBottom: 'var(--sp-5)' }}>
+              <h2 style={{ fontSize: 'var(--fs-lg)', marginBottom: 'var(--sp-3)' }}>Vencimiento</h2>
+              <div className="field">
+                <label className="field-label" htmlFor="fechaVencimiento">Fecha de vencimiento</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}>
+                  <input
+                    id="fechaVencimiento"
+                    className="field-input"
+                    style={{ flex: 1 }}
+                    type="date"
+                    value={fechaVencimiento}
+                    onChange={(e) => setFechaVencimiento(e.target.value)}
+                    disabled={guardando || sinVencimientoConfirmado}
+                  />
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: 'var(--fs-xs)', whiteSpace: 'nowrap' }}>
+                    <input
+                      type="checkbox"
+                      checked={sinVencimientoConfirmado}
+                      onChange={(e) => {
+                        setSinVencimientoConfirmado(e.target.checked);
+                        if (e.target.checked) setFechaVencimiento('');
+                      }}
+                      disabled={guardando}
+                    />
+                    Sin vencimiento
+                  </label>
                 </div>
               </div>
             </div>

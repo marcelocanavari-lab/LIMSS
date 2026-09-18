@@ -50,19 +50,20 @@ def _a_fecha(valor):
 _SELECT_DATOS_REMITO = """
     SELECT e.id_envio, e.id_laboratorio, e.fecha_despacho, e.temperatura_transporte, e.nro_remito,
            e.transportista, e.analisis_solicitados, e.protocolo_utilizar,
-           m.codigo_muestra, m.tipo_referencia, m.nro_referencia, m.erp_n01id,
+           m.id_muestra, m.codigo_muestra, m.tipo_referencia, m.nro_referencia, m.erp_n01id,
            m.erp_CODART, m.erp_DESART, m.fecha_muestreo,
            m.cantidad_enviada, m.unidad_enviada,
            u.nombre + ' ' + u.apellido AS usuario_muestreo_nombre,
            lab.nombre AS laboratorio_nombre, lab.direccion AS laboratorio_direccion,
            lab.contacto AS laboratorio_contacto,
            c.nombre AS contacto_nombre, c.cargo AS contacto_cargo,
-           -- Vencimiento confirmado a mano durante el muestreo físico (ver
-           -- Ejecutar Muestreo/completar-datos), cuando la muestra viene de
-           -- una Solicitud de Muestreo -- puede no haber ninguna
-           -- (LEFT JOIN, ver el bug real de más abajo: una muestra creada
-           -- por "Nueva Muestra" no tiene solicitud asociada).
-           s.fecha_vencimiento_real,
+           -- Vencimiento del lote, cargado/confirmado por QA en la
+           -- Solicitud de Muestreo (precargado del ERP al crear, corregible
+           -- en Completar Datos -- ver SolicitudMuestreoResponse.fecha_
+           -- vencimiento), cuando la muestra viene de una Solicitud de
+           -- Muestreo -- puede no haber ninguna (LEFT JOIN, una muestra
+           -- creada por "Nueva Muestra" no tiene solicitud asociada).
+           s.fecha_vencimiento, s.sin_vencimiento_ingreso_confirmado,
            -- N° de lote del proveedor, cargado en la Solicitud de Muestreo
            -- (completar-datos) -- mismo LEFT JOIN de arriba, puede no haber
            -- ninguna solicitud asociada (muestra creada por "Nueva
@@ -75,8 +76,7 @@ _SELECT_DATOS_REMITO = """
            -- subir_protocolo_proveedor en solicitudes_muestreo.py) -- se
            -- adjunta a la copia del remito que va al laboratorio cuando
            -- ese laboratorio lo requiere (ver requiere_coas_proveedor,
-           -- consultado aparte más abajo por la misma razón de tolerancia
-           -- de columna que sin_vencimiento_confirmado).
+           -- consultado aparte más abajo por tolerancia de columna).
            s.protocolo_proveedor_path, s.protocolo_proveedor_nombre_original
     FROM lims_envios e
     INNER JOIN lims_muestras m ON m.id_muestra = e.id_muestra
@@ -131,36 +131,31 @@ def _obtener_ensayos_remito(cursor, id_envio: int):
     return cursor.fetchall()
 
 
-def _tiene_sin_vencimiento_confirmado(cursor, id_envio: int) -> bool:
-    """True si la Solicitud de Muestreo de este envío tiene confirmado a
-    mano (ver Ejecutar Muestreo) que el material NO tiene vencimiento --
-    consulta aparte de _SELECT_DATOS_REMITO (que ya trae fecha_vencimiento_
-    real por LEFT JOIN) para poder tolerar que la columna sin_vencimiento_
-    confirmado (ver migrations_solicitud_vencimiento_confirmado.sql)
-    todavía no exista en este entorno sin romper el SELECT principal por un
-    nombre de columna inválido."""
-    cursor.execute("SELECT COL_LENGTH('lims_solicitudes_muestreo', 'sin_vencimiento_confirmado') AS c")
+def _datos_vencimiento_muestra(cursor, id_muestra: int) -> tuple:
+    """(fecha_vencimiento, sin_vencimiento_confirmado) de lims_muestras --
+    solo tiene dato real para Granel/Semi-Elaborado/Producto Terminado
+    (creadas directo con "Nueva Muestra", ver MuestraCreate.fecha_
+    vencimiento); Materia Prima/Material de Empaque resuelven este dato
+    aparte, desde la Solicitud de Muestreo (ver s.fecha_vencimiento en
+    _SELECT_DATOS_REMITO). Tolerante a que las columnas todavía no existan
+    en este entorno (ver migrations_muestras_vencimiento.sql)."""
+    cursor.execute("SELECT COL_LENGTH('lims_muestras', 'fecha_vencimiento') AS c")
     if cursor.fetchone().c is None:
-        return False
+        return None, False
     cursor.execute(
-        """
-        SELECT s.sin_vencimiento_confirmado
-        FROM lims_envios e
-        INNER JOIN lims_muestras m ON m.id_muestra = e.id_muestra
-        INNER JOIN lims_solicitudes_muestreo s ON s.id_muestra = m.id_muestra
-        WHERE e.id_envio = ?
-        """,
-        id_envio,
+        "SELECT fecha_vencimiento, sin_vencimiento_confirmado FROM lims_muestras WHERE id_muestra = ?",
+        id_muestra,
     )
     fila = cursor.fetchone()
-    return bool(fila.sin_vencimiento_confirmado) if fila else False
+    if not fila:
+        return None, False
+    return _a_fecha(fila.fecha_vencimiento), bool(fila.sin_vencimiento_confirmado)
 
 
 def _laboratorio_requiere_coas(cursor, id_laboratorio: int) -> bool:
     """True si el laboratorio destino tiene tildado "Requiere COAS del
-    proveedor" -- mismo criterio de tolerancia de columna que
-    _tiene_sin_vencimiento_confirmado (ver migrations_laboratorio_requiere_
-    coas.sql, columna nueva que puede no existir todavía en este entorno)."""
+    proveedor" -- tolera que la columna todavía no exista en este entorno
+    (ver migrations_laboratorio_requiere_coas.sql)."""
     cursor.execute("SELECT COL_LENGTH('lims_laboratorios', 'requiere_coas_proveedor') AS c")
     if cursor.fetchone().c is None:
         return False
@@ -206,25 +201,32 @@ def generar_remito(
     ensayos = _obtener_ensayos_remito(cursor, id_envio)
     testigos = _obtener_testigos_remito(cursor, id_envio, datos.id_laboratorio, datos.fecha_despacho)
 
-    # Prioriza fecha_vencimiento_real (cargada a mano en la Solicitud de
-    # Muestreo al ejecutar el muestreo físico -- ver completar-datos/
-    # orden-trabajo-digital) sobre la consulta en vivo al ERP, mismo
-    # criterio que _fecha_envio_real_para_pdf ya aplica para testigos en
-    # este mismo módulo. Bug real detectado en producción: el ERP puede no
-    # tener vencimiento cargado para un comprobante (VENCOM = sentinel
-    # 1899-12-30) mientras que el vencimiento real del lote sí se confirmó
-    # a mano durante el muestreo -- antes ese dato cargado quedaba
-    # completamente ignorado porque _SELECT_DATOS_REMITO nunca hacía join
-    # con lims_solicitudes_muestreo. Solo se cae a la consulta ERP cuando no
-    # hay ese dato confirmado (p.ej. una muestra creada por "Nueva Muestra",
-    # sin Solicitud de Muestreo asociada).
+    # Prioriza fecha_vencimiento ya cargada por una persona sobre la consulta
+    # en vivo al ERP. Dos fuentes posibles, mutuamente excluyentes según el
+    # tipo de material -- para cualquier muestra real, como mucho una de las
+    # dos tiene dato:
+    #   1. Solicitud de Muestreo (Materia Prima/Material de Empaque):
+    #      precargada del ERP al crear, corregible por QA en Completar Datos
+    #      -- ver SolicitudMuestreoResponse.fecha_vencimiento.
+    #   2. La propia muestra (Granel/Semi-Elaborado/Producto Terminado,
+    #      creadas directo con "Nueva Muestra", sin Solicitud asociada --
+    #      ver MuestraCreate.fecha_vencimiento).
+    # Bug real detectado en producción: el ERP puede no tener vencimiento
+    # cargado para un comprobante (VENCOM = sentinel 1899-12-30) mientras que
+    # QA sí cargó/corrigió el vencimiento real a mano (ej. desde el COA del
+    # proveedor) -- antes ese dato cargado quedaba completamente ignorado.
+    # Solo se cae a la consulta ERP cuando ninguna de las dos fuentes tiene
+    # el dato (muestras viejas, creadas antes de que estos campos existieran).
     #
-    # Si la persona confirmó explícitamente en Ejecutar Muestreo que el
-    # material NO tiene vencimiento (ver migrations_solicitud_vencimiento_
-    # confirmado.sql / sin_vencimiento_confirmado), eso es definitivo -- no
-    # se vuelve a consultar el ERP encima de una confirmación humana real.
-    sin_vencimiento_confirmado = _tiene_sin_vencimiento_confirmado(cursor, datos.id_envio)
-    vencimiento_lote = _a_fecha(datos.fecha_vencimiento_real) if datos.fecha_vencimiento_real else None
+    # Si alguna de las dos confirmó explícitamente (checkbox "Sin
+    # vencimiento") que el material NO tiene vencimiento, eso es definitivo
+    # -- no se vuelve a consultar el ERP encima de esa confirmación.
+    sin_vencimiento_confirmado = bool(datos.sin_vencimiento_ingreso_confirmado)
+    vencimiento_lote = _a_fecha(datos.fecha_vencimiento) if datos.fecha_vencimiento else None
+    if vencimiento_lote is None and not sin_vencimiento_confirmado:
+        vencimiento_muestra, sin_vencimiento_muestra = _datos_vencimiento_muestra(cursor, datos.id_muestra)
+        vencimiento_lote = vencimiento_muestra
+        sin_vencimiento_confirmado = sin_vencimiento_muestra
     if vencimiento_lote is None and not sin_vencimiento_confirmado:
         try:
             if datos.tipo_referencia == "ir":

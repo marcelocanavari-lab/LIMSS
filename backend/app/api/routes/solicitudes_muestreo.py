@@ -60,7 +60,12 @@ from app.schemas.solicitudes_muestreo import (
 from app.schemas.muestras import CantidadEtiquetasResponse, ImprimirDirectoBody, ImprimirDirectoResponse
 from app.services import audit, storage
 from app.services.bultos import expandir_bultos, filtrar_rango_bultos, guardar_grupos_bultos, obtener_grupos_bultos
-from app.services.especificaciones import guardar_checklist_muestreo, obtener_checklist_muestreo, tiene_ensayos_analisis
+from app.services.especificaciones import (
+    guardar_checklist_muestreo,
+    obtener_checklist_muestreo,
+    resolver_laboratorio_especificacion,
+    tiene_ensayos_analisis,
+)
 from app.services.erp_ir import (
     buscar_lineas_ir,
     formatear_nro_ir,
@@ -121,15 +126,6 @@ def _g(row, atributo: str):
     return getattr(row, atributo, None)
 
 
-def _tiene_columna_sin_vencimiento_confirmado(cursor) -> bool:
-    """sin_vencimiento_confirmado (ver migrations_solicitud_vencimiento_
-    confirmado.sql) puede no haberse corrido todavía en este entorno --
-    mientras tanto, no se exige ni se persiste (mismo criterio de
-    tolerancia que _tiene_columnas_muestra_adhoc)."""
-    cursor.execute("SELECT COL_LENGTH('lims_solicitudes_muestreo', 'sin_vencimiento_confirmado') AS c")
-    return cursor.fetchone().c is not None
-
-
 _SELECT_SOLICITUD = """
     SELECT s.*, lab.nombre AS laboratorio_nombre, u.nombre + ' ' + u.apellido AS usuario_qa,
            um.nombre + ' ' + um.apellido AS muestreador_nombre
@@ -151,6 +147,10 @@ def _fila_a_solicitud(row, cursor=None) -> SolicitudMuestreoResponse:
         ]
         if cursor is not None else []
     )
+    laboratorio_estado, laboratorio_nombre = (
+        resolver_laboratorio_especificacion(cursor, row.id_especificacion)
+        if cursor is not None else ("sin_analisis", None)
+    )
     return SolicitudMuestreoResponse(
         grupos_bultos=grupos_bultos,
         id_solicitud=row.id_solicitud,
@@ -159,7 +159,8 @@ def _fila_a_solicitud(row, cursor=None) -> SolicitudMuestreoResponse:
         erp_CODART=row.erp_CODART,
         erp_DESART=row.erp_DESART,
         id_laboratorio=row.id_laboratorio,
-        laboratorio_nombre=row.laboratorio_nombre,
+        laboratorio_nombre=laboratorio_nombre,
+        laboratorio_estado=laboratorio_estado,
         id_muestreador=row.id_muestreador,
         muestreador_nombre=row.muestreador_nombre,
         estado=row.estado,
@@ -190,7 +191,6 @@ def _fila_a_solicitud(row, cursor=None) -> SolicitudMuestreoResponse:
         nro_bultos_muestreados=row.nro_bultos_muestreados,
         observaciones_muestreo=row.observaciones_muestreo,
         identificacion_contenedor=_g(row, "identificacion_contenedor"),
-        fecha_vencimiento_real=_a_fecha(_g(row, "fecha_vencimiento_real")),
         fecha_reanalisis_real=_a_fecha(_g(row, "fecha_reanalisis_real")),
         aspecto_mp=_g(row, "aspecto_mp"),
         protocolo_proveedor_nombre_original=_g(row, "protocolo_proveedor_nombre_original"),
@@ -1600,8 +1600,6 @@ def ensayos_para_orden(
             aspecto_externo=row.aspecto_externo, cierre=row.cierre,
             aspecto_interno=row.aspecto_interno, precintos=row.precintos,
             identificacion_contenedor=_g(row, "identificacion_contenedor"),
-            fecha_vencimiento_real=_a_fecha(_g(row, "fecha_vencimiento_real")),
-            sin_vencimiento_confirmado=bool(_g(row, "sin_vencimiento_confirmado")),
             fecha_reanalisis_real=_a_fecha(_g(row, "fecha_reanalisis_real")),
             aspecto_mp=_g(row, "aspecto_mp"),
             materias_extranas=row.materias_extranas, olor=row.olor, color=row.color,
@@ -1684,13 +1682,13 @@ def confirmar_orden_trabajo(
 
     df = body.datos_fisicos
     # "Datos físicos del muestreo" se sacó de Ejecutar Muestreo -- ningún
-    # campo del bloque (incluida esta confirmación de vencimiento) tiene
-    # reemplazo real en otro lado, pero se eliminó igual. df llega siempre
-    # con sus valores por default (ver OrdenTrabajoDigitalBody), así que ya
-    # no tiene sentido exigir fecha_vencimiento_real/sin_vencimiento_
-    # confirmado -- el frontend nunca los va a mandar.
-    tiene_columna_sin_vencimiento = _tiene_columna_sin_vencimiento_confirmado(cursor)
-
+    # campo del bloque tiene reemplazo real en otro lado, pero se eliminó
+    # igual. df llega siempre con sus valores por default (ver
+    # OrdenTrabajoDigitalBody). El vencimiento se unificó en un solo campo
+    # (lims_solicitudes_muestreo.fecha_vencimiento, precargado del ERP y
+    # corregible por QA en Completar Datos -- ver SolicitudMuestreoResponse.
+    # fecha_vencimiento), así que ya no hay nada de vencimiento que
+    # confirmar acá.
     cursor.execute(
         """
         UPDATE lims_solicitudes_muestreo
@@ -1710,21 +1708,13 @@ def confirmar_orden_trabajo(
         cursor.execute(
             """
             UPDATE lims_solicitudes_muestreo
-            SET identificacion_contenedor = ?, fecha_vencimiento_real = ?,
-                fecha_reanalisis_real = ?, aspecto_mp = ?
+            SET identificacion_contenedor = ?, fecha_reanalisis_real = ?, aspecto_mp = ?
             WHERE id_solicitud = ?
             """,
-            df.identificacion_contenedor, _a_datetime(df.fecha_vencimiento_real),
-            _a_datetime(df.fecha_reanalisis_real), df.aspecto_mp, id_solicitud,
+            df.identificacion_contenedor, _a_datetime(df.fecha_reanalisis_real), df.aspecto_mp, id_solicitud,
         )
     except pyodbc.Error:
         pass
-
-    if tiene_columna_sin_vencimiento:
-        cursor.execute(
-            "UPDATE lims_solicitudes_muestreo SET sin_vencimiento_confirmado = ? WHERE id_solicitud = ?",
-            1 if df.sin_vencimiento_confirmado else 0, id_solicitud,
-        )
 
     if row.id_muestra is not None:
         cursor.execute(

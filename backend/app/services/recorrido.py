@@ -164,10 +164,10 @@ def construir_recorrido(cursor, id_muestra: int) -> Optional[RecorridoResponse]:
     # sumo una solicitud vinculada, pero se recorre por si hubiera más de una.
     # SELECT s.* (no una lista a mano) porque _g() más abajo necesita poder
     # leer las columnas de la migración v2 (identificacion_contenedor,
-    # fecha_vencimiento_real, fecha_reanalisis_real, aspecto_mp) cuando
-    # existen -- con una lista explícita que no las incluyera, _g() las iba a
-    # ver siempre ausentes (columna nunca seleccionada) y no "ausente en este
-    # entorno", que es la única razón por la que debería devolver None.
+    # fecha_reanalisis_real, aspecto_mp) cuando existen -- con una lista
+    # explícita que no las incluyera, _g() las iba a ver siempre ausentes
+    # (columna nunca seleccionada) y no "ausente en este entorno", que es la
+    # única razón por la que debería devolver None.
     cursor.execute(
         """
         SELECT s.*, u.nombre + ' ' + u.apellido AS usuario_qa_nombre
@@ -201,7 +201,6 @@ def construir_recorrido(cursor, id_muestra: int) -> Optional[RecorridoResponse]:
                 aspecto_interno=s0.aspecto_interno,
                 precintos=s0.precintos,
                 identificacion_contenedor=_g(s0, "identificacion_contenedor"),
-                fecha_vencimiento_real=_a_fecha(_g(s0, "fecha_vencimiento_real")),
                 fecha_reanalisis_real=_a_fecha(_g(s0, "fecha_reanalisis_real")),
                 aspecto_mp=_g(s0, "aspecto_mp"),
                 materias_extranas=s0.materias_extranas,

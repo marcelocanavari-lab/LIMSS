@@ -19,6 +19,7 @@ from fastapi.responses import Response
 from app.core.security import get_current_user, require_rol
 from app.db.connections import erp_db, limss_db
 from app.schemas.muestras import (
+    AgregarTestigoEnvioBody,
     CantidadEtiquetasResponse,
     ContactoLaboratorioCreate,
     ContactoLaboratorioResponse,
@@ -77,7 +78,7 @@ from app.services.bultos import expandir_bultos, filtrar_rango_bultos, obtener_g
 from app.services.formato import etiqueta_referencia, formatear_cantidad, normalizar_unidad, titulo_etiqueta_por_tipo
 from app.services.especificaciones import guardar_checklist_muestreo, obtener_checklist_muestreo, tiene_ensayos_analisis
 from app.services.erp_ir import buscar_todos_candidatos_ir, formatear_nro_ir, normalizar_fecha_sentinel
-from app.services.erp_lotes import buscar_lote
+from app.services.erp_lotes import buscar_lote, obtener_vencimiento_lote_produccion
 from app.services.erp_materiales import asignar_numero_analisis_si_corresponde, obtener_codsars_por_tipo, tiene_numero_analisis
 from app.services.pdf_legajo import AdjuntoLegajo, generar_pdf_legajo
 from app.services.recorrido import construir_recorrido
@@ -111,14 +112,21 @@ def _a_fecha(valor) -> Optional[date]:
     return date.fromisoformat(str(valor))
 
 
-def _datos_vencimiento_confirmado(cursor, id_muestra: int) -> tuple[Optional[date], bool, bool]:
-    """(fecha_vencimiento_real, sin_vencimiento_confirmado, tiene_solicitud)
+def _a_datetime(valor: Optional[date]) -> Optional[datetime]:
+    """El driver ODBC "SQL Server" (legacy, configurado en .env) no puede
+    bindear objetos date de Python (SQLBindParameter falla) -- se convierte
+    a datetime, que sí soporta (mismo problema y mismo fix que en
+    solicitudes_muestreo.py/auditoria.py)."""
+    if valor is None:
+        return None
+    return datetime.combine(valor, datetime.min.time())
+
+
+def _datos_vencimiento(cursor, id_muestra: int) -> tuple[Optional[date], bool, bool]:
+    """(fecha_vencimiento, sin_vencimiento_ingreso_confirmado, tiene_solicitud)
     de la Solicitud de Muestreo de esta muestra -- consulta aparte del resto
-    de obtener_remito, no un JOIN directo en esa query, para tolerar que
-    sin_vencimiento_confirmado (ver migrations_solicitud_vencimiento_
-    confirmado.sql) todavía no exista en algún entorno sin romper el SELECT
-    principal por un nombre de columna inválido (mismo criterio que
-    _tiene_sin_vencimiento_confirmado en envios.py).
+    de obtener_remito, no un JOIN directo en esa query, para mantener esa
+    query enfocada en los datos del envío/laboratorio.
 
     tiene_solicitud distingue "no confirmado todavía" de "no aplica ningún
     aviso acá" -- una muestra creada directo con Nueva Muestra (sin
@@ -127,24 +135,18 @@ def _datos_vencimiento_confirmado(cursor, id_muestra: int) -> tuple[Optional[dat
     de "sin vencimiento") nunca va a tener fila en lims_solicitudes_muestreo,
     así que jamás puede confirmarse por acá -- el frontend no debe pedir esa
     confirmación para un caso que estructuralmente no existe."""
-    try:
-        cursor.execute("SELECT COL_LENGTH('lims_solicitudes_muestreo', 'sin_vencimiento_confirmado') AS c")
-        tiene_columna = cursor.fetchone().c is not None
-        campo_sin_vencimiento = "s.sin_vencimiento_confirmado" if tiene_columna else "0"
-        cursor.execute(
-            f"""
-            SELECT s.fecha_vencimiento_real, {campo_sin_vencimiento} AS sin_vencimiento_confirmado
-            FROM lims_solicitudes_muestreo s
-            WHERE s.id_muestra = ?
-            """,
-            id_muestra,
-        )
-        fila = cursor.fetchone()
-    except pyodbc.Error:
-        return None, False, False
+    cursor.execute(
+        """
+        SELECT s.fecha_vencimiento, s.sin_vencimiento_ingreso_confirmado
+        FROM lims_solicitudes_muestreo s
+        WHERE s.id_muestra = ?
+        """,
+        id_muestra,
+    )
+    fila = cursor.fetchone()
     if not fila:
         return None, False, False
-    return _a_fecha(fila.fecha_vencimiento_real), bool(fila.sin_vencimiento_confirmado), True
+    return _a_fecha(fila.fecha_vencimiento), bool(fila.sin_vencimiento_ingreso_confirmado), True
 
 
 def _datos_coas(cursor, id_muestra: int, id_laboratorio: int) -> tuple[bool, bool]:
@@ -174,6 +176,43 @@ def _datos_coas(cursor, id_muestra: int, id_laboratorio: int) -> tuple[bool, boo
     fila_sol = cursor.fetchone()
     tiene_protocolo_proveedor = bool(fila_sol.protocolo_proveedor_path) if fila_sol else False
     return laboratorio_requiere_coas, tiene_protocolo_proveedor
+
+
+def _testigos_pendientes_de_agregar(cursor, id_especificacion: Optional[int], id_envio: int) -> list[TestigoRemito]:
+    """Testigos ACTIVOS asignados hoy a la especificación de la muestra que
+    todavía no están en lims_envio_testigos para este envío -- caso real:
+    alguien asigna un testigo a la especificación DESPUÉS de confirmado el
+    envío, y como generar_remito solo lee lims_envio_testigos (fijado una
+    sola vez, al confirmar el envío -- ver confirmar_envio), regenerar el
+    remito nunca lo iba a reflejar. Devuelto acá para que RemitoImprimirPage.
+    jsx pueda avisar ANTES de generar/regenerar (mismo espíritu que
+    otros_laboratorios en EnsayosParaEnvioResponse) -- agregarlo es una
+    acción explícita del usuario (ver POST .../testigos), nunca automática:
+    un testigo consume stock físico real, no es un dato puramente
+    informativo como el vencimiento."""
+    if id_especificacion is None:
+        return []
+    cursor.execute(
+        """
+        SELECT t.id_testigo, t.codigo, t.nombre, t.nro_ir, t.nro_lote, t.fecha_vencimiento
+        FROM lims_especificacion_testigos et2
+        INNER JOIN lims_testigos t ON t.id_testigo = et2.id_testigo
+        WHERE et2.id_especificacion = ? AND t.activo = 1
+          AND NOT EXISTS (
+              SELECT 1 FROM lims_envio_testigos et
+              WHERE et.id_envio = ? AND et.id_testigo = t.id_testigo
+          )
+        ORDER BY t.codigo
+        """,
+        id_especificacion, id_envio,
+    )
+    return [
+        TestigoRemito(
+            id_testigo=t.id_testigo, codigo=t.codigo, nombre=t.nombre, nro_ir=t.nro_ir,
+            nro_lote=t.nro_lote, fecha_vencimiento=t.fecha_vencimiento,
+        )
+        for t in cursor.fetchall()
+    ]
 
 
 def _fila_a_laboratorio(row) -> LaboratorioResponse:
@@ -210,6 +249,11 @@ def _fila_a_muestra(row) -> MuestraResponse:
         fecha_muestreo=row.fecha_muestreo,
         observaciones=row.observaciones,
         datos_muestreo_pendientes=bool(row.datos_muestreo_pendientes),
+        # Columnas agregadas en migrations_muestras_vencimiento.sql -- si
+        # todavía no se corrió en este entorno, se leen como None/False sin
+        # romper el resto de la respuesta (ver _g más arriba).
+        fecha_vencimiento=_a_fecha(_g(row, "fecha_vencimiento")),
+        sin_vencimiento_confirmado=bool(_g(row, "sin_vencimiento_confirmado")),
     )
 
 
@@ -259,8 +303,7 @@ def crear_laboratorio(
     try:
         # Columna agregada en migrations_laboratorio_requiere_coas.sql -- si
         # todavía no se corrió en este entorno, se omite sin bloquear el
-        # resto del alta (mismo criterio de tolerancia ya usado en
-        # confirmar_orden_trabajo para sin_vencimiento_confirmado).
+        # resto del alta.
         cursor.execute(
             "UPDATE lims_laboratorios SET requiere_coas_proveedor = ? WHERE id_laboratorio = ?",
             1 if body.requiere_coas_proveedor else 0, id_laboratorio,
@@ -642,9 +685,17 @@ def buscar_material(
     rows = buscar_lote(erp, obtener_codsars_por_tipo(conn, tipo), referencia)
     if not rows:
         raise HTTPException(status_code=404, detail=f"No se encontró el lote '{referencia}' en el ERP para este tipo de material")
+    # Vencimiento del comprobante de tipo LOTE (ver obtener_vencimiento_lote_
+    # produccion) -- antes no se consultaba acá, así que Granel/Semi-
+    # Elaborado/Producto Terminado nunca mostraban vencimiento ni lo pedían
+    # al crear la muestra (bug real: quedaban sin este dato, a diferencia de
+    # Materia Prima). Una sola consulta (no una por fila): el vencimiento es
+    # del LOTE, no de cada artículo/presentación que comparte ese lote.
+    fecha_vencimiento = obtener_vencimiento_lote_produccion(erp, referencia)
     return [
         MaterialEncontrado(
             referencia=referencia.strip(), IdM21=r.IdM21, CODART=r.CODART, DESART=r.DESART, unidad=r.unidad,
+            fecha_vencimiento=fecha_vencimiento,
         )
         for r in rows
     ]
@@ -920,12 +971,13 @@ def crear_muestra(
             INSERT INTO lims_muestras
                 (codigo_muestra, tipo_referencia, tipo_material, nro_referencia, erp_n01id, erp_IdM21, erp_CODART, erp_DESART,
                  erp_cantidad_lote, erp_proveedor, cantidad_enviada, unidad_enviada, id_especificacion, estado,
-                 id_usuario_muestreo, observaciones, numero_analisis)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 id_usuario_muestreo, observaciones, numero_analisis, fecha_vencimiento, sin_vencimiento_confirmado)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             codigo_muestra, body.tipo_referencia, body.tipo_material, body.nro_referencia, body.erp_n01id, body.erp_IdM21, body.erp_CODART, body.erp_DESART,
             body.erp_cantidad_lote, body.erp_proveedor, cantidad_enviada, unidad_enviada, id_especificacion,
             estado_inicial, user["id_usuario"], body.observaciones, numero_analisis,
+            _a_datetime(body.fecha_vencimiento), body.sin_vencimiento_confirmado,
         )
     else:
         cursor.execute(
@@ -933,12 +985,13 @@ def crear_muestra(
             INSERT INTO lims_muestras
                 (codigo_muestra, tipo_referencia, tipo_material, nro_referencia, erp_n01id, erp_IdM21, erp_CODART, erp_DESART,
                  erp_cantidad_lote, erp_proveedor, cantidad_enviada, unidad_enviada, id_especificacion, estado,
-                 id_usuario_muestreo, observaciones)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 id_usuario_muestreo, observaciones, fecha_vencimiento, sin_vencimiento_confirmado)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             codigo_muestra, body.tipo_referencia, body.tipo_material, body.nro_referencia, body.erp_n01id, body.erp_IdM21, body.erp_CODART, body.erp_DESART,
             body.erp_cantidad_lote, body.erp_proveedor, cantidad_enviada, unidad_enviada, id_especificacion,
             estado_inicial, user["id_usuario"], body.observaciones,
+            _a_datetime(body.fecha_vencimiento), body.sin_vencimiento_confirmado,
         )
     cursor.execute("SELECT @@IDENTITY AS id")
     id_muestra = int(cursor.fetchone().id)
@@ -1740,6 +1793,7 @@ def obtener_remito(
     cursor.execute(
         """
         SELECT e.id_envio, e.id_laboratorio,
+               m.id_especificacion,
                m.codigo_muestra, m.tipo_referencia, m.nro_referencia, m.erp_CODART, m.erp_DESART, m.fecha_muestreo,
                m.cantidad_enviada, m.unidad_enviada,
                u.nombre + ' ' + u.apellido AS usuario_muestreo_nombre,
@@ -1779,14 +1833,16 @@ def obtener_remito(
         for t in cursor.fetchall()
     ]
 
+    testigos_pendientes = _testigos_pendientes_de_agregar(cursor, row.id_especificacion, row.id_envio)
+
     cursor.execute(
         "SELECT TOP 1 * FROM lims_remitos WHERE id_envio = ? ORDER BY id_remito DESC",
         row.id_envio,
     )
     remito_pdf = cursor.fetchone()
 
-    fecha_vencimiento_confirmada, sin_vencimiento_confirmado, tiene_solicitud_muestreo = (
-        _datos_vencimiento_confirmado(cursor, id_muestra)
+    fecha_vencimiento, sin_vencimiento_ingreso_confirmado, tiene_solicitud_muestreo = (
+        _datos_vencimiento(cursor, id_muestra)
     )
     laboratorio_requiere_coas, tiene_protocolo_proveedor = _datos_coas(cursor, id_muestra, row.id_laboratorio)
 
@@ -1816,15 +1872,139 @@ def obtener_remito(
         protocolo_utilizar=row.protocolo_utilizar,
         ensayos_solicitados=_obtener_ensayos_solicitados(cursor, row.id_envio),
         testigos=testigos,
+        testigos_pendientes=testigos_pendientes,
         tiene_copia_firmada=bool(remito_pdf.pdf_copia_firmada) if remito_pdf else False,
         fecha_recepcion=_a_fecha(remito_pdf.fecha_recepcion) if remito_pdf else None,
         recibido_por=remito_pdf.recibido_por if remito_pdf else None,
-        fecha_vencimiento_confirmada=fecha_vencimiento_confirmada,
-        sin_vencimiento_confirmado=sin_vencimiento_confirmado,
+        fecha_vencimiento=fecha_vencimiento,
+        sin_vencimiento_ingreso_confirmado=sin_vencimiento_ingreso_confirmado,
         tiene_solicitud_muestreo=tiene_solicitud_muestreo,
         laboratorio_requiere_coas=laboratorio_requiere_coas,
         tiene_protocolo_proveedor=tiene_protocolo_proveedor,
     )
+
+
+@router.post("/{id_muestra}/envios/{id_envio}/testigos", response_model=RemitoResponse)
+def agregar_testigo_a_envio(
+    id_muestra: int,
+    id_envio: int,
+    body: AgregarTestigoEnvioBody,
+    user: dict = Depends(require_rol("analista_qc", "qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Agrega conscientemente un testigo a un envío YA confirmado -- ver
+    testigos_pendientes en obtener_remito (testigo asignado a la
+    especificación después de confirmado el envío, que por eso nunca quedó
+    en lims_envio_testigos). Reutiliza el mismo mecanismo de
+    confirmar_envio (inserta en lims_envio_testigos, descuenta stock según
+    lims_testigo_laboratorios) -- a diferencia del vencimiento, un testigo
+    consume stock físico real, así que esto nunca se hace automático:
+    requiere `motivo` explícito, igual que corregir_recepcion en
+    solicitudes_muestreo.py."""
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT e.id_envio, e.id_laboratorio, e.nro_remito, m.id_especificacion
+        FROM lims_envios e
+        INNER JOIN lims_muestras m ON m.id_muestra = e.id_muestra
+        WHERE e.id_envio = ? AND m.id_muestra = ?
+        """,
+        id_envio, id_muestra,
+    )
+    envio = cursor.fetchone()
+    if not envio:
+        raise HTTPException(status_code=404, detail="Envío no encontrado para esta muestra")
+
+    if envio.id_especificacion is None:
+        raise HTTPException(status_code=400, detail="Esta muestra no tiene especificación resuelta")
+
+    cursor.execute(
+        "SELECT 1 FROM lims_especificacion_testigos WHERE id_especificacion = ? AND id_testigo = ?",
+        envio.id_especificacion, body.id_testigo,
+    )
+    if not cursor.fetchone():
+        raise HTTPException(status_code=400, detail="El testigo no está asociado a la especificación de esta muestra")
+
+    cursor.execute(
+        "SELECT 1 FROM lims_envio_testigos WHERE id_envio = ? AND id_testigo = ?",
+        id_envio, body.id_testigo,
+    )
+    if cursor.fetchone():
+        raise HTTPException(status_code=400, detail="Este testigo ya está incluido en el envío")
+
+    cursor.execute("SELECT * FROM lims_testigos WHERE id_testigo = ?", body.id_testigo)
+    testigo = cursor.fetchone()
+    if not testigo:
+        raise HTTPException(status_code=404, detail="Testigo no encontrado")
+    if not testigo.activo:
+        raise HTTPException(status_code=400, detail=f"El testigo '{testigo.codigo}' está inactivo")
+
+    fecha_vencimiento_testigo = _a_fecha(testigo.fecha_vencimiento)
+    if fecha_vencimiento_testigo is not None and fecha_vencimiento_testigo < date.today():
+        # REQ-ENV-004-A: mismo bloqueo absoluto que confirmar_envio -- un
+        # testigo vencido no puede sumarse a ningún envío.
+        raise HTTPException(
+            status_code=400,
+            detail=f"El testigo '{testigo.codigo}' está VENCIDO ({fecha_vencimiento_testigo}). No se puede agregar al envío.",
+        )
+
+    cursor.execute(
+        "INSERT INTO lims_envio_testigos (id_envio, id_testigo, cantidad) VALUES (?, ?, 0)",
+        id_envio, body.id_testigo,
+    )
+
+    # Descuento automático de stock -- mismo criterio que confirmar_envio.
+    cursor.execute(
+        "SELECT consumo_estimado FROM lims_testigo_laboratorios WHERE id_testigo = ? AND id_laboratorio = ?",
+        body.id_testigo, envio.id_laboratorio,
+    )
+    consumo_row = cursor.fetchone()
+    consumo_estimado = (
+        float(consumo_row.consumo_estimado)
+        if consumo_row and consumo_row.consumo_estimado is not None
+        else None
+    )
+
+    if consumo_estimado is not None:
+        stock_resultante = float(testigo.stock_actual) - consumo_estimado
+        cursor.execute(
+            "UPDATE lims_testigos SET stock_actual = ? WHERE id_testigo = ?",
+            stock_resultante, testigo.id_testigo,
+        )
+        cursor.execute(
+            """
+            INSERT INTO lims_testigo_movimientos
+                (id_testigo, id_envio, tipo, cantidad, stock_resultante, id_usuario, observaciones)
+            VALUES (?, ?, 'egreso', ?, ?, ?, ?)
+            """,
+            testigo.id_testigo, id_envio, -consumo_estimado, stock_resultante, user["id_usuario"],
+            f"Consumo por testigo agregado post-confirmación - remito {envio.nro_remito or f'(envío #{id_envio})'}",
+        )
+        audit.registrar(
+            conn, entidad="testigo", accion="consumo_envio",
+            id_usuario=user["id_usuario"], id_entidad=testigo.id_testigo,
+            valor_anterior={"stock_actual": float(testigo.stock_actual)},
+            valor_nuevo={"stock_actual": stock_resultante, "id_envio": id_envio, "consumo_estimado": consumo_estimado},
+            motivo=body.motivo,
+        )
+    else:
+        audit.registrar(
+            conn, entidad="testigo", accion="consumo_envio_omitido",
+            id_usuario=user["id_usuario"], id_entidad=testigo.id_testigo,
+            valor_nuevo={
+                "id_envio": id_envio, "id_laboratorio": envio.id_laboratorio,
+                "motivo": "Sin consumo_estimado configurado para este testigo/laboratorio -- no se descontó stock automáticamente",
+            },
+        )
+
+    audit.registrar(
+        conn, entidad="envio", accion="agregar_testigo_post_confirmacion",
+        id_usuario=user["id_usuario"], id_entidad=id_envio,
+        valor_nuevo={"id_testigo": body.id_testigo, "codigo": testigo.codigo},
+        motivo=body.motivo,
+    )
+
+    return obtener_remito(id_muestra, id_envio, user, conn)
 
 
 @router.get("/{id_muestra}/recorrido", response_model=RecorridoResponse)

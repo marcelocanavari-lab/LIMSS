@@ -93,12 +93,10 @@ class SolicitudMuestreoCreate(BaseModel):
     # se usa el valor del ERP como antes (ver crear_solicitud).
     fecha_vencimiento: Optional[date] = None
     # Checkbox "Este material no tiene fecha de vencimiento" en el
-    # formulario unificado -- mismo patrón UX que sin_vencimiento_confirmado
-    # (DatosFisicosMuestreo, Ejecutar Muestreo), pero un mecanismo
-    # INDEPENDIENTE, aplicado al vencimiento del ingreso (fecha_vencimiento,
-    # dato del proveedor) en vez de al confirmado después durante el
-    # muestreo físico (fecha_vencimiento_real) -- ver migrations_solicitud_
-    # sin_vencimiento_ingreso.sql.
+    # formulario unificado -- único mecanismo de vencimiento del flujo (el
+    # par fecha_vencimiento_real/sin_vencimiento_confirmado de "Ejecutar
+    # Muestreo" ya no existe: no tenía ningún control real detrás y se
+    # eliminó) -- ver migrations_solicitud_sin_vencimiento_ingreso.sql.
     sin_vencimiento_ingreso_confirmado: bool = False
     fecha_reanalisis: Optional[date] = None
     pais_origen: Optional[str] = Field(None, max_length=100)
@@ -146,7 +144,18 @@ class SolicitudMuestreoResponse(BaseModel):
     # app/services/agente_muestreo.py) -- QA la completa a mano con PUT
     # .../completar-laboratorio antes de poder ejecutar el muestreo.
     id_laboratorio: Optional[int] = None
+    # laboratorio_nombre/laboratorio_estado se calculan en vivo contra los
+    # ensayos de análisis ACTIVOS de la especificación vinculada (ver
+    # resolver_laboratorio_especificacion en app/services/especificaciones.py)
+    # -- YA NO reflejan el campo id_laboratorio de arriba, que dejó de
+    # escribirse desde el rediseño de esta pantalla. laboratorio_estado:
+    # 'sin_analisis' (solo checklist, ej. Material de Empaque -- no es un
+    # problema, laboratorio_nombre queda None), 'ok' (laboratorio_nombre trae
+    # el/los laboratorio(s), separados por coma si hay más de uno) o
+    # 'falta_asignar' (algún ensayo de análisis activo sin laboratorio --
+    # único estado que debería alertar, laboratorio_nombre queda None).
     laboratorio_nombre: Optional[str] = None
+    laboratorio_estado: str = "sin_analisis"
     id_muestreador: Optional[int] = None
     muestreador_nombre: Optional[str] = None
     estado: str
@@ -188,7 +197,6 @@ class SolicitudMuestreoResponse(BaseModel):
     # getattr/default None (ver _g en routes/solicitudes_muestreo.py) para no
     # romper el resto del módulo si todavía no existen en la BD real.
     identificacion_contenedor: Optional[str] = None
-    fecha_vencimiento_real: Optional[date] = None
     fecha_reanalisis_real: Optional[date] = None
     aspecto_mp: Optional[str] = None
     # Protocolo que entrega el PROVEEDOR junto con el lote (foto o PDF),
@@ -333,15 +341,6 @@ class DatosFisicosMuestreo(BaseModel):
     aspecto_interno: Optional[str] = Field(None, max_length=200)
     precintos: Optional[str] = Field(None, max_length=200)
     identificacion_contenedor: Optional[str] = Field(None, max_length=200)
-    fecha_vencimiento_real: Optional[date] = None
-    # Distingue "el muestreador todavía no revisó el vencimiento" (ambos en
-    # False/None) de "revisó el envase y confirmó que este material
-    # genuinamente no tiene vencimiento" -- antes fecha_vencimiento_real en
-    # NULL representaba las dos situaciones por igual, así que quedaba
-    # cargado solo cuando alguien se acordaba de hacerlo a mano, sin ninguna
-    # exigencia real de revisarlo (ver confirmar_orden_trabajo, que ahora
-    # exige uno de los dos si la especificación está resuelta contra un IR).
-    sin_vencimiento_confirmado: bool = False
     fecha_reanalisis_real: Optional[date] = None
     aspecto_mp: Optional[str] = Field(None, max_length=200)
     materias_extranas: Optional[str] = Field(None, max_length=200)
@@ -390,13 +389,11 @@ class EnsayosParaOrdenResponse(BaseModel):
     # existente) y armar acá la confirmación de "Muestras a tomar" -- sin
     # esto no hay forma de saber contra qué especificación consultar.
     id_especificacion: Optional[int] = None
-    # Vencimiento que ya trae la solicitud (resuelto contra el ERP al
-    # crearla, ver crear_solicitud) -- se ofrece como valor sugerido/
-    # precargado en Ejecutar Muestreo para que la persona lo confirme en vez
-    # de tener que volver a tipearlo, pero SIEMPRE pidiendo confirmación
-    # explícita (ver datos_fisicos.sin_vencimiento_confirmado): que el campo
-    # venga con un valor no exime de revisarlo. None si el ERP no tenía
-    # vencimiento cargado (sentinel o NULL, ya normalizado en el origen).
+    # Vencimiento que ya trae la solicitud (precargado del ERP al crearla,
+    # corregible por QA en Completar Datos -- ver crear_solicitud/
+    # completar_datos). No se pide confirmarlo de nuevo acá -- es el único
+    # campo de vencimiento del flujo. None si no hay ninguno cargado
+    # (sentinel del ERP o NULL, ya normalizado en el origen).
     fecha_vencimiento_sugerida: Optional[date] = None
     datos_fisicos: DatosFisicosMuestreo
     checklist_muestreo: list[ChecklistMuestreoItem] = []

@@ -30,6 +30,46 @@ def tiene_ensayos_analisis(cursor, id_especificacion: Optional[int]) -> bool:
     return cursor.fetchone() is not None
 
 
+def resolver_laboratorio_especificacion(cursor, id_especificacion: Optional[int]) -> tuple[str, Optional[str]]:
+    """Estado del laboratorio de análisis de una especificación, para la
+    columna "Laboratorio" del listado de Solicitudes de Muestreo (ver
+    _fila_a_solicitud en solicitudes_muestreo.py) -- calculado en vivo contra
+    los ensayos de análisis ACTIVOS, no contra el campo legacy
+    lims_solicitudes_muestreo.id_laboratorio, que dejó de escribirse desde el
+    rediseño de esa pantalla (ver SolicitudMuestreoCreate.id_laboratorio) y
+    por eso quedaba en NULL para cualquier solicitud nueva sin importar si
+    sus ensayos estaban bien configurados. Devuelve (estado, nombre):
+      - ("sin_analisis", None): sin ningún ensayo 'analisis' activo (solo
+        checklist de 'muestreo' -- caso normal de Material de Empaque). No es
+        un problema, no hay nada que enviar a un laboratorio.
+      - ("ok", "Lab A, Lab B"): TODOS los ensayos de análisis activos tienen
+        laboratorio asignado -- nombres DISTINCT, separados por coma si hay
+        más de uno entre los ensayos de la especificación.
+      - ("falta_asignar", None): al menos un ensayo de análisis activo no
+        tiene laboratorio asignado -- el único estado que debería alertar.
+    Sin especificación resuelta todavía (id_especificacion None), se trata
+    igual que sin ensayos de análisis: no hay nada contra qué resolver."""
+    if id_especificacion is None:
+        return "sin_analisis", None
+    cursor.execute(
+        """
+        SELECT lab.nombre
+        FROM lims_especificacion_ensayos se
+        INNER JOIN lims_categorias_ensayo cat ON cat.id_categoria = se.id_categoria
+        LEFT JOIN lims_laboratorios lab ON lab.id_laboratorio = se.id_laboratorio
+        WHERE se.id_especificacion = ? AND cat.momento = 'analisis' AND se.activo = 1
+        """,
+        id_especificacion,
+    )
+    filas = cursor.fetchall()
+    if not filas:
+        return "sin_analisis", None
+    if any(f.nombre is None for f in filas):
+        return "falta_asignar", None
+    nombres = sorted({f.nombre for f in filas})
+    return "ok", ", ".join(nombres)
+
+
 def obtener_checklist_muestreo(cursor, id_muestra: Optional[int], id_especificacion: Optional[int]) -> list[ChecklistMuestreoItem]:
     """Ítems de categorías con momento 'muestreo' (Aspecto del Contenedor,
     Aspectos de la Materia Prima -- ver lims_categorias_ensayo) de una

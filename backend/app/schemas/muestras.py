@@ -78,6 +78,22 @@ class MuestraCreate(BaseModel):
     # Se guarda tal cual llega, sin volver a resolver contra el ERP acá (este
     # endpoint no consulta el ERP, confía en lo que ya resolvió el frontend).
     erp_n01id: Optional[int] = None
+    # Vencimiento -- precargado del ERP en la búsqueda previa (ver
+    # MaterialEncontrado.fecha_vencimiento, resuelto para las 4 combinaciones
+    # de tipo_material) y corregible acá, mismo criterio que fecha_vencimiento
+    # en SolicitudMuestreoCreate. Obligatorio uno de los dos (fecha_
+    # vencimiento o sin_vencimiento_confirmado) -- ver _validar_vencimiento
+    # más abajo: antes "Nueva Muestra" no pedía este dato para ningún tipo de
+    # material, y Granel/Semi-Elaborado/Producto Terminado (que no tienen
+    # ninguna otra pantalla de creación) quedaban sin vencimiento siempre.
+    fecha_vencimiento: Optional[date] = None
+    sin_vencimiento_confirmado: bool = False
+
+    @model_validator(mode="after")
+    def _validar_vencimiento(self):
+        if self.fecha_vencimiento is None and not self.sin_vencimiento_confirmado:
+            raise ValueError("Falta la fecha de vencimiento (o confirmar que el material no tiene vencimiento)")
+        return self
 
 
 class MuestraUpdate(BaseModel):
@@ -115,6 +131,10 @@ class MuestraResponse(BaseModel):
     # None para muestras por lote, o para muestras viejas creadas antes de
     # este campo.
     erp_n01id: Optional[int] = None
+    # Vencimiento -- ver MuestraCreate.fecha_vencimiento. None/False en
+    # muestras creadas antes de que este campo existiera.
+    fecha_vencimiento: Optional[date] = None
+    sin_vencimiento_confirmado: bool = False
 
 
 # ── Vincular especificación (muestra creada antes de que la especificación
@@ -349,6 +369,11 @@ class TestigoRemito(BaseModel):
     fecha_vencimiento: Optional[date] = None
 
 
+class AgregarTestigoEnvioBody(BaseModel):
+    id_testigo: int
+    motivo: str = Field(..., min_length=1, max_length=300)
+
+
 class ProtocoloEnvio(BaseModel):
     id_protocolo: int
     nro_protocolo_ext: str
@@ -421,18 +446,28 @@ class RemitoResponse(BaseModel):
     protocolo_utilizar: Optional[str] = None
     ensayos_solicitados: list[EnsayoSolicitado] = []
     testigos: list[TestigoRemito] = []
+    # Testigos asignados HOY a la especificación de la muestra pero que no
+    # están en `testigos` (lims_envio_testigos) -- caso real: alguien asigna
+    # un testigo nuevo a la especificación DESPUÉS de confirmado este envío,
+    # y el remito (que solo lee lims_envio_testigos) nunca lo iba a reflejar
+    # sin que nadie se diera cuenta. Mismo espíritu que otros_laboratorios en
+    # EnsayosParaEnvioResponse -- aviso no bloqueante para que la persona
+    # decida conscientemente agregarlo (ver POST .../testigos), nunca se
+    # agrega solo. Vacío para muestras sin especificación resuelta.
+    testigos_pendientes: list[TestigoRemito] = []
     # Constancia de recepción (copia firmada por el laboratorio), ver
     # POST/GET /api/envios/{id_envio}/remito/copia-firmada en envios.py.
     tiene_copia_firmada: bool = False
     fecha_recepcion: Optional[date] = None
     recibido_por: Optional[str] = None
-    # Vencimiento confirmado en Ejecutar Muestreo (ver DatosFisicosMuestreo
-    # en solicitudes_muestreo.py) -- para que RemitoImprimirPage.jsx pueda
-    # avisar ANTES de generar el PDF si nadie lo revisó todavía (ninguno de
-    # los dos campos cargado), en vez de que la persona recién se entere
-    # mirando el documento ya generado.
-    fecha_vencimiento_confirmada: Optional[date] = None
-    sin_vencimiento_confirmado: bool = False
+    # Vencimiento de la Solicitud de Muestreo (precargado del ERP al crear,
+    # corregible por QA en Completar Datos -- ver SolicitudMuestreoResponse.
+    # fecha_vencimiento) -- para que RemitoImprimirPage.jsx pueda avisar
+    # ANTES de generar el PDF si nadie lo cargó todavía (ninguno de los dos
+    # campos cargado), en vez de que la persona recién se entere mirando el
+    # documento ya generado.
+    fecha_vencimiento: Optional[date] = None
+    sin_vencimiento_ingreso_confirmado: bool = False
     # False solo cuando la muestra no tiene ninguna Solicitud de Muestreo
     # asociada (creada directo con Nueva Muestra) -- ese mecanismo de
     # confirmación vive en lims_solicitudes_muestreo, así que para esas

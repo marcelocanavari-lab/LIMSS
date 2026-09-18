@@ -580,6 +580,18 @@
 .printable .card { background: #f4f4f5; border: 1px solid #ddd; box-shadow: none; }
 .printable .badge { border: 1px solid currentColor; background: transparent; }
 
+/* Recorrido de Muestra (Consulta de Muestras) -- a diferencia de los
+   reportes de abajo (Libro de Ingresos, Gráfico de Tendencia, etc., que son
+   pantallas dedicadas a generar un reporte y donde el ancho angosto tipo
+   A4 también en pantalla es aceptable/esperado), esta es la pantalla
+   habitual de consulta de una muestra: comparte el mismo .printable
+   (para que "Ver recorrido" -> window.print() imprima bien), pero en
+   pantalla necesita el ancho normal del resto del sistema, no quedar como
+   una tarjeta angosta de ~900px flotando sobre el fondo oscuro de
+   .screen-content. La impresión no se toca -- @media print ya resetea
+   .printable a max-width:100% más abajo. */
+.recorrido-consulta { max-width: none; margin: 0; }
+
 /* Inverso de .no-print: contenido que solo existe para la vista de
    impresión (p.ej. la variante densa de un reporte cuya pantalla normal
    ahora es interactiva) -- oculto en pantalla, visible solo al imprimir. */
