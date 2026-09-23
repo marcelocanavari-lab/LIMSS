@@ -1,1545 +1,1573 @@
 {
-  "fecha": "2026-08-27T11:17:32.736242",
+  "fecha": "2026-08-27T15:01:19.425547",
   "modo": "real",
   "total_en_json": 238,
-  "creadas": 219,
-  "conflictos_ya_existian": 5,
+  "creadas": 223,
+  "conflictos_ya_existian": 1,
   "no_resueltas_en_erp": 14,
   "errores_inesperados": 0,
-  "ensayos_insertados_total": 2298,
-  "ensayos_maestro_nuevos_count": 69,
-  "ensayos_maestro_reutilizados_count": 2229,
+  "ensayos_insertados_total": 2341,
+  "ensayos_maestro_nuevos_count": 68,
+  "ensayos_maestro_reutilizados_count": 2273,
   "especificaciones_sin_codsar_resuelto": 0,
   "detalle_creadas": [
     {
+      "codigo": "ME003",
+      "id_especificacion": 412,
+      "erp_DESART": "ESTUCHE AMOXICILINA 100 X 10",
+      "erp_codsar": "0005",
+      "n_ensayos": 11
+    },
+    {
       "codigo": "ME004",
-      "id_especificacion": 633,
+      "id_especificacion": 413,
       "erp_DESART": "ESTUCHE AMOXICILINA 100 X 100",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME005",
-      "id_especificacion": 634,
+      "id_especificacion": 414,
       "erp_DESART": "ESTUCHE AMOXICILINA 250 X 10",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME006",
-      "id_especificacion": 635,
+      "id_especificacion": 415,
       "erp_DESART": "ESTUCHE AMOXICILINA 250 X 100",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME007",
-      "id_especificacion": 636,
+      "id_especificacion": 416,
       "erp_DESART": "ESTUCHE AMOXICILINA 500 X 10",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME008",
-      "id_especificacion": 637,
+      "id_especificacion": 417,
       "erp_DESART": "ESTUCHE AMOXICILINA 500 X 100",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME009",
-      "id_especificacion": 638,
+      "id_especificacion": 418,
       "erp_DESART": "ESTUCHE AMOXICILINA SUSPENSION",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME010",
-      "id_especificacion": 639,
+      "id_especificacion": 419,
       "erp_DESART": "ESTUCHE CELAM 1000 MG X 4 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME011",
-      "id_especificacion": 640,
+      "id_especificacion": 420,
       "erp_DESART": "ESTUCHE CELAM 1000 MG X 40 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME012",
-      "id_especificacion": 641,
+      "id_especificacion": 421,
       "erp_DESART": "ESTUCHE CELAM 500 MG X 8 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME013",
-      "id_especificacion": 642,
+      "id_especificacion": 422,
       "erp_DESART": "ESTUCHE CELAM 500 MG X 80 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME014",
-      "id_especificacion": 643,
+      "id_especificacion": 423,
       "erp_DESART": "ESTUCHE CELAM SUSPENSION",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME016",
-      "id_especificacion": 644,
+      "id_especificacion": 424,
       "erp_DESART": "ESTUCHE CLINDAMICIN 110 MG X 10 COM",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME017",
-      "id_especificacion": 645,
+      "id_especificacion": 425,
       "erp_DESART": "ESTUCHE CLINDAMICIN 110 MG X 100 CO",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME026",
-      "id_especificacion": 646,
+      "id_especificacion": 426,
       "erp_DESART": "ESTUCHE DIAZEPAN INYECTABLE",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME093",
-      "id_especificacion": 647,
+      "id_especificacion": 427,
       "erp_DESART": "ETIQUETA ENTERO SULFATRIM SUSP",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME198",
-      "id_especificacion": 648,
+      "id_especificacion": 428,
       "erp_DESART": "ESTUCHE SIN PAR 40 X 4 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME199",
-      "id_especificacion": 649,
+      "id_especificacion": 429,
       "erp_DESART": "ESTUCHE SIN PAR 60 X 6 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME200",
-      "id_especificacion": 650,
+      "id_especificacion": 430,
       "erp_DESART": "ESTUCHE SIN PAR GATOS X 2 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME201",
-      "id_especificacion": 651,
+      "id_especificacion": 431,
       "erp_DESART": "EXHIBIDOR SIN PAR 10 X 10 UN.",
       "erp_codsar": "0005",
       "n_ensayos": 12
     },
     {
       "codigo": "ME202",
-      "id_especificacion": 652,
+      "id_especificacion": 432,
       "erp_DESART": "EXHIBIDOR SIN PAR 20 X 10 UN.",
       "erp_codsar": "0005",
       "n_ensayos": 12
     },
     {
       "codigo": "ME203",
-      "id_especificacion": 653,
+      "id_especificacion": 433,
       "erp_DESART": "EXHIBIDOR SIN PAR 40 X 10 UN.",
       "erp_codsar": "0005",
       "n_ensayos": 12
     },
     {
       "codigo": "ME204",
-      "id_especificacion": 654,
+      "id_especificacion": 434,
       "erp_DESART": "EXHIBIDOR SIN PAR 60 X 10 UN.",
       "erp_codsar": "0005",
       "n_ensayos": 12
     },
     {
       "codigo": "ME205",
-      "id_especificacion": 655,
+      "id_especificacion": 435,
       "erp_DESART": "EXHIBIDOR SIN PAR GATOS X 10 UN.",
       "erp_codsar": "0005",
       "n_ensayos": 12
     },
     {
       "codigo": "ME206",
-      "id_especificacion": 656,
+      "id_especificacion": 436,
       "erp_DESART": "ESTUCHE BLANCO 40 X 50 X 90",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME207",
-      "id_especificacion": 657,
+      "id_especificacion": 437,
       "erp_DESART": "ETIQUETA CLORMADINONA 4 MG X 500 CO",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME208",
-      "id_especificacion": 658,
+      "id_especificacion": 438,
       "erp_DESART": "ETIQUETA CLORMADINONA 4 MG X 1000 C",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME209",
-      "id_especificacion": 659,
+      "id_especificacion": 439,
       "erp_DESART": "ESTUCHE CLORMADINONA 4 MG X 100",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME210",
-      "id_especificacion": 660,
+      "id_especificacion": 440,
       "erp_DESART": "PIPETA KNOCK OUT GATOS 0.4 ML",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME211",
-      "id_especificacion": 661,
+      "id_especificacion": 441,
       "erp_DESART": "PIPETA KNOCK OUT GATOS 0.8 ML",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME212",
-      "id_especificacion": 662,
+      "id_especificacion": 442,
       "erp_DESART": "PROSPECTO KNOCK OUT GATOS",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME213",
-      "id_especificacion": 663,
+      "id_especificacion": 443,
       "erp_DESART": "ETIQUETA DEXAMETASONA 1.0 X 500 COM",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME214",
-      "id_especificacion": 664,
+      "id_especificacion": 444,
       "erp_DESART": "ESTUCHE MEGESTROL GATAS  X 8 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME215",
-      "id_especificacion": 665,
+      "id_especificacion": 445,
       "erp_DESART": "ESTUCHE MEGESTROL GATAS X 80 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME218",
-      "id_especificacion": 666,
+      "id_especificacion": 446,
       "erp_DESART": "ESTUCHE SEDA INYECTABLE",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME219",
-      "id_especificacion": 667,
+      "id_especificacion": 447,
       "erp_DESART": "ETIQUETA SEDA INYECTABLE",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME220",
-      "id_especificacion": 668,
+      "id_especificacion": 448,
       "erp_DESART": "ALUMINIO IMP CLORMADINONA 4 MG",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME221",
-      "id_especificacion": 669,
+      "id_especificacion": 449,
       "erp_DESART": "ESTUCHE DEXAMETASONA 1 MG X 100",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME222",
-      "id_especificacion": 670,
+      "id_especificacion": 450,
       "erp_DESART": "ALUMINIO IMP DEXAMETASONA 1.0 MG",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME223",
-      "id_especificacion": 671,
+      "id_especificacion": 451,
       "erp_DESART": "ETIQUETA PRAZIQUANTEL 100 MG X 500",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME224",
-      "id_especificacion": 672,
+      "id_especificacion": 452,
       "erp_DESART": "ALUMINIO IMP PRAZIQUANTEL 100 MG",
       "erp_codsar": "0005",
       "n_ensayos": 12
     },
     {
       "codigo": "ME225",
-      "id_especificacion": 673,
+      "id_especificacion": 453,
       "erp_DESART": "ALUMINIO IMP MEGESTROL GATAS",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME228",
-      "id_especificacion": 674,
+      "id_especificacion": 454,
       "erp_DESART": "ALUMINIO IMP SIN PAR 10",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME229",
-      "id_especificacion": 675,
+      "id_especificacion": 455,
       "erp_DESART": "ALUMINIO IMP SIN PAR 20",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME230",
-      "id_especificacion": 676,
+      "id_especificacion": 456,
       "erp_DESART": "ALUMINIO IMP SIN PAR 40",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME231",
-      "id_especificacion": 677,
+      "id_especificacion": 457,
       "erp_DESART": "ALUMINIO IMP SIN PAR 60",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME232",
-      "id_especificacion": 678,
+      "id_especificacion": 458,
       "erp_DESART": "ALUMINIO IMP SIN PAR GATOS",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME233",
-      "id_especificacion": 679,
+      "id_especificacion": 459,
       "erp_DESART": "EXHIBIDOR METOCLOPRAMIDA GOTAS X 20",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME234",
-      "id_especificacion": 680,
+      "id_especificacion": 460,
       "erp_DESART": "ETIQUETA T4 X 250 COMP.",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME235",
-      "id_especificacion": 681,
+      "id_especificacion": 461,
       "erp_DESART": "VASO MEDIDA PLAST GRAD X 15 CC",
       "erp_codsar": "0005",
       "n_ensayos": 8
     },
     {
       "codigo": "ME236",
-      "id_especificacion": 682,
+      "id_especificacion": 462,
       "erp_DESART": "PRECINTO METALICO AZUL",
       "erp_codsar": "0005",
       "n_ensayos": 5
     },
     {
       "codigo": "ME240",
-      "id_especificacion": 683,
+      "id_especificacion": 463,
       "erp_DESART": "PROSPECTO DIAZEPAN",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME242",
-      "id_especificacion": 684,
+      "id_especificacion": 464,
       "erp_DESART": "ETIQUETA ENROFLOXACINA 250 MG X 500",
       "erp_codsar": "0005",
       "n_ensayos": 10
     },
     {
       "codigo": "ME243",
-      "id_especificacion": 685,
+      "id_especificacion": 465,
       "erp_DESART": "ESTUCHE ENROFLOXACINA 250 MG X 10 C",
       "erp_codsar": "0005",
       "n_ensayos": 12
     },
     {
       "codigo": "ME244",
-      "id_especificacion": 686,
+      "id_especificacion": 466,
       "erp_DESART": "ESTUCHE ENROFLOXACINA 250 MG X 100",
       "erp_codsar": "0005",
       "n_ensayos": 12
     },
     {
       "codigo": "ME246",
-      "id_especificacion": 687,
+      "id_especificacion": 467,
       "erp_DESART": "FRASCO PEAD X 30 ML BOCA 28",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME247",
-      "id_especificacion": 688,
+      "id_especificacion": 468,
       "erp_DESART": "FRASCO PEAD X 150 ML BOCA 28",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME252",
-      "id_especificacion": 689,
+      "id_especificacion": 469,
       "erp_DESART": "ALUMINIO IMP STRONG 5 X 1 COMP.",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME253",
-      "id_especificacion": 690,
+      "id_especificacion": 470,
       "erp_DESART": "ALUMINIO IMP STRONG 10 X 1 COMP.",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME254",
-      "id_especificacion": 691,
+      "id_especificacion": 471,
       "erp_DESART": "ALUMINIO IMP STRONG 20 X 2 COMP.",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME255",
-      "id_especificacion": 692,
+      "id_especificacion": 472,
       "erp_DESART": "ALUMINIO IMP STRONG 40 X 4 COMP.",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME256",
-      "id_especificacion": 693,
+      "id_especificacion": 473,
       "erp_DESART": "ALUMINIO IMP STRONG 60 X 6 COMP.",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME258",
-      "id_especificacion": 694,
+      "id_especificacion": 474,
       "erp_DESART": "ESTUCHE STRONG 10 X 1 COMP.",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME259",
-      "id_especificacion": 695,
+      "id_especificacion": 475,
       "erp_DESART": "ESTUCHE STRONG 20 X 2 COMP.",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME260",
-      "id_especificacion": 696,
+      "id_especificacion": 476,
       "erp_DESART": "ESTUCHE STRONG 40 X 4 COMP.",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME261",
-      "id_especificacion": 697,
+      "id_especificacion": 477,
       "erp_DESART": "ESTUCHE STRONG 60 X 6 COMP.",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME283",
-      "id_especificacion": 698,
+      "id_especificacion": 478,
       "erp_DESART": "FRASCO GOTERO KNOCKOUT GTOS MULTI",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME284",
-      "id_especificacion": 699,
+      "id_especificacion": 479,
       "erp_DESART": "INSERTO GOTERO KNOCKOUT GTOS MULTI",
       "erp_codsar": "0005",
       "n_ensayos": 8
     },
     {
       "codigo": "ME285",
-      "id_especificacion": 700,
+      "id_especificacion": 480,
       "erp_DESART": "TAPA GOTERO KNOCKOUT GTOS MULTI",
       "erp_codsar": "0005",
       "n_ensayos": 8
     },
     {
       "codigo": "ME290",
-      "id_especificacion": 701,
+      "id_especificacion": 481,
       "erp_DESART": "FRASCO VACUNA AMBAR 50 ML BOCA 20",
       "erp_codsar": "0005",
       "n_ensayos": 8
     },
     {
       "codigo": "ME291",
-      "id_especificacion": 702,
+      "id_especificacion": 482,
       "erp_DESART": "FRASCO POLIPROPILENO 60 ML BLANCO",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME292",
-      "id_especificacion": 703,
+      "id_especificacion": 483,
       "erp_DESART": "TAPA PLASTICA BLANCA B 28 C/G MET",
       "erp_codsar": "0005",
       "n_ensayos": 5
     },
     {
       "codigo": "ME293",
-      "id_especificacion": 704,
+      "id_especificacion": 484,
       "erp_DESART": "JERINGA DOSIFICADORA BUCAL FLOW P.",
       "erp_codsar": "0005",
       "n_ensayos": 4
     },
     {
       "codigo": "ME294",
-      "id_especificacion": 705,
+      "id_especificacion": 485,
       "erp_DESART": "PROSPECTO STRONG COMP",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME018",
-      "id_especificacion": 706,
+      "id_especificacion": 486,
       "erp_DESART": "ESTUCHE CLINDAMICIN 220 MG X 10 COM",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME019",
-      "id_especificacion": 707,
+      "id_especificacion": 487,
       "erp_DESART": "ESTUCHE CLINDAMICIN 220 MG X 100 CO",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME020",
-      "id_especificacion": 708,
+      "id_especificacion": 488,
       "erp_DESART": "ESTUCHE CLORMADINONA 2 MG X 100",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME022",
-      "id_especificacion": 709,
+      "id_especificacion": 489,
       "erp_DESART": "ESTUCHE CLORPROMAZINA 100 MG X 100",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME023",
-      "id_especificacion": 710,
+      "id_especificacion": 490,
       "erp_DESART": "ESTUCHE DEXAMETASONA INYECT.",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME024",
-      "id_especificacion": 711,
+      "id_especificacion": 491,
       "erp_DESART": "ESTUCHE DEXAMETASONA 0.5  X 100",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME025",
-      "id_especificacion": 712,
+      "id_especificacion": 492,
       "erp_DESART": "ESTUCHE DEXAMETASONA 0.5  X 20 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME027",
-      "id_especificacion": 713,
+      "id_especificacion": 493,
       "erp_DESART": "ESTUCHE ENROFLOXACINA 150 MG X 10 C",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME028",
-      "id_especificacion": 714,
+      "id_especificacion": 494,
       "erp_DESART": "ESTUCHE ENROFLOXACINA 150 MG X 100",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME029",
-      "id_especificacion": 715,
+      "id_especificacion": 495,
       "erp_DESART": "ESTUCHE ENROFLOXACINA 50 MG X 12 CO",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME030",
-      "id_especificacion": 716,
+      "id_especificacion": 496,
       "erp_DESART": "ESTUCHE ENROFLOXACINA 50 MG X 120 C",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME033",
-      "id_especificacion": 717,
+      "id_especificacion": 497,
       "erp_DESART": "ESTUCHE FENBENDAZOL SUSP X 30 ML",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME034",
-      "id_especificacion": 718,
+      "id_especificacion": 498,
       "erp_DESART": "ESTUCHE GLUCOSA X 100 ML",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME035",
-      "id_especificacion": 719,
+      "id_especificacion": 499,
       "erp_DESART": "ESTUCHE GLUCOSA X 50 ML",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME036",
-      "id_especificacion": 720,
+      "id_especificacion": 500,
       "erp_DESART": "ESTUCHE GRISEOFULVINA 250 X100 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME037",
-      "id_especificacion": 721,
+      "id_especificacion": 501,
       "erp_DESART": "ESTUCHE GRISEOFULVINA 250 X 20 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME038",
-      "id_especificacion": 722,
+      "id_especificacion": 502,
       "erp_DESART": "ESTUCHE HIDROXICINA X 150 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME039",
-      "id_especificacion": 723,
+      "id_especificacion": 503,
       "erp_DESART": "ESTUCHE HIDROXICINA X 30 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME042",
-      "id_especificacion": 724,
+      "id_especificacion": 504,
       "erp_DESART": "EXHIBIDOR LEVAMISOL GOTAS X 20 UN.",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME043",
-      "id_especificacion": 725,
+      "id_especificacion": 505,
       "erp_DESART": "ESTUCHE LEVAMISOL GTS X 15 ML",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME044",
-      "id_especificacion": 726,
+      "id_especificacion": 506,
       "erp_DESART": "ESTUCHE LEVAMISOL X 10 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME045",
-      "id_especificacion": 727,
+      "id_especificacion": 507,
       "erp_DESART": "ESTUCHE LEVAMISOL X 100 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME046",
-      "id_especificacion": 728,
+      "id_especificacion": 508,
       "erp_DESART": "ESTUCHE MEBENDAZOL SUSP X 30 ML",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME047",
-      "id_especificacion": 729,
+      "id_especificacion": 509,
       "erp_DESART": "ESTUCHE MEBENDAZOL X 10 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME048",
-      "id_especificacion": 730,
+      "id_especificacion": 510,
       "erp_DESART": "ESTUCHE MEBENDAZOL X 100 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME049",
-      "id_especificacion": 731,
+      "id_especificacion": 511,
       "erp_DESART": "ESTUCHE MEGESTROL X 8 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME050",
-      "id_especificacion": 732,
+      "id_especificacion": 512,
       "erp_DESART": "ESTUCHE MEGESTROL X 80 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME051",
-      "id_especificacion": 733,
+      "id_especificacion": 513,
       "erp_DESART": "ESTUCHE METOCLOPRAMIDA GTS X 15 ML",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME052",
-      "id_especificacion": 734,
+      "id_especificacion": 514,
       "erp_DESART": "ESTUCHE METOCLOPRAMIDA INY",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME054",
-      "id_especificacion": 735,
+      "id_especificacion": 515,
       "erp_DESART": "ESTUCHE PIROXICAM L.M. X 100 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME055",
-      "id_especificacion": 736,
+      "id_especificacion": 516,
       "erp_DESART": "ESTUCHE PRAZIQUANTEL 50 MG X 2 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME056",
-      "id_especificacion": 737,
+      "id_especificacion": 517,
       "erp_DESART": "ESTUCHE PRAZIQUANTEL 50 MG X 20 COM",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME057",
-      "id_especificacion": 738,
+      "id_especificacion": 518,
       "erp_DESART": "ESTUCHE PREDNISOLONA 10 MG X 10 COM",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME058",
-      "id_especificacion": 739,
+      "id_especificacion": 519,
       "erp_DESART": "ESTUCHE PREDNISOLONA 10 MG X 200 CO",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME059",
-      "id_especificacion": 740,
+      "id_especificacion": 520,
       "erp_DESART": "ESTUCHE PREDNISOLONA 20 MG X 10 COM",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME060",
-      "id_especificacion": 741,
+      "id_especificacion": 521,
       "erp_DESART": "ESTUCHE PREDNISOLONA 20 MG X 200 CO",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME061",
-      "id_especificacion": 742,
+      "id_especificacion": 522,
       "erp_DESART": "EXHIBIDOR SEDAGOTAS X 24 UN.",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME081",
-      "id_especificacion": 743,
+      "id_especificacion": 523,
       "erp_DESART": "ETIQUETA AMOXICILINA SUSP.",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME062",
-      "id_especificacion": 744,
+      "id_especificacion": 524,
       "erp_DESART": "ESTUCHE SEDAGOTAS",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME063",
-      "id_especificacion": 745,
+      "id_especificacion": 525,
       "erp_DESART": "ESTUCHE SULFATRIM F X 10 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME064",
-      "id_especificacion": 746,
+      "id_especificacion": 526,
       "erp_DESART": "ESTUCHE SULFATRIM F X 100 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME065",
-      "id_especificacion": 747,
+      "id_especificacion": 527,
       "erp_DESART": "ESTUCHE SULFATRIM X 100 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME066",
-      "id_especificacion": 748,
+      "id_especificacion": 528,
       "erp_DESART": "ESTUCHE T3 F X 100 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME068",
-      "id_especificacion": 749,
+      "id_especificacion": 529,
       "erp_DESART": "ESTUCHE T4 F X 100 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME069",
-      "id_especificacion": 750,
+      "id_especificacion": 530,
       "erp_DESART": "ESTUCHE T4 X 100 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME071",
-      "id_especificacion": 751,
+      "id_especificacion": 531,
       "erp_DESART": "ESTUCHE KNOCK OUT 0.5 ML (0-4 KG)",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME072",
-      "id_especificacion": 752,
+      "id_especificacion": 532,
       "erp_DESART": "ESTUCHE KNOCK OUT 1.0 ML (4-10 KG)",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME073",
-      "id_especificacion": 753,
+      "id_especificacion": 533,
       "erp_DESART": "ESTUCHE KNOCK OUT 100 ML",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME074",
-      "id_especificacion": 754,
+      "id_especificacion": 534,
       "erp_DESART": "ESTUCHE KNOCK OUT 2.5 ML (10-25 KG)",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME075",
-      "id_especificacion": 755,
+      "id_especificacion": 535,
       "erp_DESART": "ESTUCHE KNOCK OUT 25 ML",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME076",
-      "id_especificacion": 756,
+      "id_especificacion": 536,
       "erp_DESART": "ESTUCHE KNOCK OUT 4.0 ML (25-40 KG)",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME077",
-      "id_especificacion": 757,
+      "id_especificacion": 537,
       "erp_DESART": "ESTUCHE KNOCK OUT 6.0 ML (40-60 KG)",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME078",
-      "id_especificacion": 758,
+      "id_especificacion": 538,
       "erp_DESART": "ETIQUETA AMOXICILINA 100 MG X 500 C",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME079",
-      "id_especificacion": 759,
+      "id_especificacion": 539,
       "erp_DESART": "ETIQUETA AMOXICILINA 250 MG X 500 C",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME080",
-      "id_especificacion": 760,
+      "id_especificacion": 540,
       "erp_DESART": "ETIQUETA AMOXICILINA 500 MG X 500 C",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME082",
-      "id_especificacion": 761,
+      "id_especificacion": 541,
       "erp_DESART": "ETIQUETA BRONCO TOS",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME083",
-      "id_especificacion": 762,
+      "id_especificacion": 542,
       "erp_DESART": "ETIQUETA BRONCO TOS FORTE",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME084",
-      "id_especificacion": 763,
+      "id_especificacion": 543,
       "erp_DESART": "ETIQUETA CELAM 1000 MG X 100 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME085",
-      "id_especificacion": 764,
+      "id_especificacion": 544,
       "erp_DESART": "ETIQUETA CELAM 500 MG X 200 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME086",
-      "id_especificacion": 765,
+      "id_especificacion": 545,
       "erp_DESART": "ETIQUETA CLINDAMICIN 220 MG X 500 C",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
+      "codigo": "ME087",
+      "id_especificacion": 546,
+      "erp_DESART": "ETIQUETA CLINDAMICIN 110 MG X 500 C",
+      "erp_codsar": "0005",
+      "n_ensayos": 9
+    },
+    {
+      "codigo": "ME088",
+      "id_especificacion": 547,
+      "erp_DESART": "ETIQUETA CLORMADINONA 2 MG X 1000 C",
+      "erp_codsar": "0005",
+      "n_ensayos": 9
+    },
+    {
+      "codigo": "ME089",
+      "id_especificacion": 548,
+      "erp_DESART": "ETIQUETA CLORMADINONA 2 MG X 500 CO",
+      "erp_codsar": "0005",
+      "n_ensayos": 9
+    },
+    {
       "codigo": "ME090",
-      "id_especificacion": 766,
+      "id_especificacion": 549,
       "erp_DESART": "ETIQUETA DEXAMETASONA 0.5 X 500 COM",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME091",
-      "id_especificacion": 767,
+      "id_especificacion": 550,
       "erp_DESART": "ETIQUETA ENROFLOXACINA 150 MG X 500",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME092",
-      "id_especificacion": 768,
+      "id_especificacion": 551,
       "erp_DESART": "ETIQUETA ENROFLOXACINA 50 MG X 360",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME095",
-      "id_especificacion": 769,
+      "id_especificacion": 552,
       "erp_DESART": "ETIQUETA FENBENDAZOL SUSP X 30 ML.",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME097",
-      "id_especificacion": 770,
+      "id_especificacion": 553,
       "erp_DESART": "ETIQUETA GLUCOSA 25% X 50 ML",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME098",
-      "id_especificacion": 771,
+      "id_especificacion": 554,
       "erp_DESART": "ETIQUETA GRISEOFULVINA 250 X 500 CO",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME099",
-      "id_especificacion": 772,
+      "id_especificacion": 555,
       "erp_DESART": "ETIQUETA HIDROXICINA X 600 COMP.",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME100",
-      "id_especificacion": 773,
+      "id_especificacion": 556,
       "erp_DESART": "PIPETA KNOCK OUT 0.5 ML",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME101",
-      "id_especificacion": 774,
+      "id_especificacion": 557,
       "erp_DESART": "ETIQUETA KNOCK-OUT 100 ML",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME102",
-      "id_especificacion": 775,
+      "id_especificacion": 558,
       "erp_DESART": "ETIQUETA KNOCK-OUT 25 ML",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME105",
-      "id_especificacion": 776,
+      "id_especificacion": 559,
       "erp_DESART": "ETIQUETA MEBENDAZOL SUSP X 30 ML",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME106",
-      "id_especificacion": 777,
+      "id_especificacion": 560,
       "erp_DESART": "ETIQUETA MEBENDAZOL X 500 COMP.",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME107",
-      "id_especificacion": 778,
+      "id_especificacion": 561,
       "erp_DESART": "ETIQUETA MEGESTROL X 400 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME108",
-      "id_especificacion": 779,
+      "id_especificacion": 562,
       "erp_DESART": "ETIQUETA METOCLOPRAMIDA INYECTABLE",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME109",
-      "id_especificacion": 780,
+      "id_especificacion": 563,
       "erp_DESART": "ETIQUETA PRAZIQUANTEL 50MG X 200 C.",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME110",
-      "id_especificacion": 781,
+      "id_especificacion": 564,
       "erp_DESART": "ETIQUETA PREDNISOLONA 10 MG X 500 C",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME111",
-      "id_especificacion": 782,
+      "id_especificacion": 565,
       "erp_DESART": "ETIQUETA PREDNISOLONA 20 MG X 500 C",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME112",
-      "id_especificacion": 783,
+      "id_especificacion": 566,
       "erp_DESART": "ETIQUETA SULFATRIM \"F\" X 500 COMP.",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME113",
-      "id_especificacion": 784,
+      "id_especificacion": 567,
       "erp_DESART": "ETIQUETA SULFATRIM SUSPENSION",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME115",
-      "id_especificacion": 785,
+      "id_especificacion": 568,
       "erp_DESART": "ETIQUETA T4 F X 250 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME116",
-      "id_especificacion": 786,
+      "id_especificacion": 569,
       "erp_DESART": "ETIQUETA T4 F X 500 COMP.",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME117",
-      "id_especificacion": 787,
+      "id_especificacion": 570,
       "erp_DESART": "ETIQUETA T4 X 500 COMP.",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME120",
-      "id_especificacion": 788,
+      "id_especificacion": 571,
       "erp_DESART": "ETIQUETA VASELINA LIQ X 125",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME122",
-      "id_especificacion": 789,
+      "id_especificacion": 572,
       "erp_DESART": "EXHIBIDOR AZUL",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME123",
-      "id_especificacion": 790,
+      "id_especificacion": 573,
       "erp_DESART": "EXHIBIDOR BORDO",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME124",
-      "id_especificacion": 791,
+      "id_especificacion": 574,
       "erp_DESART": "JERINGA 5 CC S/A",
       "erp_codsar": "0005",
       "n_ensayos": 8
     },
     {
-      "codigo": "ME125",
-      "id_especificacion": 792,
-      "erp_DESART": "POTE INYECTADO X 500 CC PP BLANCO",
-      "erp_codsar": "0005",
-      "n_ensayos": 8
-    },
-    {
       "codigo": "ME126",
-      "id_especificacion": 793,
+      "id_especificacion": 575,
       "erp_DESART": "PROSPECTO SEDAGOTAS",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME127",
-      "id_especificacion": 794,
+      "id_especificacion": 576,
       "erp_DESART": "PROSPECTO KNOCK OUT PERROS",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME129",
-      "id_especificacion": 795,
+      "id_especificacion": 577,
       "erp_DESART": "SEPARADOR DEXAMETASONA INY",
       "erp_codsar": "0005",
       "n_ensayos": 6
     },
     {
       "codigo": "ME130",
-      "id_especificacion": 796,
+      "id_especificacion": 578,
       "erp_DESART": "SEPARADOR DIAZEPAN INY",
       "erp_codsar": "0005",
       "n_ensayos": 6
     },
     {
       "codigo": "ME131",
-      "id_especificacion": 797,
+      "id_especificacion": 579,
       "erp_DESART": "FRASCO PET AMBAR 125 JBE",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME132",
-      "id_especificacion": 798,
+      "id_especificacion": 580,
       "erp_DESART": "FRASCO VIDRIO 125 CC AMBAR VITRIF.",
       "erp_codsar": "0005",
       "n_ensayos": 8
     },
     {
       "codigo": "ME134",
-      "id_especificacion": 799,
+      "id_especificacion": 581,
       "erp_DESART": "PIPETA KNOCK OUT 1.0 ML",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME135",
-      "id_especificacion": 800,
+      "id_especificacion": 582,
       "erp_DESART": "PIPETA KNOCK OUT 2.5 ML",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME136",
-      "id_especificacion": 801,
+      "id_especificacion": 583,
       "erp_DESART": "FRASCO VIDRIO X 40 ML AMBAR",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME137",
-      "id_especificacion": 802,
+      "id_especificacion": 584,
       "erp_DESART": "FRASCO VIDRIO AMBAR 70 ML VITRI CEL",
       "erp_codsar": "0005",
       "n_ensayos": 12
     },
     {
       "codigo": "ME138",
-      "id_especificacion": 803,
+      "id_especificacion": 585,
       "erp_DESART": "FRASCO PET TRANSP 125 VASELINA",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME139",
-      "id_especificacion": 804,
+      "id_especificacion": 586,
       "erp_DESART": "FRASCO VID BCO VIAL 25 ML B/20 DEXA",
       "erp_codsar": "0005",
       "n_ensayos": 14
     },
     {
       "codigo": "ME140",
-      "id_especificacion": 805,
+      "id_especificacion": 587,
       "erp_DESART": "FRASCO DIAZEPAN X 10 ML AMBAR",
       "erp_codsar": "0005",
       "n_ensayos": 14
     },
     {
       "codigo": "ME141",
-      "id_especificacion": 806,
+      "id_especificacion": 588,
       "erp_DESART": "GOTEROS LEVAMISOL 15 CM3",
       "erp_codsar": "0005",
       "n_ensayos": 14
     },
     {
       "codigo": "ME142",
-      "id_especificacion": 807,
+      "id_especificacion": 589,
       "erp_DESART": "GOTERO METOCLOPRAMIDA GOTAS",
       "erp_codsar": "0005",
       "n_ensayos": 14
     },
     {
       "codigo": "ME143",
-      "id_especificacion": 808,
+      "id_especificacion": 590,
       "erp_DESART": "GOTERO SEDAGOTAS",
       "erp_codsar": "0005",
       "n_ensayos": 14
     },
     {
       "codigo": "ME146",
-      "id_especificacion": 809,
+      "id_especificacion": 591,
       "erp_DESART": "PIPETA KNOCK OUT 4.0 ML",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME149",
-      "id_especificacion": 810,
+      "id_especificacion": 592,
       "erp_DESART": "FRASCO VACUNA X 50 ML AMBAR",
       "erp_codsar": "0005",
       "n_ensayos": 8
     },
     {
       "codigo": "ME150",
-      "id_especificacion": 811,
+      "id_especificacion": 593,
       "erp_DESART": "PIPETA KNOCK OUT 6.0 ML",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME151",
-      "id_especificacion": 812,
+      "id_especificacion": 594,
       "erp_DESART": "INSERTO GOTERO PLASTICO X 20/100 ML",
       "erp_codsar": "0005",
       "n_ensayos": 9
     },
     {
       "codigo": "ME152",
-      "id_especificacion": 813,
+      "id_especificacion": 595,
       "erp_DESART": "PRECINTO METALICO P/INYECTABLE",
       "erp_codsar": "0005",
       "n_ensayos": 5
     },
     {
       "codigo": "ME153",
-      "id_especificacion": 814,
+      "id_especificacion": 596,
       "erp_DESART": "TAPA GOTEROS PLASTICOS X 20 ML.",
       "erp_codsar": "0005",
       "n_ensayos": 8
     },
     {
       "codigo": "ME154",
-      "id_especificacion": 815,
+      "id_especificacion": 597,
       "erp_DESART": "TAPA PILFER BOCA 28 BLANCA",
       "erp_codsar": "0005",
       "n_ensayos": 6
     },
     {
       "codigo": "ME155",
-      "id_especificacion": 816,
+      "id_especificacion": 598,
       "erp_DESART": "TAPA PILFER BOCA 28 BORDO",
       "erp_codsar": "0005",
       "n_ensayos": 6
     },
     {
       "codigo": "ME157",
-      "id_especificacion": 817,
+      "id_especificacion": 599,
       "erp_DESART": "TAPON BUTILO",
       "erp_codsar": "0005",
       "n_ensayos": 5
     },
     {
+      "codigo": "ME158",
+      "id_especificacion": 600,
+      "erp_DESART": "ALUMINIO IMP AMOXICILINA 100 MG",
+      "erp_codsar": "0005",
+      "n_ensayos": 13
+    },
+    {
       "codigo": "ME159",
-      "id_especificacion": 818,
+      "id_especificacion": 601,
       "erp_DESART": "ALUMINIO IMP AMOXICILINA 250 MG",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME160",
-      "id_especificacion": 819,
+      "id_especificacion": 602,
       "erp_DESART": "ALUMINIO IMP AMOXICILINA 500 MG",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME161",
-      "id_especificacion": 820,
+      "id_especificacion": 603,
       "erp_DESART": "ALUMINIO IMP CELAM 500 MG",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME162",
-      "id_especificacion": 821,
+      "id_especificacion": 604,
       "erp_DESART": "ALUMINIO IMP CELAM 1000 MG",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME163",
-      "id_especificacion": 822,
+      "id_especificacion": 605,
       "erp_DESART": "ALUMINIO IMP CLINDAMICIN 110 MG",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME164",
-      "id_especificacion": 823,
+      "id_especificacion": 606,
       "erp_DESART": "ALUMINIO IMP CLINDAMICIN 220 MG",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME165",
-      "id_especificacion": 824,
+      "id_especificacion": 607,
       "erp_DESART": "ALUMINIO IMP CLORMADINONA 2 MG",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME166",
-      "id_especificacion": 825,
+      "id_especificacion": 608,
       "erp_DESART": "ALUMINIO IMP CLORPROMAZINA",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME167",
-      "id_especificacion": 826,
+      "id_especificacion": 609,
       "erp_DESART": "ALUMINIO IMP DEXAMETASONA 0.5 MG",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME168",
-      "id_especificacion": 827,
+      "id_especificacion": 610,
       "erp_DESART": "ALUMINIO IMP ENROFLOXACINA 50 MG",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME169",
-      "id_especificacion": 828,
+      "id_especificacion": 611,
       "erp_DESART": "ALUMINIO IMP ENROFLOXACINA 150 MG",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME170",
-      "id_especificacion": 829,
+      "id_especificacion": 612,
       "erp_DESART": "ALUMINIO IMP GRISEOFULVINA 250 MG",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME171",
-      "id_especificacion": 830,
+      "id_especificacion": 613,
       "erp_DESART": "ALUMINIO IMP HIDROXICINA 50 MG",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME172",
-      "id_especificacion": 831,
+      "id_especificacion": 614,
       "erp_DESART": "ALUMINIO IMP LEQUANTEL",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME173",
-      "id_especificacion": 832,
+      "id_especificacion": 615,
       "erp_DESART": "ALUMINIO IMP LEVAMISOL",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME174",
-      "id_especificacion": 833,
+      "id_especificacion": 616,
       "erp_DESART": "ALUMINIO IMP MEBENDAZOL",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME175",
-      "id_especificacion": 834,
+      "id_especificacion": 617,
       "erp_DESART": "ALUMINIO IMP MEGESTROL",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME176",
-      "id_especificacion": 835,
+      "id_especificacion": 618,
       "erp_DESART": "ALUMINIO IMP PIROXICAM",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME177",
-      "id_especificacion": 836,
+      "id_especificacion": 619,
       "erp_DESART": "ALUMINIO IMP PRAZIQUANTEL 50 MG",
       "erp_codsar": "0005",
       "n_ensayos": 12
     },
     {
       "codigo": "ME178",
-      "id_especificacion": 837,
+      "id_especificacion": 620,
       "erp_DESART": "ALUMINIO IMP PREDNISOLONA 10 MG",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME179",
-      "id_especificacion": 838,
+      "id_especificacion": 621,
       "erp_DESART": "ALUMINIO IMP PREDNISOLONA 20 MG",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME180",
-      "id_especificacion": 839,
+      "id_especificacion": 622,
       "erp_DESART": "ALUMINIO IMP SULFATRIM",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME181",
-      "id_especificacion": 840,
+      "id_especificacion": 623,
       "erp_DESART": "ALUMINIO IMP SULFATRIM \"F\"",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME182",
-      "id_especificacion": 841,
+      "id_especificacion": 624,
       "erp_DESART": "ALUMINIO IMP T3",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME183",
-      "id_especificacion": 842,
+      "id_especificacion": 625,
       "erp_DESART": "ALUMINIO IMP T3 \"F\"",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME184",
-      "id_especificacion": 843,
+      "id_especificacion": 626,
       "erp_DESART": "ALUMINIO IMP T4",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME185",
-      "id_especificacion": 844,
+      "id_especificacion": 627,
       "erp_DESART": "ALUMINIO IMP T4 \"F\"",
       "erp_codsar": "0005",
       "n_ensayos": 13
     },
     {
       "codigo": "ME192",
-      "id_especificacion": 845,
+      "id_especificacion": 628,
       "erp_DESART": "TAPA PLASTICA BLANCA BOCA 28 MM",
       "erp_codsar": "0005",
       "n_ensayos": 5
     },
     {
       "codigo": "ME193",
-      "id_especificacion": 846,
+      "id_especificacion": 629,
       "erp_DESART": "TAPA PLASTICA GRIS BOCA 28 MM",
       "erp_codsar": "0005",
       "n_ensayos": 5
     },
     {
       "codigo": "ME194",
-      "id_especificacion": 847,
+      "id_especificacion": 630,
       "erp_DESART": "ESTUCHE KNOCK OUT GATOS 0.4 ML (0-4",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME195",
-      "id_especificacion": 848,
+      "id_especificacion": 631,
       "erp_DESART": "ESTUCHE KNOCK OUT GATOS 0.8 ML (4-8",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME196",
-      "id_especificacion": 849,
+      "id_especificacion": 632,
       "erp_DESART": "ESTUCHE SIN PAR 10 X 2 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME197",
-      "id_especificacion": 850,
+      "id_especificacion": 633,
       "erp_DESART": "ESTUCHE SIN PAR 20 X 2 COMP",
       "erp_codsar": "0005",
       "n_ensayos": 11
     },
     {
       "codigo": "ME156",
-      "id_especificacion": 851,
+      "id_especificacion": 634,
       "erp_DESART": "TAPA PILFER BOCA 28 PLATA",
       "erp_codsar": "0005",
       "n_ensayos": 6
@@ -1547,53 +1575,13 @@
   ],
   "detalle_conflictos": [
     {
-      "codigo": "ME003",
-      "id_especificacion_existente": 398,
-      "erp_DESART_existente": "ESTUCHE AMOXICILINA 100 X 10",
+      "codigo": "ME125",
+      "id_especificacion_existente": 411,
+      "erp_DESART_existente": "POTE INYECTADO X 500 CC PP BLANCO",
       "tipo_material_existente": "material_empaque",
       "vigente_existente": true,
       "version_existente": "1.0",
-      "nombre_json_a_importar": "ESTUCHE DE AMOXICILINA 100 mg X 10 COMPRIMIDOS",
-      "tipo_embalaje_json_a_importar": "Secundario"
-    },
-    {
-      "codigo": "ME087",
-      "id_especificacion_existente": 413,
-      "erp_DESART_existente": "ETIQUETA CLINDAMICIN 110 MG X 500 C",
-      "tipo_material_existente": "material_empaque",
-      "vigente_existente": true,
-      "version_existente": "1.0",
-      "nombre_json_a_importar": "ETIQUETA DE CLINDAMICIN 110 mg X 500 COMPRIMIDOS",
-      "tipo_embalaje_json_a_importar": "Secundario"
-    },
-    {
-      "codigo": "ME088",
-      "id_especificacion_existente": 391,
-      "erp_DESART_existente": "ETIQUETA CLORMADINONA 2 MG X 1000 C",
-      "tipo_material_existente": "material_empaque",
-      "vigente_existente": true,
-      "version_existente": "1.0",
-      "nombre_json_a_importar": "ETIQUETA DE CLORMADINONA X 1000 COMPRIMIDOS",
-      "tipo_embalaje_json_a_importar": "Secundario"
-    },
-    {
-      "codigo": "ME089",
-      "id_especificacion_existente": 392,
-      "erp_DESART_existente": "ETIQUETA CLORMADINONA 2 MG X 500 CO",
-      "tipo_material_existente": "material_empaque",
-      "vigente_existente": true,
-      "version_existente": "1.0",
-      "nombre_json_a_importar": "ETIQUETA DE CLORMADINONA X 500 COMPRIMIDOS",
-      "tipo_embalaje_json_a_importar": "Secundario"
-    },
-    {
-      "codigo": "ME158",
-      "id_especificacion_existente": 397,
-      "erp_DESART_existente": "ALUMINIO IMP AMOXICILINA 100 MG",
-      "tipo_material_existente": "material_empaque",
-      "vigente_existente": true,
-      "version_existente": "1.0",
-      "nombre_json_a_importar": "ALUMINIO IMPRESO DE AMOXICILINA 100mg",
+      "nombre_json_a_importar": "POTE INYECTADO P.P X 400CC CON TAPA",
       "tipo_embalaje_json_a_importar": "Primario"
     }
   ],
@@ -1724,8 +1712,7 @@
     "peso",
     "pico",
     "profundidad",
-    "rosca",
-    "tapa"
+    "rosca"
   ],
   "detalle_especificaciones_sin_codsar": [],
   "detalle_ensayos_marcados_para_revisar": []
