@@ -1,648 +1,2476 @@
 {
-  "fecha_corrida": "2026-08-31T15:55:19.881259",
+  "fecha_corrida": "2026-08-31T19:05:48.283558",
   "modo": "real",
-  "csv": "Scripts\\data\\control_de_variables_consolidado_2.csv",
-  "total_en_csv": 136,
-  "lecturas_creadas": 0,
-  "salteadas_ya_existia": 134,
-  "conflictos_de_valor": 2,
-  "filas_con_algun_valor_fuera_de_rango": 0,
+  "csv": "C:\\ServerFolders\\Empresa\\Lamar\\LIMSS\\backend\\Scripts\\data\\control_de_variables_consolidado.csv",
+  "total_en_csv": 130,
+  "lecturas_creadas": 130,
+  "salteadas_ya_existia": 0,
+  "conflictos_de_valor": 0,
+  "filas_con_algun_valor_fuera_de_rango": 130,
   "errores": 0,
-  "detalle_creadas": [],
-  "detalle_ya_existian": [
+  "detalle_creadas": [
     {
       "fecha": "2026-01-15",
-      "hora": "14:40"
+      "hora": "14:40",
+      "id_lectura": 1
     },
     {
       "fecha": "2026-01-16",
-      "hora": "15:44"
+      "hora": "15:44",
+      "id_lectura": 2
     },
     {
       "fecha": "2026-01-19",
-      "hora": "15:05"
+      "hora": "15:05",
+      "id_lectura": 3
     },
     {
       "fecha": "2026-01-20",
-      "hora": "14:40"
+      "hora": "14:40",
+      "id_lectura": 4
     },
     {
       "fecha": "2026-01-21",
-      "hora": "15:14"
+      "hora": "15:14",
+      "id_lectura": 5
     },
     {
       "fecha": "2026-01-22",
-      "hora": "15:10"
+      "hora": "15:10",
+      "id_lectura": 6
     },
     {
       "fecha": "2026-01-23",
-      "hora": "15:10"
+      "hora": "15:10",
+      "id_lectura": 7
     },
     {
       "fecha": "2026-01-26",
-      "hora": "15:10"
+      "hora": "15:10",
+      "id_lectura": 8
     },
     {
       "fecha": "2026-01-27",
-      "hora": "14:50"
+      "hora": "14:50",
+      "id_lectura": 9
     },
     {
       "fecha": "2026-01-28",
-      "hora": "15:15"
+      "hora": "15:15",
+      "id_lectura": 10
     },
     {
       "fecha": "2026-01-29",
-      "hora": "13:00"
+      "hora": "13:00",
+      "id_lectura": 11
     },
     {
       "fecha": "2026-01-30",
-      "hora": "14:30"
-    },
-    {
-      "fecha": "2026-02-02",
-      "hora": "15:00"
-    },
-    {
-      "fecha": "2026-02-03",
-      "hora": "15:00"
-    },
-    {
-      "fecha": "2026-02-04",
-      "hora": "15:30"
-    },
-    {
-      "fecha": "2026-02-05",
-      "hora": "15:20"
-    },
-    {
-      "fecha": "2026-02-06",
-      "hora": "14:00"
-    },
-    {
-      "fecha": "2026-02-09",
-      "hora": "14:50"
-    },
-    {
-      "fecha": "2026-02-10",
-      "hora": "13:20"
-    },
-    {
-      "fecha": "2026-02-11",
-      "hora": "14:15"
-    },
-    {
-      "fecha": "2026-02-12",
-      "hora": "11:45"
-    },
-    {
-      "fecha": "2026-02-13",
-      "hora": "11:30"
-    },
-    {
-      "fecha": "2026-02-17",
-      "hora": "14:00"
-    },
-    {
-      "fecha": "2026-02-18",
-      "hora": "14:10"
-    },
-    {
-      "fecha": "2026-02-19",
-      "hora": "15:00"
-    },
-    {
-      "fecha": "2026-02-20",
-      "hora": "15:10"
-    },
-    {
-      "fecha": "2026-02-23",
-      "hora": "14:30"
-    },
-    {
-      "fecha": "2026-02-24",
-      "hora": "14:40"
-    },
-    {
-      "fecha": "2026-02-25",
-      "hora": "14:50"
-    },
-    {
-      "fecha": "2026-02-26",
-      "hora": "15:00"
-    },
-    {
-      "fecha": "2026-02-27",
-      "hora": "15:10"
-    },
-    {
-      "fecha": "2026-03-02",
-      "hora": "15:10"
-    },
-    {
-      "fecha": "2026-03-03",
-      "hora": "14:50"
-    },
-    {
-      "fecha": "2026-03-04",
-      "hora": "15:00"
+      "hora": "14:00",
+      "id_lectura": 12
     },
     {
       "fecha": "2026-03-05",
-      "hora": "15:15"
+      "hora": "16:50",
+      "id_lectura": 13
     },
     {
       "fecha": "2026-03-06",
-      "hora": "14:30"
+      "hora": "14:40",
+      "id_lectura": 14
     },
     {
-      "fecha": "2026-03-09",
-      "hora": "14:40"
+      "fecha": "2026-03-07",
+      "hora": "14:40",
+      "id_lectura": 15
     },
     {
       "fecha": "2026-03-10",
-      "hora": "14:50"
+      "hora": "14:40",
+      "id_lectura": 16
     },
     {
       "fecha": "2026-03-11",
-      "hora": "15:00"
+      "hora": "14:00",
+      "id_lectura": 17
     },
-    {
-      "fecha": "2026-03-13",
-      "hora": "15:20"
-    },
-    {
-      "fecha": "2026-03-16",
-      "hora": "14:10"
-    },
-    {
-      "fecha": "2026-03-17",
-      "hora": "14:20"
-    },
-    {
-      "fecha": "2026-03-18",
-      "hora": "14:30"
-    },
-    {
-      "fecha": "2026-03-19",
-      "hora": "14:40"
-    },
-    {
-      "fecha": "2026-03-20",
-      "hora": "14:50"
-    },
-    {
-      "fecha": "2026-03-23",
-      "hora": "15:00"
-    },
-    {
-      "fecha": "2026-03-24",
-      "hora": "15:10"
-    },
-    {
-      "fecha": "2026-03-25",
-      "hora": "15:20"
-    },
-    {
-      "fecha": "2026-03-26",
-      "hora": "15:30"
-    },
-    {
-      "fecha": "2026-03-27",
-      "hora": "15:40"
-    },
-    {
-      "fecha": "2026-03-30",
-      "hora": "14:00"
-    },
-    {
-      "fecha": "2026-03-31",
-      "hora": "14:10"
-    },
-    {
-      "fecha": "2026-04-01",
-      "hora": "14:20"
-    },
-    {
-      "fecha": "2026-04-02",
-      "hora": "14:30"
-    },
-    {
-      "fecha": "2026-04-03",
-      "hora": "14:40"
-    },
-    {
-      "fecha": "2026-04-06",
-      "hora": "14:50"
-    },
-    {
-      "fecha": "2026-04-07",
-      "hora": "15:00"
-    },
-    {
-      "fecha": "2026-04-08",
-      "hora": "15:10"
-    },
-    {
-      "fecha": "2026-04-09",
-      "hora": "15:20"
-    },
-    {
-      "fecha": "2026-04-10",
-      "hora": "15:30"
-    },
-    {
-      "fecha": "2026-04-13",
-      "hora": "14:00"
-    },
-    {
-      "fecha": "2026-04-14",
-      "hora": "14:10"
-    },
-    {
-      "fecha": "2026-04-15",
-      "hora": "14:20"
-    },
-    {
-      "fecha": "2026-04-16",
-      "hora": "14:30"
-    },
-    {
-      "fecha": "2026-04-17",
-      "hora": "14:40"
-    },
-    {
-      "fecha": "2026-04-20",
-      "hora": "14:50"
-    },
-    {
-      "fecha": "2026-04-21",
-      "hora": "15:00"
-    },
-    {
-      "fecha": "2026-04-22",
-      "hora": "15:10"
-    },
-    {
-      "fecha": "2026-04-23",
-      "hora": "15:20"
-    },
-    {
-      "fecha": "2026-04-27",
-      "hora": "14:00"
-    },
-    {
-      "fecha": "2026-04-28",
-      "hora": "14:10"
-    },
-    {
-      "fecha": "2026-04-29",
-      "hora": "14:20"
-    },
-    {
-      "fecha": "2026-04-30",
-      "hora": "14:30"
-    },
-    {
-      "fecha": "2026-05-04",
-      "hora": "14:40"
-    },
-    {
-      "fecha": "2026-05-05",
-      "hora": "14:50"
-    },
-    {
-      "fecha": "2026-05-06",
-      "hora": "15:00"
-    },
-    {
-      "fecha": "2026-05-07",
-      "hora": "15:10"
-    },
-    {
-      "fecha": "2026-05-08",
-      "hora": "15:20"
-    },
-    {
-      "fecha": "2026-05-11",
-      "hora": "14:00"
-    },
-    {
-      "fecha": "2026-05-12",
-      "hora": "14:10"
-    },
-    {
-      "fecha": "2026-05-13",
-      "hora": "14:20"
-    },
-    {
-      "fecha": "2026-05-14",
-      "hora": "14:30"
-    },
-    {
-      "fecha": "2026-05-15",
-      "hora": "14:40"
-    },
-    {
-      "fecha": "2026-05-18",
-      "hora": "14:50"
-    },
-    {
-      "fecha": "2026-05-19",
-      "hora": "15:00"
-    },
-    {
-      "fecha": "2026-05-20",
-      "hora": "15:10"
-    },
-    {
-      "fecha": "2026-05-21",
-      "hora": "15:20"
-    },
-    {
-      "fecha": "2026-05-22",
-      "hora": "15:30"
-    },
-    {
-      "fecha": "2026-05-25",
-      "hora": "14:00"
-    },
-    {
-      "fecha": "2026-05-26",
-      "hora": "14:10"
-    },
-    {
-      "fecha": "2026-05-27",
-      "hora": "14:20"
-    },
-    {
-      "fecha": "2026-05-28",
-      "hora": "14:30"
-    },
-    {
-      "fecha": "2026-05-29",
-      "hora": "14:40"
-    },
-    {
-      "fecha": "2026-06-01",
-      "hora": "14:50"
-    },
-    {
-      "fecha": "2026-06-02",
-      "hora": "15:00"
-    },
-    {
-      "fecha": "2026-06-03",
-      "hora": "15:10"
-    },
-    {
-      "fecha": "2026-06-04",
-      "hora": "15:20"
-    },
-    {
-      "fecha": "2026-06-05",
-      "hora": "15:30"
-    },
-    {
-      "fecha": "2026-06-08",
-      "hora": "14:00"
-    },
-    {
-      "fecha": "2026-06-09",
-      "hora": "14:10"
-    },
-    {
-      "fecha": "2026-06-10",
-      "hora": "14:20"
-    },
-    {
-      "fecha": "2026-06-11",
-      "hora": "14:30"
-    },
-    {
-      "fecha": "2026-06-12",
-      "hora": "14:40"
-    },
-    {
-      "fecha": "2026-06-15",
-      "hora": "14:50"
-    },
-    {
-      "fecha": "2026-06-16",
-      "hora": "15:00"
-    },
-    {
-      "fecha": "2026-06-17",
-      "hora": "15:10"
-    },
-    {
-      "fecha": "2026-06-18",
-      "hora": "15:20"
-    },
-    {
-      "fecha": "2026-06-19",
-      "hora": "15:30"
-    },
-    {
-      "fecha": "2026-06-22",
-      "hora": "14:00"
-    },
-    {
-      "fecha": "2026-06-23",
-      "hora": "14:10"
-    },
-    {
-      "fecha": "2026-06-24",
-      "hora": "14:20"
-    },
-    {
-      "fecha": "2026-06-25",
-      "hora": "14:30"
-    },
-    {
-      "fecha": "2026-06-26",
-      "hora": "14:40"
-    },
-    {
-      "fecha": "2026-06-29",
-      "hora": "14:50"
-    },
-    {
-      "fecha": "2026-06-30",
-      "hora": "15:00"
-    },
-    {
-      "fecha": "2026-07-01",
-      "hora": "15:10"
-    },
-    {
-      "fecha": "2026-07-02",
-      "hora": "15:20"
-    },
-    {
-      "fecha": "2026-07-03",
-      "hora": "15:30"
-    },
-    {
-      "fecha": "2026-07-06",
-      "hora": "14:00"
-    },
-    {
-      "fecha": "2026-07-07",
-      "hora": "14:10"
-    },
-    {
-      "fecha": "2026-07-08",
-      "hora": "14:20"
-    },
-    {
-      "fecha": "2026-07-09",
-      "hora": "14:30"
-    },
-    {
-      "fecha": "2026-07-10",
-      "hora": "14:40"
-    },
-    {
-      "fecha": "2026-07-13",
-      "hora": "14:50"
-    },
-    {
-      "fecha": "2026-07-14",
-      "hora": "15:00"
-    },
-    {
-      "fecha": "2026-07-15",
-      "hora": "15:10"
-    },
-    {
-      "fecha": "2026-08-20",
-      "hora": "14:10"
-    },
-    {
-      "fecha": "2026-08-21",
-      "hora": "14:20"
-    },
-    {
-      "fecha": "2026-08-24",
-      "hora": "14:30"
-    },
-    {
-      "fecha": "2026-08-25",
-      "hora": "11:00"
-    },
-    {
-      "fecha": "2026-08-26",
-      "hora": "14:40"
-    },
-    {
-      "fecha": "2026-08-27",
-      "hora": "14:50"
-    },
-    {
-      "fecha": "2026-08-28",
-      "hora": "14:45"
-    },
-    {
-      "fecha": "2026-08-31",
-      "hora": "12:18"
-    }
-  ],
-  "detalle_conflictos_valor": [
     {
       "fecha": "2026-03-12",
       "hora": "15:10",
-      "id_lectura_existente": 21,
-      "diferencias": [
-        {
-          "variable": "ORP",
-          "valor_csv": 256.0,
-          "valor_bd": 247.0
-        },
+      "id_lectura": 18
+    },
+    {
+      "fecha": "2026-03-13",
+      "hora": "14:50",
+      "id_lectura": 19
+    },
+    {
+      "fecha": "2026-03-16",
+      "hora": "16:45",
+      "id_lectura": 20
+    },
+    {
+      "fecha": "2026-03-17",
+      "hora": "15:20",
+      "id_lectura": 21
+    },
+    {
+      "fecha": "2026-03-18",
+      "hora": "15:00",
+      "id_lectura": 22
+    },
+    {
+      "fecha": "2026-03-19",
+      "hora": "15:00",
+      "id_lectura": 23
+    },
+    {
+      "fecha": "2026-03-20",
+      "hora": "16:25",
+      "id_lectura": 24
+    },
+    {
+      "fecha": "2026-03-25",
+      "hora": "15:25",
+      "id_lectura": 25
+    },
+    {
+      "fecha": "2026-03-26",
+      "hora": "15:00",
+      "id_lectura": 26
+    },
+    {
+      "fecha": "2026-03-27",
+      "hora": "14:44",
+      "id_lectura": 27
+    },
+    {
+      "fecha": "2026-03-30",
+      "hora": "14:35",
+      "id_lectura": 28
+    },
+    {
+      "fecha": "2026-03-31",
+      "hora": "14:55",
+      "id_lectura": 29
+    },
+    {
+      "fecha": "2026-04-01",
+      "hora": "14:40",
+      "id_lectura": 30
+    },
+    {
+      "fecha": "2026-04-06",
+      "hora": "15:10",
+      "id_lectura": 31
+    },
+    {
+      "fecha": "2026-04-07",
+      "hora": "15:40",
+      "id_lectura": 32
+    },
+    {
+      "fecha": "2026-04-08",
+      "hora": "15:40",
+      "id_lectura": 33
+    },
+    {
+      "fecha": "2026-04-09",
+      "hora": "16:55",
+      "id_lectura": 34
+    },
+    {
+      "fecha": "2026-04-10",
+      "hora": "15:00",
+      "id_lectura": 35
+    },
+    {
+      "fecha": "2026-04-13",
+      "hora": "15:14",
+      "id_lectura": 36
+    },
+    {
+      "fecha": "2026-04-14",
+      "hora": "15:00",
+      "id_lectura": 37
+    },
+    {
+      "fecha": "2026-04-15",
+      "hora": "15:25",
+      "id_lectura": 38
+    },
+    {
+      "fecha": "2026-04-16",
+      "hora": "16:10",
+      "id_lectura": 39
+    },
+    {
+      "fecha": "2026-04-17",
+      "hora": "16:00",
+      "id_lectura": 40
+    },
+    {
+      "fecha": "2026-04-20",
+      "hora": "15:20",
+      "id_lectura": 41
+    },
+    {
+      "fecha": "2026-04-21",
+      "hora": "16:18",
+      "id_lectura": 42
+    },
+    {
+      "fecha": "2026-04-22",
+      "hora": "16:04",
+      "id_lectura": 43
+    },
+    {
+      "fecha": "2026-04-23",
+      "hora": "14:50",
+      "id_lectura": 44
+    },
+    {
+      "fecha": "2026-04-24",
+      "hora": "15:30",
+      "id_lectura": 45
+    },
+    {
+      "fecha": "2026-04-27",
+      "hora": "14:33",
+      "id_lectura": 46
+    },
+    {
+      "fecha": "2026-04-28",
+      "hora": "14:30",
+      "id_lectura": 47
+    },
+    {
+      "fecha": "2026-04-29",
+      "hora": "15:00",
+      "id_lectura": 48
+    },
+    {
+      "fecha": "2026-04-30",
+      "hora": "16:45",
+      "id_lectura": 49
+    },
+    {
+      "fecha": "2026-05-04",
+      "hora": "14:45",
+      "id_lectura": 50
+    },
+    {
+      "fecha": "2026-05-05",
+      "hora": "14:30",
+      "id_lectura": 51
+    },
+    {
+      "fecha": "2026-05-06",
+      "hora": "14:55",
+      "id_lectura": 52
+    },
+    {
+      "fecha": "2026-05-07",
+      "hora": "14:55",
+      "id_lectura": 53
+    },
+    {
+      "fecha": "2026-05-08",
+      "hora": "14:52",
+      "id_lectura": 54
+    },
+    {
+      "fecha": "2026-05-11",
+      "hora": "11:40",
+      "id_lectura": 55
+    },
+    {
+      "fecha": "2026-05-12",
+      "hora": "12:12",
+      "id_lectura": 56
+    },
+    {
+      "fecha": "2026-05-13",
+      "hora": "15:19",
+      "id_lectura": 57
+    },
+    {
+      "fecha": "2026-05-14",
+      "hora": "15:55",
+      "id_lectura": 58
+    },
+    {
+      "fecha": "2026-05-15",
+      "hora": "14:50",
+      "id_lectura": 59
+    },
+    {
+      "fecha": "2026-05-18",
+      "hora": "14:40",
+      "id_lectura": 60
+    },
+    {
+      "fecha": "2026-05-19",
+      "hora": "10:50",
+      "id_lectura": 61
+    },
+    {
+      "fecha": "2026-05-20",
+      "hora": "14:35",
+      "id_lectura": 62
+    },
+    {
+      "fecha": "2026-05-21",
+      "hora": "10:05",
+      "id_lectura": 63
+    },
+    {
+      "fecha": "2026-05-22",
+      "hora": "15:00",
+      "id_lectura": 64
+    },
+    {
+      "fecha": "2026-05-26",
+      "hora": "14:25",
+      "id_lectura": 65
+    },
+    {
+      "fecha": "2026-05-27",
+      "hora": "12:40",
+      "id_lectura": 66
+    },
+    {
+      "fecha": "2026-05-28",
+      "hora": "16:15",
+      "id_lectura": 67
+    },
+    {
+      "fecha": "2026-05-29",
+      "hora": "14:55",
+      "id_lectura": 68
+    },
+    {
+      "fecha": "2026-06-01",
+      "hora": "15:25",
+      "id_lectura": 69
+    },
+    {
+      "fecha": "2026-06-02",
+      "hora": "16:16",
+      "id_lectura": 70
+    },
+    {
+      "fecha": "2026-06-03",
+      "hora": "14:30",
+      "id_lectura": 71
+    },
+    {
+      "fecha": "2026-06-04",
+      "hora": "16:11",
+      "id_lectura": 72
+    },
+    {
+      "fecha": "2026-06-05",
+      "hora": "13:50",
+      "id_lectura": 73
+    },
+    {
+      "fecha": "2026-06-08",
+      "hora": "11:40",
+      "id_lectura": 74
+    },
+    {
+      "fecha": "2026-06-09",
+      "hora": "11:55",
+      "id_lectura": 75
+    },
+    {
+      "fecha": "2026-06-10",
+      "hora": "12:10",
+      "id_lectura": 76
+    },
+    {
+      "fecha": "2026-06-11",
+      "hora": "15:00",
+      "id_lectura": 77
+    },
+    {
+      "fecha": "2026-06-12",
+      "hora": "15:10",
+      "id_lectura": 78
+    },
+    {
+      "fecha": "2026-06-16",
+      "hora": "15:40",
+      "id_lectura": 79
+    },
+    {
+      "fecha": "2026-06-17",
+      "hora": "12:10",
+      "id_lectura": 80
+    },
+    {
+      "fecha": "2026-06-18",
+      "hora": "13:00",
+      "id_lectura": 81
+    },
+    {
+      "fecha": "2026-06-19",
+      "hora": "16:45",
+      "id_lectura": 82
+    },
+    {
+      "fecha": "2026-06-22",
+      "hora": "15:00",
+      "id_lectura": 83
+    },
+    {
+      "fecha": "2026-06-23",
+      "hora": "15:45",
+      "id_lectura": 84
+    },
+    {
+      "fecha": "2026-06-24",
+      "hora": "14:30",
+      "id_lectura": 85
+    },
+    {
+      "fecha": "2026-06-25",
+      "hora": "17:00",
+      "id_lectura": 86
+    },
+    {
+      "fecha": "2026-06-26",
+      "hora": "12:40",
+      "id_lectura": 87
+    },
+    {
+      "fecha": "2026-06-29",
+      "hora": "12:50",
+      "id_lectura": 88
+    },
+    {
+      "fecha": "2026-06-30",
+      "hora": "16:10",
+      "id_lectura": 89
+    },
+    {
+      "fecha": "2026-07-01",
+      "hora": "11:40",
+      "id_lectura": 90
+    },
+    {
+      "fecha": "2026-07-02",
+      "hora": "16:45",
+      "id_lectura": 91
+    },
+    {
+      "fecha": "2026-07-03",
+      "hora": "15:11",
+      "id_lectura": 92
+    },
+    {
+      "fecha": "2026-07-06",
+      "hora": "14:50",
+      "id_lectura": 93
+    },
+    {
+      "fecha": "2026-07-07",
+      "hora": "11:24",
+      "id_lectura": 94
+    },
+    {
+      "fecha": "2026-07-08",
+      "hora": "15:10",
+      "id_lectura": 95
+    },
+    {
+      "fecha": "2026-07-13",
+      "hora": "16:10",
+      "id_lectura": 96
+    },
+    {
+      "fecha": "2026-07-14",
+      "hora": "15:45",
+      "id_lectura": 97
+    },
+    {
+      "fecha": "2026-07-15",
+      "hora": "14:26",
+      "id_lectura": 98
+    },
+    {
+      "fecha": "2026-07-16",
+      "hora": "14:10",
+      "id_lectura": 99
+    },
+    {
+      "fecha": "2026-07-17",
+      "hora": "12:10",
+      "id_lectura": 100
+    },
+    {
+      "fecha": "2026-07-20",
+      "hora": "15:10",
+      "id_lectura": 101
+    },
+    {
+      "fecha": "2026-07-21",
+      "hora": "16:29",
+      "id_lectura": 102
+    },
+    {
+      "fecha": "2026-07-22",
+      "hora": "15:00",
+      "id_lectura": 103
+    },
+    {
+      "fecha": "2026-07-23",
+      "hora": "15:40",
+      "id_lectura": 104
+    },
+    {
+      "fecha": "2026-07-24",
+      "hora": "15:16",
+      "id_lectura": 105
+    },
+    {
+      "fecha": "2026-07-27",
+      "hora": "12:00",
+      "id_lectura": 106
+    },
+    {
+      "fecha": "2026-07-28",
+      "hora": "15:15",
+      "id_lectura": 107
+    },
+    {
+      "fecha": "2026-07-29",
+      "hora": "13:25",
+      "id_lectura": 108
+    },
+    {
+      "fecha": "2026-07-30",
+      "hora": "12:05",
+      "id_lectura": 109
+    },
+    {
+      "fecha": "2026-07-31",
+      "hora": "15:00",
+      "id_lectura": 110
+    },
+    {
+      "fecha": "2026-08-03",
+      "hora": "11:45",
+      "id_lectura": 111
+    },
+    {
+      "fecha": "2026-08-04",
+      "hora": "12:22",
+      "id_lectura": 112
+    },
+    {
+      "fecha": "2026-08-05",
+      "hora": "14:50",
+      "id_lectura": 113
+    },
+    {
+      "fecha": "2026-08-06",
+      "hora": "15:10",
+      "id_lectura": 114
+    },
+    {
+      "fecha": "2026-08-07",
+      "hora": "15:30",
+      "id_lectura": 115
+    },
+    {
+      "fecha": "2026-08-10",
+      "hora": "15:00",
+      "id_lectura": 116
+    },
+    {
+      "fecha": "2026-08-11",
+      "hora": "15:30",
+      "id_lectura": 117
+    },
+    {
+      "fecha": "2026-08-12",
+      "hora": "15:15",
+      "id_lectura": 118
+    },
+    {
+      "fecha": "2026-08-13",
+      "hora": "13:10",
+      "id_lectura": 119
+    },
+    {
+      "fecha": "2026-08-14",
+      "hora": "12:55",
+      "id_lectura": 120
+    },
+    {
+      "fecha": "2026-08-18",
+      "hora": "10:15",
+      "id_lectura": 121
+    },
+    {
+      "fecha": "2026-08-19",
+      "hora": "12:15",
+      "id_lectura": 122
+    },
+    {
+      "fecha": "2026-08-20",
+      "hora": "13:15",
+      "id_lectura": 123
+    },
+    {
+      "fecha": "2026-08-21",
+      "hora": "15:00",
+      "id_lectura": 124
+    },
+    {
+      "fecha": "2026-08-24",
+      "hora": "12:10",
+      "id_lectura": 125
+    },
+    {
+      "fecha": "2026-08-25",
+      "hora": "11:00",
+      "id_lectura": 126
+    },
+    {
+      "fecha": "2026-08-26",
+      "hora": "14:40",
+      "id_lectura": 127
+    },
+    {
+      "fecha": "2026-08-27",
+      "hora": "14:50",
+      "id_lectura": 128
+    },
+    {
+      "fecha": "2026-08-28",
+      "hora": "14:45",
+      "id_lectura": 129
+    },
+    {
+      "fecha": "2026-08-31",
+      "hora": "12:18",
+      "id_lectura": 130
+    }
+  ],
+  "detalle_ya_existian": [],
+  "detalle_conflictos_valor": [],
+  "detalle_filas_con_desviacion": [
+    {
+      "fecha": "2026-01-15",
+      "hora": "14:40",
+      "desviaciones": [
         {
           "variable": "pH",
-          "valor_csv": 9.85,
-          "valor_bd": 10.0
+          "valor": 10.64
         },
         {
           "variable": "Big Blue Filtro",
-          "valor_csv": 1.8,
-          "valor_bd": 1.9
+          "valor": 1.8
         },
         {
           "variable": "Alimentación",
-          "valor_csv": 3.0,
-          "valor_bd": 3.1
+          "valor": 11.5
+        }
+      ]
+    },
+    {
+      "fecha": "2026-01-16",
+      "hora": "15:44",
+      "desviaciones": [
+        {
+          "variable": "pH",
+          "valor": 10.52
         },
         {
-          "variable": "Concentrado 1",
-          "valor_csv": 5.0,
-          "valor_bd": 4.5
+          "variable": "Big Blue Filtro",
+          "valor": 1.8
+        }
+      ]
+    },
+    {
+      "fecha": "2026-01-19",
+      "hora": "15:05",
+      "desviaciones": [
+        {
+          "variable": "pH",
+          "valor": 10.44
         },
         {
-          "variable": "Conductividad",
-          "valor_csv": 0.74,
-          "valor_bd": 0.66
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        }
+      ]
+    },
+    {
+      "fecha": "2026-01-20",
+      "hora": "14:40",
+      "desviaciones": [
+        {
+          "variable": "pH",
+          "valor": 10.4
+        },
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        }
+      ]
+    },
+    {
+      "fecha": "2026-01-21",
+      "hora": "15:14",
+      "desviaciones": [
+        {
+          "variable": "pH",
+          "valor": 10.48
+        },
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.8
+        }
+      ]
+    },
+    {
+      "fecha": "2026-01-22",
+      "hora": "15:10",
+      "desviaciones": [
+        {
+          "variable": "pH",
+          "valor": 10.62
+        },
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.8
+        }
+      ]
+    },
+    {
+      "fecha": "2026-01-23",
+      "hora": "15:10",
+      "desviaciones": [
+        {
+          "variable": "pH",
+          "valor": 10.46
+        },
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.8
+        }
+      ]
+    },
+    {
+      "fecha": "2026-01-26",
+      "hora": "15:10",
+      "desviaciones": [
+        {
+          "variable": "pH",
+          "valor": 10.48
+        },
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.8
+        }
+      ]
+    },
+    {
+      "fecha": "2026-01-27",
+      "hora": "14:50",
+      "desviaciones": [
+        {
+          "variable": "pH",
+          "valor": 10.5
+        },
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.8
+        }
+      ]
+    },
+    {
+      "fecha": "2026-01-28",
+      "hora": "15:15",
+      "desviaciones": [
+        {
+          "variable": "pH",
+          "valor": 10.44
+        },
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.8
+        }
+      ]
+    },
+    {
+      "fecha": "2026-01-29",
+      "hora": "13:00",
+      "desviaciones": [
+        {
+          "variable": "pH",
+          "valor": 10.62
+        },
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.8
+        }
+      ]
+    },
+    {
+      "fecha": "2026-01-30",
+      "hora": "14:00",
+      "desviaciones": [
+        {
+          "variable": "pH",
+          "valor": 10.55
+        },
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.8
+        }
+      ]
+    },
+    {
+      "fecha": "2026-03-05",
+      "hora": "16:50",
+      "desviaciones": [
+        {
+          "variable": "pH",
+          "valor": 10.38
+        },
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.8
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 11.5
+        }
+      ]
+    },
+    {
+      "fecha": "2026-03-06",
+      "hora": "14:40",
+      "desviaciones": [
+        {
+          "variable": "pH",
+          "valor": 10.34
+        },
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-03-07",
+      "hora": "14:40",
+      "desviaciones": [
+        {
+          "variable": "pH",
+          "valor": 10.56
+        },
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-03-10",
+      "hora": "14:40",
+      "desviaciones": [
+        {
+          "variable": "pH",
+          "valor": 10.42
+        },
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-03-11",
+      "hora": "14:00",
+      "desviaciones": [
+        {
+          "variable": "pH",
+          "valor": 10.45
+        },
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-03-12",
+      "hora": "15:10",
+      "desviaciones": [
+        {
+          "variable": "pH",
+          "valor": 10.0
+        },
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-03-13",
+      "hora": "14:50",
+      "desviaciones": [
+        {
+          "variable": "pH",
+          "valor": 10.44
+        },
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-03-16",
+      "hora": "16:45",
+      "desviaciones": [
+        {
+          "variable": "pH",
+          "valor": 10.48
+        },
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.8
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-03-17",
+      "hora": "15:20",
+      "desviaciones": [
+        {
+          "variable": "pH",
+          "valor": 10.26
+        },
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 11.5
+        }
+      ]
+    },
+    {
+      "fecha": "2026-03-18",
+      "hora": "15:00",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 11.5
+        }
+      ]
+    },
+    {
+      "fecha": "2026-03-19",
+      "hora": "15:00",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-03-20",
+      "hora": "16:25",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-03-25",
+      "hora": "15:25",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-03-26",
+      "hora": "15:00",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-03-27",
+      "hora": "14:44",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-03-30",
+      "hora": "14:35",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-03-31",
+      "hora": "14:55",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.8
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-04-01",
+      "hora": "14:40",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-04-06",
+      "hora": "15:10",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-04-07",
+      "hora": "15:40",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-04-08",
+      "hora": "15:40",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-04-09",
+      "hora": "16:55",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-04-10",
+      "hora": "15:00",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-04-13",
+      "hora": "15:14",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-04-14",
+      "hora": "15:00",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.8
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-04-15",
+      "hora": "15:25",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-04-16",
+      "hora": "16:10",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-04-17",
+      "hora": "16:00",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-04-20",
+      "hora": "15:20",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-04-21",
+      "hora": "16:18",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-04-22",
+      "hora": "16:04",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-04-23",
+      "hora": "14:50",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
         }
       ]
     },
     {
       "fecha": "2026-04-24",
       "hora": "15:30",
-      "id_lectura_existente": 48,
-      "diferencias": [
-        {
-          "variable": "ORP",
-          "valor_csv": 205.0,
-          "valor_bd": 296.0
-        },
-        {
-          "variable": "pH",
-          "valor_csv": 9.08,
-          "valor_bd": 8.96
-        },
-        {
-          "variable": "Baja Bomba",
-          "valor_csv": 2.0,
-          "valor_bd": 2.2
-        },
+      "desviaciones": [
         {
           "variable": "Big Blue Filtro",
-          "valor_csv": 1.8,
-          "valor_bd": 1.9
+          "valor": 1.9
         },
         {
           "variable": "Alimentación",
-          "valor_csv": 3.0,
-          "valor_bd": 3.1
-        },
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-04-27",
+      "hora": "14:33",
+      "desviaciones": [
         {
-          "variable": "Etapa 1 Salida",
-          "valor_csv": 12.0,
-          "valor_bd": 12.5
-        },
-        {
-          "variable": "Entrada Etapa 2",
-          "valor_csv": 6.8,
-          "valor_bd": 6.7
-        },
-        {
-          "variable": "Etapa 2 Salida",
-          "valor_csv": 6.8,
-          "valor_bd": 6.7
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
         },
         {
           "variable": "Alimentación",
-          "valor_csv": 11.0,
-          "valor_bd": 10.5
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-04-28",
+      "hora": "14:30",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
         },
         {
-          "variable": "Conductividad",
-          "valor_csv": 1.12,
-          "valor_bd": 0.61
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-04-29",
+      "hora": "15:00",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-04-30",
+      "hora": "16:45",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-05-04",
+      "hora": "14:45",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-05-05",
+      "hora": "14:30",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-05-06",
+      "hora": "14:55",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-05-07",
+      "hora": "14:55",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-05-08",
+      "hora": "14:52",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-05-11",
+      "hora": "11:40",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-05-12",
+      "hora": "12:12",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-05-13",
+      "hora": "15:19",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-05-14",
+      "hora": "15:55",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-05-15",
+      "hora": "14:50",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-05-18",
+      "hora": "14:40",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-05-19",
+      "hora": "10:50",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-05-20",
+      "hora": "14:35",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-05-21",
+      "hora": "10:05",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-05-22",
+      "hora": "15:00",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-05-26",
+      "hora": "14:25",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-05-27",
+      "hora": "12:40",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-05-28",
+      "hora": "16:15",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-05-29",
+      "hora": "14:55",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-06-01",
+      "hora": "15:25",
+      "desviaciones": [
+        {
+          "variable": "pH",
+          "valor": 8.3
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-06-02",
+      "hora": "16:16",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-06-03",
+      "hora": "14:30",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-06-04",
+      "hora": "16:11",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-06-05",
+      "hora": "13:50",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-06-08",
+      "hora": "11:40",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-06-09",
+      "hora": "11:55",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-06-10",
+      "hora": "12:10",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-06-11",
+      "hora": "15:00",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-06-12",
+      "hora": "15:10",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-06-16",
+      "hora": "15:40",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-06-17",
+      "hora": "12:10",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-06-18",
+      "hora": "13:00",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-06-19",
+      "hora": "16:45",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-06-22",
+      "hora": "15:00",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-06-23",
+      "hora": "15:45",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-06-24",
+      "hora": "14:30",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-06-25",
+      "hora": "17:00",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-06-26",
+      "hora": "12:40",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-06-29",
+      "hora": "12:50",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-06-30",
+      "hora": "16:10",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-07-01",
+      "hora": "11:40",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 6.5
+        }
+      ]
+    },
+    {
+      "fecha": "2026-07-02",
+      "hora": "16:45",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-07-03",
+      "hora": "15:11",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        }
+      ]
+    },
+    {
+      "fecha": "2026-07-06",
+      "hora": "14:50",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 6.5
+        }
+      ]
+    },
+    {
+      "fecha": "2026-07-07",
+      "hora": "11:24",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.2
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 6.5
+        }
+      ]
+    },
+    {
+      "fecha": "2026-07-08",
+      "hora": "15:10",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 6.5
+        }
+      ]
+    },
+    {
+      "fecha": "2026-07-13",
+      "hora": "16:10",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 6.5
+        }
+      ]
+    },
+    {
+      "fecha": "2026-07-14",
+      "hora": "15:45",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 6.5
+        }
+      ]
+    },
+    {
+      "fecha": "2026-07-15",
+      "hora": "14:26",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 6.5
+        }
+      ]
+    },
+    {
+      "fecha": "2026-07-16",
+      "hora": "14:10",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 6.5
+        }
+      ]
+    },
+    {
+      "fecha": "2026-07-17",
+      "hora": "12:10",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 6.5
+        }
+      ]
+    },
+    {
+      "fecha": "2026-07-20",
+      "hora": "15:10",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 6.5
+        }
+      ]
+    },
+    {
+      "fecha": "2026-07-21",
+      "hora": "16:29",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 6.5
+        }
+      ]
+    },
+    {
+      "fecha": "2026-07-22",
+      "hora": "15:00",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 6.5
+        }
+      ]
+    },
+    {
+      "fecha": "2026-07-23",
+      "hora": "15:40",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 6.5
+        }
+      ]
+    },
+    {
+      "fecha": "2026-07-24",
+      "hora": "15:16",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 6.5
+        }
+      ]
+    },
+    {
+      "fecha": "2026-07-27",
+      "hora": "12:00",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 6.5
+        }
+      ]
+    },
+    {
+      "fecha": "2026-07-28",
+      "hora": "15:15",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 6.5
+        }
+      ]
+    },
+    {
+      "fecha": "2026-07-29",
+      "hora": "13:25",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 6.5
+        }
+      ]
+    },
+    {
+      "fecha": "2026-07-30",
+      "hora": "12:05",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 2",
+          "valor": 0.66
+        }
+      ]
+    },
+    {
+      "fecha": "2026-07-31",
+      "hora": "15:00",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 6.5
+        },
+        {
+          "variable": "Concentrado 2",
+          "valor": 0.69
+        }
+      ]
+    },
+    {
+      "fecha": "2026-08-03",
+      "hora": "11:45",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 6.5
+        },
+        {
+          "variable": "Concentrado 2",
+          "valor": 0.87
+        }
+      ]
+    },
+    {
+      "fecha": "2026-08-04",
+      "hora": "12:22",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 2",
+          "valor": 0.7
+        }
+      ]
+    },
+    {
+      "fecha": "2026-08-05",
+      "hora": "14:50",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 2",
+          "valor": 0.65
+        }
+      ]
+    },
+    {
+      "fecha": "2026-08-06",
+      "hora": "15:10",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 2",
+          "valor": 0.65
+        }
+      ]
+    },
+    {
+      "fecha": "2026-08-07",
+      "hora": "15:30",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 2",
+          "valor": 0.65
+        }
+      ]
+    },
+    {
+      "fecha": "2026-08-10",
+      "hora": "15:00",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 2",
+          "valor": 0.7
+        }
+      ]
+    },
+    {
+      "fecha": "2026-08-11",
+      "hora": "15:30",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 2",
+          "valor": 0.7
+        }
+      ]
+    },
+    {
+      "fecha": "2026-08-12",
+      "hora": "15:15",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 2",
+          "valor": 0.7
+        }
+      ]
+    },
+    {
+      "fecha": "2026-08-13",
+      "hora": "13:10",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 2",
+          "valor": 0.7
+        }
+      ]
+    },
+    {
+      "fecha": "2026-08-14",
+      "hora": "12:55",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 2",
+          "valor": 0.7
+        }
+      ]
+    },
+    {
+      "fecha": "2026-08-18",
+      "hora": "10:15",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 7.0
+        }
+      ]
+    },
+    {
+      "fecha": "2026-08-19",
+      "hora": "12:15",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 7.0
+        }
+      ]
+    },
+    {
+      "fecha": "2026-08-20",
+      "hora": "13:15",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 7.0
+        }
+      ]
+    },
+    {
+      "fecha": "2026-08-21",
+      "hora": "15:00",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 7.0
+        }
+      ]
+    },
+    {
+      "fecha": "2026-08-24",
+      "hora": "12:10",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 7.0
+        }
+      ]
+    },
+    {
+      "fecha": "2026-08-25",
+      "hora": "11:00",
+      "desviaciones": [
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 7.0
+        }
+      ]
+    },
+    {
+      "fecha": "2026-08-26",
+      "hora": "14:40",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.2
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 7.0
+        }
+      ]
+    },
+    {
+      "fecha": "2026-08-27",
+      "hora": "14:50",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.2
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 7.0
+        }
+      ]
+    },
+    {
+      "fecha": "2026-08-28",
+      "hora": "14:45",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 7.0
+        }
+      ]
+    },
+    {
+      "fecha": "2026-08-31",
+      "hora": "12:18",
+      "desviaciones": [
+        {
+          "variable": "Big Blue Filtro",
+          "valor": 1.9
+        },
+        {
+          "variable": "Alimentación",
+          "valor": 3.1
+        },
+        {
+          "variable": "Concentrado 1",
+          "valor": 7.0
         }
       ]
     }
   ],
-  "detalle_filas_con_desviacion": [],
   "detalle_errores": []
 }
