@@ -498,3 +498,46 @@ class EtiquetaResponse(BaseModel):
     es_reimpresion: bool
     id_usuario_impresion: int
     fecha_hora: datetime
+
+
+# ── Destrabar sin checklist (herramienta admin, ver muestras.py) ──
+#
+# Muestras 'en_análisis' cuya especificación no tiene ningún ensayo
+# 'análisis' (no pasan por Envío) y cuyo checklist de 'muestreo' quedó
+# incompleto de forma irreversible por el flujo normal -- ej. la
+# especificación estaba vacía en el momento exacto de "Ejecutar Muestreo"
+# (el checklist se manda una sola vez, junto con la creación de la
+# muestra) y se completó recién después, o el muestreador respondió solo
+# una parte. Ver diagnóstico real: especificaciones 410/737/738 y muestra
+# SAMP-2026-0014.
+
+class MuestraSinChecklistItem(BaseModel):
+    id_muestra: int
+    codigo_muestra: str
+    erp_CODART: str
+    erp_DESART: str
+    tipo_material: Optional[str] = None
+    id_especificacion: int
+    fecha_muestreo: datetime
+    # Cuántos ítems de 'muestreo' activos de la especificación todavía no
+    # tienen resultado para esta muestra -- para que la pantalla muestre
+    # "3 de 5 ítems sin responder" en vez de un simple sí/no.
+    ensayos_faltantes: int
+    ensayos_totales: int
+
+
+class DestrabarSinChecklistBody(BaseModel):
+    ids_muestra: list[int] = Field(..., min_length=1)
+    motivo: str = Field(..., min_length=1, max_length=300)
+
+
+class DestrabarSinChecklistItemResultado(BaseModel):
+    id_muestra: int
+    codigo_muestra: Optional[str] = None
+    ok: bool
+    detalle: str
+    ensayos_afectados: int = 0
+
+
+class DestrabarSinChecklistResponse(BaseModel):
+    resultados: list[DestrabarSinChecklistItemResultado]

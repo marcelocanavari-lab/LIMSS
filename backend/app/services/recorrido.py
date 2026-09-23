@@ -15,6 +15,7 @@ from app.schemas.recorrido import (
     TestigoEnvioInfo,
 )
 from app.schemas.solicitudes_muestreo import DatosFisicosMuestreo
+from app.services.especificaciones import muestra_elegible_destrabar_checklist
 
 
 def _a_fecha(valor) -> Optional[date]:
@@ -324,4 +325,5 @@ def construir_recorrido(cursor, id_muestra: int) -> Optional[RecorridoResponse]:
         dictamen=dictamen,
         hay_oos=hay_oos,
         datos_muestreo_pendientes=bool(muestra.datos_muestreo_pendientes),
+        elegible_destrabar_checklist=muestra_elegible_destrabar_checklist(cursor, id_muestra)[0],
     )

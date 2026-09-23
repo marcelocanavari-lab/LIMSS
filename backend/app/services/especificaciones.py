@@ -70,6 +70,60 @@ def resolver_laboratorio_especificacion(cursor, id_especificacion: Optional[int]
     return "ok", ", ".join(nombres)
 
 
+def ensayos_muestreo_faltantes(cursor, id_muestra: int, id_especificacion: Optional[int]):
+    """Ensayos de categoría 'muestreo' ACTIVOS de la especificación que
+    todavía no tienen fila en lims_resultados_muestreo para esta muestra --
+    usado por la herramienta de "Destrabar sin checklist" (ver
+    destrabar_sin_checklist en muestras.py) para saber exactamente qué
+    ítems necesitan el placeholder "N/A - Destrabado manualmente". Devuelve
+    filas con id_espec_ensayo y nombre_ensayo (para el audit trail)."""
+    if id_especificacion is None:
+        return []
+    cursor.execute(
+        """
+        SELECT se.id_espec_ensayo, m.nombre_ensayo
+        FROM lims_especificacion_ensayos se
+        INNER JOIN lims_categorias_ensayo cat ON cat.id_categoria = se.id_categoria
+        INNER JOIN lims_ensayos_maestro m ON m.id_ensayo_maestro = se.id_ensayo_maestro
+        LEFT JOIN lims_resultados_muestreo r ON r.id_espec_ensayo = se.id_espec_ensayo AND r.id_muestra = ?
+        WHERE se.id_especificacion = ? AND cat.momento = 'muestreo' AND se.activo = 1
+          AND r.id_resultado IS NULL
+        ORDER BY se.orden
+        """,
+        id_muestra, id_especificacion,
+    )
+    return cursor.fetchall()
+
+
+def muestra_elegible_destrabar_checklist(cursor, id_muestra: int):
+    """(elegible, motivo_no_elegible, faltantes) -- una muestra es candidata
+    a "Destrabar sin checklist" (ver destrabar_sin_checklist en muestras.py)
+    solo cuando estructuralmente NO puede completar su checklist por el
+    flujo normal: sigue 'en_análisis', sin dictamen todavía, su
+    especificación no tiene ningún ensayo 'análisis' activo (si lo tuviera,
+    el camino normal es Envío/Carga de Resultados, no este) y le falta al
+    menos un resultado de 'muestreo'. Validación server-side deliberada --
+    nunca confiar en que el frontend mandó la lista correcta, mismo criterio
+    que vincular_especificacion en muestras.py."""
+    cursor.execute("SELECT estado, id_especificacion FROM lims_muestras WHERE id_muestra = ?", id_muestra)
+    m = cursor.fetchone()
+    if not m:
+        return False, "Muestra no encontrada", []
+    if m.estado != "en_análisis":
+        return False, f"La muestra está en estado '{m.estado}', no 'en_análisis'", []
+    if m.id_especificacion is None:
+        return False, "La muestra no tiene especificación vinculada", []
+    cursor.execute("SELECT 1 FROM lims_dictamenes WHERE id_muestra = ?", id_muestra)
+    if cursor.fetchone():
+        return False, "La muestra ya tiene un dictamen emitido", []
+    if tiene_ensayos_analisis(cursor, m.id_especificacion):
+        return False, "La especificación tiene ensayos de análisis -- corresponde el flujo normal de Envío/Carga de Resultados", []
+    faltantes = ensayos_muestreo_faltantes(cursor, id_muestra, m.id_especificacion)
+    if not faltantes:
+        return False, "El checklist ya está completo -- la muestra ya debería estar en la Bandeja de Dictamen", []
+    return True, None, faltantes
+
+
 def obtener_checklist_muestreo(cursor, id_muestra: Optional[int], id_especificacion: Optional[int]) -> list[ChecklistMuestreoItem]:
     """Ítems de categorías con momento 'muestreo' (Aspecto del Contenedor,
     Aspectos de la Materia Prima -- ver lims_categorias_ensayo) de una

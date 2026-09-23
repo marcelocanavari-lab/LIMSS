@@ -24,6 +24,9 @@ from app.schemas.muestras import (
     ContactoLaboratorioCreate,
     ContactoLaboratorioResponse,
     ContactoLaboratorioUpdate,
+    DestrabarSinChecklistBody,
+    DestrabarSinChecklistItemResultado,
+    DestrabarSinChecklistResponse,
     EnsayoSolicitado,
     EnsayosParaEnvioResponse,
     EnvioCreate,
@@ -45,6 +48,7 @@ from app.schemas.muestras import (
     MaterialEncontrado,
     MuestraCreate,
     MuestraResponse,
+    MuestraSinChecklistItem,
     MuestraUpdate,
     ProtocoloEnvio,
     RemitoResponse,
@@ -76,7 +80,12 @@ from app.schemas.solicitudes_muestreo import ChecklistMuestreoItem, ChecklistMue
 from app.services import audit, storage
 from app.services.bultos import expandir_bultos, filtrar_rango_bultos, obtener_grupos_bultos
 from app.services.formato import etiqueta_referencia, formatear_cantidad, normalizar_unidad, titulo_etiqueta_por_tipo
-from app.services.especificaciones import guardar_checklist_muestreo, obtener_checklist_muestreo, tiene_ensayos_analisis
+from app.services.especificaciones import (
+    guardar_checklist_muestreo,
+    muestra_elegible_destrabar_checklist,
+    obtener_checklist_muestreo,
+    tiene_ensayos_analisis,
+)
 from app.services.erp_ir import buscar_todos_candidatos_ir, formatear_nro_ir, normalizar_fecha_sentinel
 from app.services.erp_lotes import buscar_lote, obtener_vencimiento_lote_produccion
 from app.services.erp_materiales import asignar_numero_analisis_si_corresponde, obtener_codsars_por_tipo, tiene_numero_analisis
@@ -1092,6 +1101,134 @@ def vincular_especificacion(
 
     cursor.execute(_SELECT_MUESTRA + " WHERE m.id_muestra = ?", id_muestra)
     return _fila_a_muestra(cursor.fetchone())
+
+
+@router.get("/sin-checklist", response_model=list[MuestraSinChecklistItem])
+def listar_sin_checklist(
+    user: dict = Depends(require_rol("qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Muestras 'en_análisis' atascadas de forma estructural: su
+    especificación no tiene ningún ensayo 'análisis' (no corresponde Envío/
+    Carga de Resultados) y su checklist de 'muestreo' quedó incompleto sin
+    posibilidad de completarse por el flujo normal (ver diagnóstico real:
+    especificaciones 410/737/738 vacías al momento de Ejecutar Muestreo, y
+    SAMP-2026-0014 con checklist enviado parcial). Ruta literal -- declarada
+    ANTES de GET /{id_muestra} más abajo, mismo motivo que el resto de las
+    rutas literales de este archivo."""
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT m.id_muestra, m.codigo_muestra, m.erp_CODART, m.erp_DESART, m.tipo_material,
+               m.id_especificacion, m.fecha_muestreo
+        FROM lims_muestras m
+        WHERE m.estado = 'en_análisis'
+          AND m.id_especificacion IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM lims_dictamenes d WHERE d.id_muestra = m.id_muestra)
+          AND NOT EXISTS (
+              SELECT 1 FROM lims_especificacion_ensayos see_a
+              INNER JOIN lims_categorias_ensayo cat_a ON cat_a.id_categoria = see_a.id_categoria
+              WHERE see_a.id_especificacion = m.id_especificacion AND cat_a.momento = 'analisis' AND see_a.activo = 1
+          )
+          AND EXISTS (
+              SELECT 1 FROM lims_especificacion_ensayos see_d
+              INNER JOIN lims_categorias_ensayo cat_d ON cat_d.id_categoria = see_d.id_categoria
+              LEFT JOIN lims_resultados_muestreo rm ON rm.id_espec_ensayo = see_d.id_espec_ensayo AND rm.id_muestra = m.id_muestra
+              WHERE see_d.id_especificacion = m.id_especificacion AND cat_d.momento = 'muestreo' AND see_d.activo = 1
+                AND rm.id_resultado IS NULL
+          )
+        ORDER BY m.fecha_muestreo
+        """
+    )
+    filas = cursor.fetchall()
+    resultado = []
+    for m in filas:
+        cursor.execute(
+            """
+            SELECT
+                (SELECT COUNT(*) FROM lims_especificacion_ensayos se
+                 INNER JOIN lims_categorias_ensayo cat ON cat.id_categoria = se.id_categoria
+                 WHERE se.id_especificacion = ? AND cat.momento = 'muestreo' AND se.activo = 1) AS totales,
+                (SELECT COUNT(*) FROM lims_especificacion_ensayos se
+                 INNER JOIN lims_categorias_ensayo cat ON cat.id_categoria = se.id_categoria
+                 LEFT JOIN lims_resultados_muestreo rm ON rm.id_espec_ensayo = se.id_espec_ensayo AND rm.id_muestra = ?
+                 WHERE se.id_especificacion = ? AND cat.momento = 'muestreo' AND se.activo = 1
+                   AND rm.id_resultado IS NULL) AS faltantes
+            """,
+            m.id_especificacion, m.id_muestra, m.id_especificacion,
+        )
+        cont = cursor.fetchone()
+        resultado.append(MuestraSinChecklistItem(
+            id_muestra=m.id_muestra, codigo_muestra=m.codigo_muestra,
+            erp_CODART=m.erp_CODART, erp_DESART=m.erp_DESART, tipo_material=m.tipo_material,
+            id_especificacion=m.id_especificacion, fecha_muestreo=m.fecha_muestreo,
+            ensayos_faltantes=cont.faltantes, ensayos_totales=cont.totales,
+        ))
+    return resultado
+
+
+@router.post("/destrabar-sin-checklist", response_model=DestrabarSinChecklistResponse)
+def destrabar_sin_checklist(
+    body: DestrabarSinChecklistBody,
+    user: dict = Depends(require_rol("qa", "admin")),
+    conn: pyodbc.Connection = Depends(limss_db),
+):
+    """Fuerza el pase a la Bandeja de Dictamen de una o varias muestras
+    atascadas (ver listar_sin_checklist) SIN completar su checklist
+    retroactivamente -- inserta un placeholder explícito ("N/A -
+    Destrabado manualmente") por cada ensayo de 'muestreo' activo que le
+    falte, en vez de simular una inspección que no se hizo (mismo criterio
+    ético ya aplicado en esta sesión: no fabricar datos de una inspección
+    real). Revalida server-side cada muestra (mismo criterio que
+    vincular_especificacion) -- nunca confía en que el frontend mandó una
+    lista correcta; una muestra que no cumple la condición estructural
+    queda con ok=False y detalle del motivo, sin bloquear el resto del
+    lote. Un único motivo de texto libre, obligatorio, se aplica a todas
+    las muestras del lote -- se graba en el audit trail de cada una."""
+    cursor = conn.cursor()
+    resultados: list[DestrabarSinChecklistItemResultado] = []
+
+    for id_muestra in body.ids_muestra:
+        cursor.execute("SELECT codigo_muestra FROM lims_muestras WHERE id_muestra = ?", id_muestra)
+        fila_muestra = cursor.fetchone()
+        codigo_muestra = fila_muestra.codigo_muestra if fila_muestra else None
+
+        elegible, motivo_no_elegible, faltantes = muestra_elegible_destrabar_checklist(cursor, id_muestra)
+        if not elegible:
+            resultados.append(DestrabarSinChecklistItemResultado(
+                id_muestra=id_muestra, codigo_muestra=codigo_muestra, ok=False, detalle=motivo_no_elegible,
+            ))
+            continue
+
+        for f in faltantes:
+            cursor.execute(
+                """
+                INSERT INTO lims_resultados_muestreo
+                    (id_muestra, id_espec_ensayo, valor_cualitativo, dentro_especificacion, id_usuario_carga, fecha_carga)
+                VALUES (?, ?, ?, NULL, ?, GETDATE())
+                """,
+                id_muestra, f.id_espec_ensayo, "N/A - Destrabado manualmente", user["id_usuario"],
+            )
+
+        cursor.execute("SELECT id_especificacion FROM lims_muestras WHERE id_muestra = ?", id_muestra)
+        id_especificacion = cursor.fetchone().id_especificacion
+
+        audit.registrar(
+            conn, entidad="muestra", accion="destrabar_sin_checklist",
+            id_usuario=user["id_usuario"], id_entidad=id_muestra,
+            valor_nuevo={
+                "id_especificacion": id_especificacion,
+                "ensayos_afectados": [{"id_espec_ensayo": f.id_espec_ensayo, "nombre_ensayo": f.nombre_ensayo} for f in faltantes],
+            },
+            motivo=body.motivo,
+        )
+        resultados.append(DestrabarSinChecklistItemResultado(
+            id_muestra=id_muestra, codigo_muestra=codigo_muestra, ok=True,
+            detalle=f"{len(faltantes)} ítem(s) de checklist marcado(s) como destrabado manualmente",
+            ensayos_afectados=len(faltantes),
+        ))
+
+    return DestrabarSinChecklistResponse(resultados=resultados)
 
 
 @router.get("/", response_model=list[MuestraResponse])

@@ -54,6 +54,7 @@ import CajasPage from './pages/muestras/CajasPage';
 import CajaDetallePage from './pages/muestras/CajaDetallePage';
 import BusquedaProductoCajasPage from './pages/muestras/BusquedaProductoCajasPage';
 import ConsultaMuestrasPage from './pages/muestras/ConsultaMuestrasPage';
+import MuestrasSinChecklistPage from './pages/muestras/MuestrasSinChecklistPage';
 import ConsultaMuestraDetallePage from './pages/muestras/ConsultaMuestraDetallePage';
 import ResultadosPage from './pages/resultados/ResultadosPage';
 import MuestraEnviosDetallePage from './pages/resultados/MuestraEnviosDetallePage';
@@ -165,6 +166,7 @@ export default function App() {
           {/* ── Consulta de Muestras (analista_qc, qa, admin) ───── */}
           <Route path="/consulta-muestras" element={<PrivateRoute roles={GESTION}><ConsultaMuestrasPage /></PrivateRoute>} />
           <Route path="/consulta-muestras/:id" element={<PrivateRoute roles={GESTION}><ConsultaMuestraDetallePage /></PrivateRoute>} />
+          <Route path="/muestras/sin-checklist" element={<PrivateRoute roles={QA_ADMIN}><MuestrasSinChecklistPage /></PrivateRoute>} />
 
           {/* ── Control de Calidad (solo qa, admin) ─────────────── */}
           <Route path="/dictamenes" element={<PrivateRoute roles={QA_ADMIN}><DictamenesPage /></PrivateRoute>} />

@@ -39,6 +39,13 @@ export const muestrasApi = {
   editarMuestra: (id, data) => api.patch(`/api/muestras/${id}`, data),
   obtenerRecorrido: (id) => api.get(`/api/muestras/${id}/recorrido`),
 
+  // Muestras atascadas sin checklist completo (herramienta admin, rol
+  // qa/admin) -- ver el diagnóstico real detrás de especificaciones
+  // 410/737/738 y SAMP-2026-0014.
+  listarSinChecklist: () => api.get('/api/muestras/sin-checklist'),
+  destrabarSinChecklist: (idsMuestra, motivo) =>
+    api.post('/api/muestras/destrabar-sin-checklist', { ids_muestra: idsMuestra, motivo }),
+
   // Vincular especificación -- caso real: la muestra se creó antes de que
   // la especificación de su artículo existiera en Datos Maestros, así que
   // quedó con id_especificacion NULL sin ningún mecanismo para reconectarla

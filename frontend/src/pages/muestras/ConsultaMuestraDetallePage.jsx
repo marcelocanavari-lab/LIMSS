@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import TopBar from '../../components/TopBar';
 import EspecificacionCelda from '../../components/EspecificacionCelda';
+import { useAuth } from '../../context/AuthContext';
 import { muestrasApi } from '../../api/muestras';
 import { ApiError, abrirPdfConAuth } from '../../api/client';
 import { BADGE_POR_ESTADO } from './MuestrasPage';
@@ -69,9 +70,19 @@ function Seccion({ titulo, defaultOpen = true, children }) {
 export default function ConsultaMuestraDetallePage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const puedeDestrabar = ['qa', 'admin'].includes(user?.rol);
 
   const [recorrido, setRecorrido] = useState(null);
   const [error, setError] = useState('');
+
+  // Destrabar sin checklist (herramienta admin) -- ver
+  // recorrido.elegible_destrabar_checklist, calculado server-side (misma
+  // condición que la bandeja "Muestras sin checklist completo").
+  const [mostrarFormDestrabar, setMostrarFormDestrabar] = useState(false);
+  const [motivoDestrabar, setMotivoDestrabar] = useState('');
+  const [destrabando, setDestrabando] = useState(false);
+  const [errorDestrabar, setErrorDestrabar] = useState('');
   // Si ya existe una etiqueta impresa para esta muestra, la próxima queda
   // registrada como reimpresión (lims_etiquetas.reimpresion) -- se refleja
   // en el texto del botón en vez de imprimir/reimprimir en silencio.
@@ -112,12 +123,33 @@ export default function ConsultaMuestraDetallePage() {
     }
   }
 
-  useEffect(() => {
+  function cargarRecorrido() {
     muestrasApi
       .obtenerRecorrido(id)
       .then(setRecorrido)
       .catch((err) => setError(err instanceof ApiError ? err.message : 'No se pudo cargar el recorrido de la muestra'));
-  }, [id]);
+  }
+
+  useEffect(cargarRecorrido, [id]);
+
+  async function handleDestrabar() {
+    if (!motivoDestrabar.trim()) {
+      setErrorDestrabar('El motivo es obligatorio');
+      return;
+    }
+    setErrorDestrabar('');
+    setDestrabando(true);
+    try {
+      await muestrasApi.destrabarSinChecklist([Number(id)], motivoDestrabar.trim());
+      setMostrarFormDestrabar(false);
+      setMotivoDestrabar('');
+      cargarRecorrido();
+    } catch (err) {
+      setErrorDestrabar(err instanceof ApiError ? err.message : 'No se pudo destrabar la muestra');
+    } finally {
+      setDestrabando(false);
+    }
+  }
 
   useEffect(() => {
     muestrasApi
@@ -201,6 +233,48 @@ export default function ConsultaMuestraDetallePage() {
             Volver
           </button>
         </div>
+
+        {puedeDestrabar && recorrido.elegible_destrabar_checklist && (
+          <div className="card no-print" style={{ marginBottom: 'var(--sp-4)' }}>
+            <div className="alert alert-warn" style={{ marginBottom: mostrarFormDestrabar ? 'var(--sp-3)' : 0 }}>
+              Esta muestra no puede llegar a la Bandeja de Dictamen por el flujo normal: su
+              especificación no tiene ensayos de análisis y su checklist de muestreo quedó
+              incompleto sin posibilidad de completarse retroactivamente.
+              {!mostrarFormDestrabar && (
+                <>
+                  {' '}
+                  <button type="button" className="btn btn-secondary" onClick={() => { setMostrarFormDestrabar(true); setErrorDestrabar(''); }}>
+                    Destrabar sin checklist
+                  </button>
+                </>
+              )}
+            </div>
+            {mostrarFormDestrabar && (
+              <>
+                <div className="field" style={{ marginBottom: 'var(--sp-3)' }}>
+                  <label className="field-label" htmlFor="motivoDestrabar">Motivo (obligatorio)</label>
+                  <textarea
+                    id="motivoDestrabar"
+                    className="field-input"
+                    rows={2}
+                    value={motivoDestrabar}
+                    onChange={(e) => setMotivoDestrabar(e.target.value)}
+                    disabled={destrabando}
+                  />
+                </div>
+                {errorDestrabar && <div className="alert alert-danger" style={{ marginBottom: 'var(--sp-3)' }}>{errorDestrabar}</div>}
+                <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+                  <button type="button" className="btn btn-ghost" onClick={() => { setMostrarFormDestrabar(false); setErrorDestrabar(''); }} disabled={destrabando}>
+                    Cancelar
+                  </button>
+                  <button type="button" className="btn btn-primary" onClick={handleDestrabar} disabled={destrabando}>
+                    {destrabando ? <span className="spinner" /> : 'Confirmar'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {modalLegajoAbierto && (
           <div

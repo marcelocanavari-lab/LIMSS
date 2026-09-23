@@ -17,6 +17,7 @@ const QUICK_LINKS = [
   { label: 'Envíos de Muestras', ruta: '/envios', roles: GESTION },
   { label: 'Carga de Resultados', ruta: '/carga-resultados', roles: GESTION },
   { label: 'Dictámenes de QA', ruta: '/dictamenes', roles: QA_ADMIN },
+  { label: 'Muestras sin checklist', ruta: '/muestras/sin-checklist', roles: QA_ADMIN },
   { label: 'Definiciones', ruta: '/menu-definiciones', roles: GESTION },
   { label: 'Reportes', ruta: '/menu-reportes', roles: GESTION },
   { label: 'Facturación', ruta: '/facturas', roles: GESTION },

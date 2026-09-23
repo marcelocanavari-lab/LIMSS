@@ -109,3 +109,10 @@ class RecorridoResponse(BaseModel):
     # True cuando el envío se generó por adelantado desde la solicitud, antes
     # de ejecutar el muestreo físico (ver lims_muestras.datos_muestreo_pendientes).
     datos_muestreo_pendientes: bool = False
+    # True cuando la muestra está atascada de forma estructural (ver
+    # muestra_elegible_destrabar_checklist en especificaciones.py y
+    # destrabar_sin_checklist en muestras.py) -- ConsultaMuestraDetallePage.jsx
+    # usa esto para ofrecer el botón individual "Destrabar sin checklist"
+    # (rol qa/admin) sin mostrarlo en las demás muestras 'en_análisis', que
+    # en su gran mayoría siguen el flujo normal correctamente.
+    elegible_destrabar_checklist: bool = False
