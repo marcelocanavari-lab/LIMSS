@@ -1,0 +1,418 @@
+{
+  "fecha": "2026-08-31T14:40:38.578054",
+  "modo": "real",
+  "total_en_json": 100,
+  "ensayos_agregados_a_especificacion_existente": 0,
+  "salteados_ya_existia_orden_907": 88,
+  "especificaciones_nuevas_creadas": 0,
+  "no_resueltos_en_erp": 12,
+  "errores_inesperados": 0,
+  "id_ensayo_maestro_aspecto_reutilizado": 11,
+  "detalle_ensayos_agregados": [],
+  "detalle_salteados": [
+    {
+      "codigo": "MP003",
+      "id_especificacion": 639
+    },
+    {
+      "codigo": "MP009",
+      "id_especificacion": 264
+    },
+    {
+      "codigo": "MP052",
+      "id_especificacion": 287
+    },
+    {
+      "codigo": "MP001",
+      "id_especificacion": 262
+    },
+    {
+      "codigo": "MP002",
+      "id_especificacion": 640
+    },
+    {
+      "codigo": "MP005",
+      "id_especificacion": 641
+    },
+    {
+      "codigo": "MP006",
+      "id_especificacion": 642
+    },
+    {
+      "codigo": "MP079",
+      "id_especificacion": 643
+    },
+    {
+      "codigo": "MP007",
+      "id_especificacion": 380
+    },
+    {
+      "codigo": "MP097",
+      "id_especificacion": 644
+    },
+    {
+      "codigo": "MP044",
+      "id_especificacion": 645
+    },
+    {
+      "codigo": "MP082",
+      "id_especificacion": 646
+    },
+    {
+      "codigo": "MP008",
+      "id_especificacion": 263
+    },
+    {
+      "codigo": "MP083",
+      "id_especificacion": 647
+    },
+    {
+      "codigo": "MP084",
+      "id_especificacion": 648
+    },
+    {
+      "codigo": "MP080",
+      "id_especificacion": 649
+    },
+    {
+      "codigo": "MP034",
+      "id_especificacion": 650
+    },
+    {
+      "codigo": "MP010",
+      "id_especificacion": 638
+    },
+    {
+      "codigo": "MP013",
+      "id_especificacion": 651
+    },
+    {
+      "codigo": "MP014",
+      "id_especificacion": 652
+    },
+    {
+      "codigo": "MP016",
+      "id_especificacion": 265
+    },
+    {
+      "codigo": "MP017",
+      "id_especificacion": 266
+    },
+    {
+      "codigo": "MP018",
+      "id_especificacion": 653
+    },
+    {
+      "codigo": "MP087",
+      "id_especificacion": 654
+    },
+    {
+      "codigo": "MP089",
+      "id_especificacion": 655
+    },
+    {
+      "codigo": "MP015",
+      "id_especificacion": 656
+    },
+    {
+      "codigo": "MP019",
+      "id_especificacion": 267
+    },
+    {
+      "codigo": "MP022",
+      "id_especificacion": 268
+    },
+    {
+      "codigo": "MP021",
+      "id_especificacion": 269
+    },
+    {
+      "codigo": "MP023",
+      "id_especificacion": 657
+    },
+    {
+      "codigo": "MP024",
+      "id_especificacion": 658
+    },
+    {
+      "codigo": "MP025",
+      "id_especificacion": 659
+    },
+    {
+      "codigo": "MP026",
+      "id_especificacion": 660
+    },
+    {
+      "codigo": "MP070",
+      "id_especificacion": 280
+    },
+    {
+      "codigo": "MP027",
+      "id_especificacion": 270
+    },
+    {
+      "codigo": "MP028",
+      "id_especificacion": 271
+    },
+    {
+      "codigo": "MP029",
+      "id_especificacion": 272
+    },
+    {
+      "codigo": "MP004",
+      "id_especificacion": 381
+    },
+    {
+      "codigo": "MP088",
+      "id_especificacion": 661
+    },
+    {
+      "codigo": "MP030",
+      "id_especificacion": 662
+    },
+    {
+      "codigo": "MP031",
+      "id_especificacion": 273
+    },
+    {
+      "codigo": "MP032",
+      "id_especificacion": 663
+    },
+    {
+      "codigo": "MP037",
+      "id_especificacion": 405
+    },
+    {
+      "codigo": "MP039",
+      "id_especificacion": 664
+    },
+    {
+      "codigo": "MP040",
+      "id_especificacion": 275
+    },
+    {
+      "codigo": "MP041",
+      "id_especificacion": 276
+    },
+    {
+      "codigo": "MP042",
+      "id_especificacion": 665
+    },
+    {
+      "codigo": "MP043",
+      "id_especificacion": 278
+    },
+    {
+      "codigo": "MP099",
+      "id_especificacion": 666
+    },
+    {
+      "codigo": "MP100",
+      "id_especificacion": 667
+    },
+    {
+      "codigo": "MP045",
+      "id_especificacion": 279
+    },
+    {
+      "codigo": "MP046",
+      "id_especificacion": 668
+    },
+    {
+      "codigo": "MP047",
+      "id_especificacion": 277
+    },
+    {
+      "codigo": "MP048",
+      "id_especificacion": 282
+    },
+    {
+      "codigo": "MP049",
+      "id_especificacion": 283
+    },
+    {
+      "codigo": "MP035",
+      "id_especificacion": 635
+    },
+    {
+      "codigo": "MP050",
+      "id_especificacion": 285
+    },
+    {
+      "codigo": "MP051",
+      "id_especificacion": 286
+    },
+    {
+      "codigo": "MP067",
+      "id_especificacion": 669
+    },
+    {
+      "codigo": "MP057",
+      "id_especificacion": 288
+    },
+    {
+      "codigo": "MP054",
+      "id_especificacion": 670
+    },
+    {
+      "codigo": "MP056",
+      "id_especificacion": 671
+    },
+    {
+      "codigo": "MP065",
+      "id_especificacion": 672
+    },
+    {
+      "codigo": "MP053",
+      "id_especificacion": 673
+    },
+    {
+      "codigo": "MP058",
+      "id_especificacion": 674
+    },
+    {
+      "codigo": "MP059",
+      "id_especificacion": 289
+    },
+    {
+      "codigo": "MP062",
+      "id_especificacion": 291
+    },
+    {
+      "codigo": "MP063",
+      "id_especificacion": 292
+    },
+    {
+      "codigo": "MP064",
+      "id_especificacion": 293
+    },
+    {
+      "codigo": "MP060",
+      "id_especificacion": 290
+    },
+    {
+      "codigo": "MP033",
+      "id_especificacion": 675
+    },
+    {
+      "codigo": "MP066",
+      "id_especificacion": 636
+    },
+    {
+      "codigo": "MP068",
+      "id_especificacion": 676
+    },
+    {
+      "codigo": "MP104",
+      "id_especificacion": 408
+    },
+    {
+      "codigo": "MP073",
+      "id_especificacion": 294
+    },
+    {
+      "codigo": "MP038",
+      "id_especificacion": 274
+    },
+    {
+      "codigo": "MP055",
+      "id_especificacion": 677
+    },
+    {
+      "codigo": "MP074",
+      "id_especificacion": 295
+    },
+    {
+      "codigo": "MP094",
+      "id_especificacion": 678
+    },
+    {
+      "codigo": "MP106",
+      "id_especificacion": 679
+    },
+    {
+      "codigo": "MP071",
+      "id_especificacion": 281
+    },
+    {
+      "codigo": "MP075",
+      "id_especificacion": 296
+    },
+    {
+      "codigo": "MP076",
+      "id_especificacion": 284
+    },
+    {
+      "codigo": "MP077",
+      "id_especificacion": 297
+    },
+    {
+      "codigo": "MP036",
+      "id_especificacion": 680
+    },
+    {
+      "codigo": "MP078",
+      "id_especificacion": 298
+    },
+    {
+      "codigo": "MP093",
+      "id_especificacion": 382
+    },
+    {
+      "codigo": "MP103",
+      "id_especificacion": 681
+    }
+  ],
+  "detalle_especificaciones_nuevas": [],
+  "detalle_no_resueltos_en_erp": [
+    {
+      "codigo": "MP118",
+      "nombre_json": "Espironolactona"
+    },
+    {
+      "codigo": "MP129",
+      "nombre_json": "Antiespumante Dow Corning Medical"
+    },
+    {
+      "codigo": "MP102",
+      "nombre_json": "Ácido clorhídrico Sol. Volumétrica 1 N"
+    },
+    {
+      "codigo": "MP119",
+      "nombre_json": "Benazepril clorhidrato"
+    },
+    {
+      "codigo": "MP115",
+      "nombre_json": "Celulosa microcristalina PH 102"
+    },
+    {
+      "codigo": "MP127",
+      "nombre_json": "DEET (Dietil-m-toluamida)"
+    },
+    {
+      "codigo": "MP117",
+      "nombre_json": "FLURALANER"
+    },
+    {
+      "codigo": "MP113",
+      "nombre_json": "FUROSEMIDA"
+    },
+    {
+      "codigo": "MP112",
+      "nombre_json": "GLICERINA"
+    },
+    {
+      "codigo": "MP124",
+      "nombre_json": "Hidróxido de Sodio sol. Volumétrica 5 N"
+    },
+    {
+      "codigo": "MP120",
+      "nombre_json": "Milbemicina oxima"
+    },
+    {
+      "codigo": "MP122",
+      "nombre_json": "Pimobendán"
+    }
+  ],
+  "detalle_errores": []
+}
