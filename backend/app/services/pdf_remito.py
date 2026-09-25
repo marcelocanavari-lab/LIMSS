@@ -171,6 +171,7 @@ def _dibujar_copia(
         c.line(x, y, x + 17 * cm, y)
         y -= 0.45 * cm
 
+        observaciones = []
         for e in ensayos:
             tipo_legible = "Numérico" if e.tipo_dato == "numerico" else "Cualitativo"
             if e.tipo_dato == "numerico":
@@ -220,11 +221,26 @@ def _dibujar_copia(
 
             y -= alto_fila
 
-        observaciones = [
-            (e.nombre_ensayo, str(e.especificacion_texto).strip())
-            for e in ensayos
-            if e.especificacion_texto and str(e.especificacion_texto).strip()
-        ]
+            # Bug real detectado en producción (REM-2026-0053, ver commit):
+            # esta sección listaba solo los ensayos que tenían
+            # especificacion_texto cargado en la base, omitiendo en
+            # silencio cualquier otro -- con nombres duplicados por analito
+            # (ej. "Valoración" de Sulfametoxazol y de Trimetoprima en la
+            # misma especificación) el resultado era que un ensayo entero
+            # parecía haber desaparecido del remito. Ahora se lista SIEMPRE
+            # uno por cada fila de la tabla de arriba, usando
+            # especificacion_texto si está cargado y, si no, la misma
+            # especificación/límites ya calculados para la tabla (variable
+            # `especificacion`) como respaldo -- nunca se omite una fila. El
+            # nombre usa el mismo `nombre_ensayo` (con sufijo de analito) que
+            # la tabla, para no confundir dos ensayos de igual nombre.
+            texto_observacion = (
+                str(e.especificacion_texto).strip()
+                if e.especificacion_texto and str(e.especificacion_texto).strip()
+                else str(especificacion)
+            )
+            observaciones.append((nombre_ensayo, texto_observacion))
+
         if observaciones:
             subtitulo("Observaciones")
             for nombre_ensayo, texto in observaciones:
